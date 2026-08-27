@@ -1,0 +1,63 @@
+# olf — dependency denylist
+# =========================
+# The dependency-audit CI gate (.github/scripts/dependency_audit.dart) fails the
+# build if ANY package in the locked dependency graph (core/pubspec.lock,
+# app/pubspec.lock — direct or transitive) matches a rule below.
+#
+# Why this exists: requirements.md §3 — "Zero third-party advertising or
+# analytics SDKs." Embedding ad/analytics SDKs that can see health data is a
+# direct legal-liability vector (Flo/FTC 2021; Meta/CIPA verdict 2025). This gate
+# is a RELEASE BLOCKER (DEVELOPMENT_PLAN.md p2.9).
+#
+# Rule syntax (one per line; '#' starts a comment):
+#   package_name     exact pub package-name match
+#   ~fragment        case-insensitive substring match (for vendor families)
+#   re:pattern       case-insensitive regular-expression match
+#
+# Adding an entry: see docs/dependency-audit.md. Always include a one-line
+# rationale after '#'. Removing an entry needs a reviewer sign-off in the PR.
+
+# ---- Product / usage analytics -------------------------------------------------
+firebase_analytics            # Google Analytics for Firebase — ships usage data to Google
+firebase_analytics_web        # web impl of the above
+amplitude_flutter             # Amplitude product analytics
+amplitude                     # Amplitude product analytics
+mixpanel_flutter              # Mixpanel product analytics
+posthog_flutter               # PostHog product analytics
+flutter_segment               # Twilio Segment CDP
+segment_analytics             # Twilio Segment CDP (Actions client)
+heap_flutter                  # Heap autocapture analytics
+countly_flutter               # Countly analytics
+countly_flutter_np            # Countly analytics (no-push variant)
+matomo_tracker                # Matomo/Piwik analytics
+flutter_matomo                # Matomo analytics
+datadog_flutter_plugin        # Datadog RUM — session/behaviour telemetry
+flutter_clarity               # Microsoft Clarity session recording
+clarity_flutter               # Microsoft Clarity session recording
+
+# ---- Advertising / attribution / MMPs ---------------------------------------
+google_mobile_ads             # AdMob / Google Mobile Ads
+google_ads                    # Google Ads
+applovin_max                  # AppLovin MAX ad mediation
+facebook_audience_network     # Meta Audience Network ads
+unity_ads                     # Unity Ads
+unity_ads_plugin              # Unity Ads
+ironsource_mediation          # ironSource ad mediation
+appodeal_flutter              # Appodeal ad mediation
+~appsflyer                    # AppsFlyer attribution (appsflyer_sdk, …)
+~adjust                       # Adjust attribution (adjust_sdk, …)
+branch_sdk                    # Branch attribution / deep-link analytics
+branch_io                     # Branch attribution
+singular_flutter_sdk          # Singular attribution
+kochava_tracker               # Kochava attribution
+facebook_app_events           # Meta app-event tracking (attribution)
+app_tracking_transparency     # iOS ATT prompt — only needed to enable cross-app tracking
+
+# ---- Crash/telemetry SDKs that phone home to a third party by default -------
+# (On-device or self-hosted crash handling is fine; these ship data off-device.)
+firebase_crashlytics          # Crashlytics — crash traces to Google
+sentry_flutter                # Sentry SaaS error monitoring
+sentry                        # Sentry SaaS error monitoring
+bugsnag_flutter               # Bugsnag SaaS error monitoring
+instabug_flutter              # Instabug session/bug telemetry
+embrace_io                    # Embrace mobile observability

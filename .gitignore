@@ -4,7 +4,13 @@
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
+
+# pubspec.lock IS committed for every package in this repo (p0.3): the
+# dependency-audit CI gate scans the locked transitive graph, and pinned
+# resolutions keep CI reproducible. Ignore stray locks elsewhere but keep ours.
 pubspec.lock
+!core/pubspec.lock
+!app/pubspec.lock
 
 # IDE
 .idea/

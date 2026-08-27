@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- audited: required for encrypted backup export to a user-chosen cloud
+         file (p1.10); no telemetry. Reviewed 2026-08-27. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <application android:label="olf"></application>
+</manifest>

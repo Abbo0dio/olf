@@ -1,0 +1,4 @@
+# Fixture denylist for dependency_audit_test.dart — do not use in CI.
+firebase_analytics    # exact-match fixture entry
+~appsflyer            # substring-match fixture entry
+re:^unity_ads         # regex-match fixture entry

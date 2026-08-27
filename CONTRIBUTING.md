@@ -154,19 +154,23 @@ A task is not `DONE` until **all** of these hold (this list is the PR template):
 ## 5. Continuous integration
 
 CI is defined in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) and runs on every PR
-into `main` and every push to `main`. Jobs: **format**, **analyze**, **test**,
-**dependency-audit**, **build**.
+into `main` and every push to `main`.
 
-**Current state (Phase 0):** the Flutter workspace does not exist yet — it arrives in **p0.2**,
-and the CI jobs are wired to real gating in **p0.3**. Until p0.3 merges:
+| Job | What it does |
+|-----|--------------|
+| **format** | `dart format --set-exit-if-changed` over `core`, `app`, `.github/scripts`. |
+| **analyze** | `dart analyze --fatal-infos --fatal-warnings` for `core` and the tooling script; `flutter analyze --fatal-infos --fatal-warnings` for `app`. |
+| **test** | `dart test` in `core`; `flutter test --coverage` in `app`. |
+| **dependency-audit** | Scans the locked transitive graph (`core` + `app` `pubspec.lock`) against [`.github/dependency-denylist.txt`](./.github/dependency-denylist.txt) and the app's main Android manifest for un-audited permissions. Fails on any match or on a stale committed lock. See [`docs/dependency-audit.md`](./docs/dependency-audit.md). |
+| **build** | `flutter build apk --debug` (Ubuntu) and `flutter build ios --debug --no-codesign` (macOS); reports install size to the run summary. |
+| **CI OK** | Aggregate. Green iff every job above passed (or legitimately skipped). |
 
-- The workflow file is present and valid, but the Flutter-dependent jobs **skip** when no
-  workspace is detected.
-- **Branch protection does not yet require any status check.** A PR into `main` is therefore
-  technically mergeable without a green CI run. Do not rely on this — treat green CI as
-  mandatory by convention until p0.3 makes it mechanically enforced.
+**A PR cannot merge unless `CI OK` is green** — it is a required status check on the
+`protect-main` ruleset (added in p0.3). The `detect` job lets the Flutter jobs skip on a
+workspace-less branch without turning `CI OK` red.
 
-After p0.3: a PR cannot merge unless format/analyze/test/dependency-audit/build all pass.
+`pubspec.lock` is committed for both packages. After changing dependencies, run `pub get` and
+commit the updated lock in the same PR, or the audit job fails.
 
 ---
 
@@ -177,10 +181,10 @@ After p0.3: a PR cannot merge unless format/analyze/test/dependency-audit/build 
 them, and how to change them. Summary:
 
 - Pull request required to merge; direct pushes to `main` are rejected.
+- **`CI OK` status check required** to merge (p0.3).
 - **Squash** is the only allowed merge method.
 - Linear history required; force-pushes and branch deletion blocked.
 - 0 approvals currently required (raise this when there is more than one regular contributor).
-- No required status checks yet — added in p0.3.
 
 ---
 
