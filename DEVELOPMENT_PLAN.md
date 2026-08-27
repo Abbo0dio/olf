@@ -228,8 +228,8 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     CONTRIBUTING.md §0 toolchain instructions.
 
 #### p0.2 — Flutter workspace: `core` + `app`
-- **Status:** IN PROGRESS
-- **PR:** —
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/2
 - **Branch / worktree:** `feat/p0.2-flutter-workspace` in `../olf-wt/p0.2`
 - **Owner:** worker: phase0
 - **Depends on:** p0.1
@@ -284,6 +284,7 @@ builds and does exactly one real thing so Phase 1 has something to grow.
   - 2026-08-27 — claimed by worker: phase0; worktree `../olf-wt/p0.2`, branch
     `feat/p0.2-flutter-workspace`. Set IN PROGRESS. Scaffolded `core` + `app`, wired CI,
     added the two sample tests (all green locally).
+  - 2026-08-27 — PR #2 opened (https://github.com/Abbo0dio/olf/pull/2). Set IN REVIEW.
 
 #### p0.3 — CI gates: format, analyze, test, dependency audit, build
 - **Status:** TODO
