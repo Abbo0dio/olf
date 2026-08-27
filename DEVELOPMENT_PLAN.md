@@ -287,25 +287,58 @@ builds and does exactly one real thing so Phase 1 has something to grow.
   - 2026-08-27 — PR #2 opened (https://github.com/Abbo0dio/olf/pull/2). Set IN REVIEW.
 
 #### p0.3 — CI gates: format, analyze, test, dependency audit, build
-- **Status:** TODO
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/3
+- **Branch / worktree:** `feat/p0.3-ci-gates` in `../olf-wt/p0.3`
+- **Owner:** worker: phase0
 - **Depends on:** p0.2
 - **Goal:** GitHub Actions pipeline. Add the **dependency-audit** step that fails the build if
   any dependency (transitive included) matches a denylist of ad/analytics/tracking SDKs, or if
   a new network-permission is added without a `// audited:` justification.
 - **Acceptance criteria:**
   - PR cannot merge unless format/analyze/test/audit/build all pass.
+    - *Status:* `required_status_checks` rule added to the `protect-main` ruleset (id
+      `21675040`) requiring the **`CI OK`** aggregate check. `CI OK` is green only if
+      format + analyze + test + dependency-audit + build all pass (or legitimately skip).
+      Verified via `gh api repos/Abbo0dio/olf/rulesets/21675040`.
   - Denylist + rationale committed; documented how to extend it.
+    - *Status:* `.github/dependency-denylist.txt` (38 rules, one-line rationale each,
+      grouped analytics / advertising-attribution / crash-telemetry). `docs/dependency-audit.md`
+      covers the format (`exact` / `~substring` / `re:regex`), how to add/remove entries, what
+      the gate does and does not catch.
 - **Tests required:** a deliberately-failing fixture proves the audit step actually blocks.
+  - *Status:* `core/test/dependency_audit_test.dart` — 6 tests spawning the audit script over
+    fixtures in `core/test/fixtures/`: denylisted-lock → exit 1 (exact + `~` rules);
+    clean-lock → exit 0; un-audited manifest permission → exit 1; audited permission → exit 0;
+    real repo denylist + committed locks → exit 0; bad invocation → exit 2.
 - **Notes / detail:**
-  - p0.1 landed the workflow file (`.github/workflows/ci.yml`) with stub jobs and the
-    `dependency_audit.sh` stub. **Branch protection does NOT require any status check until
-    this task**, so between p0.1 and p0.3 a PR into `main` can be merged without a green CI
-    run. This task must: (a) add a `required_status_checks` rule to the `protect-main` ruleset
-    targeting the `CI OK` aggregate check, (b) flesh out `format` / `analyze` / `test` /
-    `build` against the p0.2 workspace, (c) replace `dependency_audit.sh` with the real
-    denylist check + committed denylist file + extension docs + failing fixture, (d) update
-    `docs/branch-protection.md` "What is NOT enforced yet" and CONTRIBUTING.md §5.
-- **Log:** — created.
+  - **Audit implementation:** rewrote the p0.1/p0.2 bash stub as
+    `.github/scripts/dependency_audit.dart` (pure `dart:` libs, runs with no `pub get`).
+    Arg-driven (`--denylist`, `--lock` ×N, `--manifest` ×N) so CI and the fixture tests share
+    one code path. Scans **every** package in a `pubspec.lock` (direct + dev + transitive).
+  - **Transitive coverage via committed locks:** `.gitignore` now keeps
+    `core/pubspec.lock` + `app/pubspec.lock` (decision in §7). The `dependency-audit` job runs
+    `pub get`, fails on lock drift (`git diff --exit-code`), then audits the locked graph +
+    `app/android/app/src/main/AndroidManifest.xml`. `src/debug` + `src/profile` manifests are
+    Flutter-tooling-managed (not release) and reviewed by eye; iOS ATS review is p2.6.
+  - **CI changes vs p0.2:** `format` also covers `.github/scripts`; `analyze` also runs
+    `dart analyze` on the tooling script; `dependency-audit` is now a real gated job (was a
+    warn-only stub); `build` adds an install-size report to `$GITHUB_STEP_SUMMARY` with a
+    250 MiB *tripwire* only — a real budget on a release build is p5.5. `ci-ok` unchanged
+    (already the intended required check).
+  - **Ruleset:** added `required_status_checks` → `CI OK`,
+    `strict_required_status_checks_policy: false` (no forced rebase). All prior rules
+    preserved (PR required, squash-only, linear history, no force-push/deletion, 0 approvals).
+    `docs/branch-protection.md` + `CONTRIBUTING.md` §5–6 updated.
+  - **Follow-ups:** tighten the size tripwire into a real budget on a release build (p5.5);
+    make the audit cover native Gradle/CocoaPods deps if any are ever added (p2.8 threat
+    model); `integration_test` wiring is p0.4.
+- **Log:**
+  - — created.
+  - 2026-08-27 — claimed by worker: phase0; worktree `../olf-wt/p0.3`, branch
+    `feat/p0.3-ci-gates`. Set IN PROGRESS. Built the real audit + failing-fixture tests,
+    committed both `pubspec.lock`s, made `CI OK` a required status check on `protect-main`.
+  - 2026-08-27 — PR #3 opened. Set IN REVIEW.
 
 #### p0.4 — Encrypted local store + first real slice: *log that your period started today*
 - **Status:** TODO
@@ -750,6 +783,14 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-27 — **`CI OK` is a required status check** on the `protect-main` ruleset (p0.3);
+  `strict_required_status_checks_policy: false`. A PR now cannot merge unless
+  format/analyze/test/dependency-audit/build all pass. — worker: phase0.
+- 2026-08-27 — **`pubspec.lock` is committed** for every package (`core` + `app`), overriding
+  the usual "libraries don't commit their lock" convention (p0.3). Rationale: the
+  dependency-audit gate scans the locked transitive graph statically (no resolution step, no
+  drift), and pinned resolutions keep CI reproducible. The audit job still runs `pub get` and
+  fails on lock drift so the committed lock cannot go stale. — worker: phase0.
 - 2026-08-27 — Monorepo wiring is **plain `path:` dependencies, not Melos** (p0.2). Two
   packages (`core`, `app`); `app` depends on `core` via `path: ../core`. Rationale: two
   packages do not justify Melos's bootstrap step and extra dev-dependency; per-package
