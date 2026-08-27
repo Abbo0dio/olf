@@ -1,0 +1,16 @@
+name: olf_core
+description: >-
+  Pure-Dart domain core for olf: cycle math, prediction engine, crypto, storage
+  and sync interfaces. No Flutter dependency — the future desktop shell reuses this.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  meta: ^1.15.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.8
