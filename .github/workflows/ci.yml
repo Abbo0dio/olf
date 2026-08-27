@@ -1,0 +1,172 @@
+name: CI
+
+# Gates every PR into main and every push to main.
+# Jobs: format · analyze · test · dependency-audit · build
+#
+# Phase 0 state:
+#   - The Flutter workspace (core + app packages) does not exist until p0.2.
+#   - Real gating (fail-on-violation, denylist, failing-fixture test, iOS/Android
+#     build matrix) is wired in p0.3, which also marks these checks "required" in
+#     the branch ruleset.
+#   - Until p0.3: Flutter-dependent jobs SKIP when no workspace is detected, and
+#     branch protection does NOT require any status check, so a PR is technically
+#     mergeable without a green run here. Treat green CI as mandatory by convention.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # SDK version is provisional (mise pins 3.35.5 locally). p0.2 finalises it and,
+  # if it changes, records the change in DEVELOPMENT_PLAN.md §7 + the p0.2 Notes.
+  FLUTTER_VERSION: "3.35.5"
+
+jobs:
+  # Detects whether the Flutter workspace exists yet. Downstream jobs use this to
+  # skip cleanly before p0.2 instead of failing red.
+  detect:
+    name: Detect workspace
+    runs-on: ubuntu-latest
+    outputs:
+      flutter_ready: ${{ steps.check.outputs.flutter_ready }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        shell: bash
+        run: |
+          if [ -f pubspec.yaml ] || [ -f app/pubspec.yaml ] || [ -f melos.yaml ]; then
+            echo "flutter_ready=true" >> "$GITHUB_OUTPUT"
+            echo "Flutter workspace detected."
+          else
+            echo "flutter_ready=false" >> "$GITHUB_OUTPUT"
+            echo "No Flutter workspace yet (arrives in p0.2). Flutter jobs will skip."
+          fi
+
+  format:
+    name: Format
+    needs: detect
+    if: needs.detect.outputs.flutter_ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: dart format (check only)
+        run: dart format --output=none --set-exit-if-changed .
+
+  analyze:
+    name: Analyze
+    needs: detect
+    if: needs.detect.outputs.flutter_ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: flutter analyze
+        run: flutter analyze --fatal-infos --fatal-warnings
+
+  test:
+    name: Test
+    needs: detect
+    if: needs.detect.outputs.flutter_ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Run tests
+        run: flutter test --coverage
+      # p0.2 adds: one core unit test + one app widget test (they gate all future PRs).
+      # p0.4 adds: repository/migration unit tests + integration test.
+
+  dependency-audit:
+    name: Dependency audit
+    needs: detect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run dependency audit
+        shell: bash
+        run: bash .github/scripts/dependency_audit.sh
+      # p0.3 replaces the stub script with the real check:
+      #   - denylist of ad/analytics/tracking SDKs, transitive deps included
+      #     (fails the build on any match; denylist + rationale committed)
+      #   - new network permissions require a `// audited:` justification
+      #   - a deliberately-failing fixture proves the step actually blocks
+
+  build:
+    name: Build
+    needs: [detect, format, analyze, test]
+    if: needs.detect.outputs.flutter_ready == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: apk
+          - os: macos-latest
+            target: ios
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Build Android (debug APK)
+        if: matrix.target == 'apk'
+        run: flutter build apk --debug
+      - name: Build iOS (no codesign)
+        if: matrix.target == 'ios'
+        run: flutter build ios --debug --no-codesign
+      # p0.3 finalises the build matrix and adds an install-size check (§3 budget).
+
+  # Aggregate gate: one status for the ruleset to require once p0.3 wires it.
+  ci-ok:
+    name: CI OK
+    needs: [format, analyze, test, dependency-audit, build]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      NEEDS_JSON: ${{ toJSON(needs) }}
+    steps:
+      - name: Verify no upstream job failed
+        shell: bash
+        run: |
+          echo "$NEEDS_JSON"
+          if echo "$NEEDS_JSON" | grep -q '"result": "failure"'; then
+            echo "A required job failed."
+            exit 1
+          fi
+          if echo "$NEEDS_JSON" | grep -q '"result": "cancelled"'; then
+            echo "A required job was cancelled."
+            exit 1
+          fi
+          echo "All required jobs passed or were skipped."

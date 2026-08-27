@@ -173,19 +173,51 @@ Cross-cutting work (compliance ledger, release/store readiness, threat model) is
 
 ### Phase 0 — Repo, workflow, CI
 
-**Status:** `TODO` · **Goal:** the repo exists, the workflow is enforced, and the app builds
-and does exactly one real thing so Phase 1 has something to grow.
+**Status:** `IN PROGRESS` · **Goal:** the repo exists, the workflow is enforced, and the app
+builds and does exactly one real thing so Phase 1 has something to grow.
 
 #### p0.1 — Initialise repository & workflow
-- **Status:** TODO
+- **Status:** IN PROGRESS
+- **Branch / worktree:** `feat/p0.1-workflow-scaffolding` in `../olf-wt/p0.1`
+- **Owner:** worker: phase0
 - **Depends on:** none
 - **Goal:** `git init`, first commit, GitHub remote, branch protection on `main`, `.gitignore`,
   `CONTRIBUTING.md` capturing the §1 workflow, PR template with the §1.4 checklist.
 - **Acceptance criteria:**
   - `main` is protected; direct pushes blocked; PR + green CI required to merge.
+    - *Status:* `main` is protected (ruleset `protect-main`, active): PR required, squash-only,
+      linear history, no force-push, no deletion, no bypass actors. **Required status checks
+      are NOT wired yet** — that is p0.3. Until p0.3 merges, a PR is technically mergeable
+      without a green CI run; green CI is mandatory by convention. Documented in
+      `docs/branch-protection.md` and CONTRIBUTING.md §5–6.
   - `CONTRIBUTING.md` documents the worktree→PR→merge flow and status legend.
 - **Tests required:** n/a (repo scaffolding) — but the CI workflow file is added here.
-- **Log:** — created.
+- **Notes / detail:**
+  - Added `CONTRIBUTING.md` — golden rules, status legend (mirrors §1.2), full
+    worktree→PR→merge workflow (mirrors §1.3), Definition of Done (mirrors §1.4), CI state,
+    branch-protection summary, commit/PR conventions.
+  - Added `.github/pull_request_template.md` — task block + acceptance-criteria/verification
+    table + the §1.4 DoD checklist + test-output + "foundational decisions changed" section.
+  - Added `.github/workflows/ci.yml` — valid YAML, jobs `detect` → `format` / `analyze` /
+    `test` / `dependency-audit` / `build` → `ci-ok` aggregate. Flutter-dependent jobs skip
+    until the workspace lands in p0.2 (detected via `pubspec.yaml` / `app/pubspec.yaml` /
+    `melos.yaml`). `dependency-audit` always runs. `ci-ok` is the single check p0.3 will mark
+    required in the ruleset.
+  - Added `.github/scripts/dependency_audit.sh` — Phase 0 stub: seed denylist of
+    ad/analytics/tracking/crash SDK package names, best-effort scan of `pubspec.lock` when it
+    exists, warn-only. p0.3 makes matches fatal, commits the denylist + extension docs, adds
+    the deliberately-failing fixture.
+  - Added `docs/branch-protection.md` — exact ruleset rules, ruleset id `21675040`, verify
+    commands, change procedure. Last confirmed 2026-08-27.
+  - Provisional SDK pin in CI: `FLUTTER_VERSION=3.35.5` (matches local `mise`); p0.2 finalises
+    and records any change in §7 + p0.2 Notes.
+  - Follow-ups for p0.3: wire `required_status_checks` → `CI OK`; flesh out `format` /
+    `analyze` / `test` / `build` once p0.2 exists; real dependency-audit + failing fixture;
+    install-size check (§3 budget).
+- **Log:**
+  - — created.
+  - 2026-08-27 — claimed by worker: phase0; worktree `../olf-wt/p0.1`, branch
+    `feat/p0.1-workflow-scaffolding`. Set IN PROGRESS.
 
 #### p0.2 — Flutter workspace: `core` + `app`
 - **Status:** TODO
@@ -209,6 +241,15 @@ and does exactly one real thing so Phase 1 has something to grow.
   - PR cannot merge unless format/analyze/test/audit/build all pass.
   - Denylist + rationale committed; documented how to extend it.
 - **Tests required:** a deliberately-failing fixture proves the audit step actually blocks.
+- **Notes / detail:**
+  - p0.1 landed the workflow file (`.github/workflows/ci.yml`) with stub jobs and the
+    `dependency_audit.sh` stub. **Branch protection does NOT require any status check until
+    this task**, so between p0.1 and p0.3 a PR into `main` can be merged without a green CI
+    run. This task must: (a) add a `required_status_checks` rule to the `protect-main` ruleset
+    targeting the `CI OK` aggregate check, (b) flesh out `format` / `analyze` / `test` /
+    `build` against the p0.2 workspace, (c) replace `dependency_audit.sh` with the real
+    denylist check + committed denylist file + extension docs + failing fixture, (d) update
+    `docs/branch-protection.md` "What is NOT enforced yet" and CONTRIBUTING.md §5.
 - **Log:** — created.
 
 #### p0.4 — Encrypted local store + first real slice: *log that your period started today*
