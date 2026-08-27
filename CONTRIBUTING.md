@@ -11,6 +11,21 @@ this file.
 
 ---
 
+## 0. Toolchain
+
+The Flutter/Dart SDK is pinned with [`mise`](https://mise.jdx.dev) via [`mise.toml`](./mise.toml)
+at the repo root. Current pins: **Flutter 3.35.5**, **Dart 3.9.2** (bundled with that Flutter).
+
+- Install the pinned toolchain once: **`mise install`** (run from the repo root).
+- Then either prefix every Flutter/Dart command with **`mise exec --`**
+  (e.g. `mise exec -- flutter test`, `mise exec -- dart format .`), or run **`mise activate`**
+  in your shell so `flutter` / `dart` resolve to the pinned versions automatically.
+- CI pins the same version (`FLUTTER_VERSION` in `.github/workflows/ci.yml`). If you change the
+  SDK version, change it in **both** places and record it in `DEVELOPMENT_PLAN.md` §7
+  (Decisions Log).
+
+---
+
 ## 1. Golden rules
 
 1. **No direct commits to `main`.** All work lands via a pull request from a feature branch that

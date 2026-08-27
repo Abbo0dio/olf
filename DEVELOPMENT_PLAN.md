@@ -177,7 +177,8 @@ Cross-cutting work (compliance ledger, release/store readiness, threat model) is
 builds and does exactly one real thing so Phase 1 has something to grow.
 
 #### p0.1 — Initialise repository & workflow
-- **Status:** IN PROGRESS
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/1
 - **Branch / worktree:** `feat/p0.1-workflow-scaffolding` in `../olf-wt/p0.1`
 - **Owner:** worker: phase0
 - **Depends on:** none
@@ -209,7 +210,11 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     the deliberately-failing fixture.
   - Added `docs/branch-protection.md` — exact ruleset rules, ruleset id `21675040`, verify
     commands, change procedure. Last confirmed 2026-08-27.
-  - Provisional SDK pin in CI: `FLUTTER_VERSION=3.35.5` (matches local `mise`); p0.2 finalises
+  - Added `mise.toml` at repo root — pins the toolchain: **Flutter 3.35.5**, **Dart 3.9.2**
+    (bundled). Verified locally via `mise exec -- flutter --version` / `mise exec -- dart
+    --version`. CONTRIBUTING.md §0 tells contributors to run `mise install` and prefix
+    Flutter/Dart commands with `mise exec --` (or `mise activate`).
+  - SDK pin in CI: `FLUTTER_VERSION=3.35.5` (matches `mise.toml`); p0.2 confirms it still fits
     and records any change in §7 + p0.2 Notes.
   - Follow-ups for p0.3: wire `required_status_checks` → `CI OK`; flesh out `format` /
     `analyze` / `test` / `build` once p0.2 exists; real dependency-audit + failing fixture;
@@ -218,6 +223,9 @@ builds and does exactly one real thing so Phase 1 has something to grow.
   - — created.
   - 2026-08-27 — claimed by worker: phase0; worktree `../olf-wt/p0.1`, branch
     `feat/p0.1-workflow-scaffolding`. Set IN PROGRESS.
+  - 2026-08-27 — PR #1 opened (https://github.com/Abbo0dio/olf/pull/1). Set IN REVIEW.
+  - 2026-08-27 — added `mise.toml` (Flutter 3.35.5 / Dart 3.9.2 pin) from orchestrator +
+    CONTRIBUTING.md §0 toolchain instructions.
 
 #### p0.2 — Flutter workspace: `core` + `app`
 - **Status:** TODO
