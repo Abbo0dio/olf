@@ -194,10 +194,11 @@ jobs:
             echo "::warning::size report: artifact not found at $artifact"
             exit 0
           fi
-          bytes=$(du -sb "$artifact" | cut -f1)
-          mib=$(( bytes / 1024 / 1024 ))
+          # `du -sk` (KiB) is portable across GNU and BSD/macOS `du`; `-b` is not.
+          kib=$(du -sk "$artifact" | cut -f1)
+          mib=$(( kib / 1024 ))
           echo "### Install size — ${{ matrix.target }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`$artifact\` = **${mib} MiB** (${bytes} bytes, debug build)" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$artifact\` = **${mib} MiB** (${kib} KiB, debug build)" >> "$GITHUB_STEP_SUMMARY"
           # Tripwire only. A real budget on a release build is p5.5.
           ceiling_mib=250
           if [ "$mib" -gt "$ceiling_mib" ]; then
