@@ -3,14 +3,17 @@ name: CI
 # Gates every PR into main and every push to main.
 # Jobs: format · analyze · test · dependency-audit · build
 #
+# Workspace layout (p0.2): a pure-Dart `core/` package (olf_core) and a Flutter
+# `app/` package (olf_app) that path-depends on core. See /README.md.
+#
 # Phase 0 state:
-#   - The Flutter workspace (core + app packages) does not exist until p0.2.
-#   - Real gating (fail-on-violation, denylist, failing-fixture test, iOS/Android
-#     build matrix) is wired in p0.3, which also marks these checks "required" in
-#     the branch ruleset.
-#   - Until p0.3: Flutter-dependent jobs SKIP when no workspace is detected, and
-#     branch protection does NOT require any status check, so a PR is technically
-#     mergeable without a green run here. Treat green CI as mandatory by convention.
+#   - p0.2 wired format/analyze/test/build against core + app, plus the two sample
+#     tests (core unit + app widget) that gate all future PRs.
+#   - p0.3 still owns: the real dependency-audit (denylist + transitive scan +
+#     failing-fixture), the install-size check, and marking `CI OK` a REQUIRED
+#     status check on the `protect-main` ruleset.
+#   - Until p0.3 makes `CI OK` required, a PR is technically mergeable without a
+#     green run here. Treat green CI as mandatory by convention.
 
 on:
   pull_request:
@@ -27,13 +30,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # SDK version is provisional (mise pins 3.35.5 locally). p0.2 finalises it and,
-  # if it changes, records the change in DEVELOPMENT_PLAN.md §7 + the p0.2 Notes.
+  # Keep in sync with /mise.toml. Changing this is a §7 Decisions Log entry.
   FLUTTER_VERSION: "3.35.5"
 
 jobs:
-  # Detects whether the Flutter workspace exists yet. Downstream jobs use this to
-  # skip cleanly before p0.2 instead of failing red.
+  # Guards the Flutter jobs so they skip cleanly if the workspace is ever absent
+  # (e.g. a docs-only branch cut before p0.2). Normally true from p0.2 onward.
   detect:
     name: Detect workspace
     runs-on: ubuntu-latest
@@ -44,12 +46,12 @@ jobs:
       - id: check
         shell: bash
         run: |
-          if [ -f pubspec.yaml ] || [ -f app/pubspec.yaml ] || [ -f melos.yaml ]; then
+          if [ -f app/pubspec.yaml ] && [ -f core/pubspec.yaml ]; then
             echo "flutter_ready=true" >> "$GITHUB_OUTPUT"
-            echo "Flutter workspace detected."
+            echo "Workspace detected (core + app)."
           else
             echo "flutter_ready=false" >> "$GITHUB_OUTPUT"
-            echo "No Flutter workspace yet (arrives in p0.2). Flutter jobs will skip."
+            echo "No core+app workspace detected. Flutter jobs will skip."
           fi
 
   format:
@@ -65,7 +67,7 @@ jobs:
           channel: stable
           cache: true
       - name: dart format (check only)
-        run: dart format --output=none --set-exit-if-changed .
+        run: dart format --output=none --set-exit-if-changed core app
 
   analyze:
     name: Analyze
@@ -79,10 +81,16 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      - name: Resolve dependencies
-        run: flutter pub get
-      - name: flutter analyze
-        run: flutter analyze --fatal-infos --fatal-warnings
+      - name: core — resolve & analyze (pure Dart, no Flutter)
+        working-directory: core
+        run: |
+          dart pub get
+          dart analyze --fatal-infos --fatal-warnings
+      - name: app — resolve & analyze
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze --fatal-infos --fatal-warnings
 
   test:
     name: Test
@@ -96,12 +104,18 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      - name: Resolve dependencies
-        run: flutter pub get
-      - name: Run tests
-        run: flutter test --coverage
-      # p0.2 adds: one core unit test + one app widget test (they gate all future PRs).
-      # p0.4 adds: repository/migration unit tests + integration test.
+      - name: core — unit tests
+        working-directory: core
+        run: |
+          dart pub get
+          dart test
+      - name: app — widget tests
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter test --coverage
+      # p0.4 adds: repository/migration unit tests + a log→restart→delete
+      # integration test.
 
   dependency-audit:
     name: Dependency audit
@@ -123,6 +137,9 @@ jobs:
     needs: [detect, format, analyze, test]
     if: needs.detect.outputs.flutter_ready == 'true'
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: app
     strategy:
       fail-fast: false
       matrix:
@@ -148,7 +165,7 @@ jobs:
         run: flutter build ios --debug --no-codesign
       # p0.3 finalises the build matrix and adds an install-size check (§3 budget).
 
-  # Aggregate gate: one status for the ruleset to require once p0.3 wires it.
+  # Aggregate gate: the single status p0.3 will mark REQUIRED on the ruleset.
   ci-ok:
     name: CI OK
     needs: [format, analyze, test, dependency-audit, build]

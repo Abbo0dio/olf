@@ -10,9 +10,10 @@
 #
 # This stub:
 #   - Documents intent so the CI job exists and is valid now.
-#   - Does a best-effort grep against pubspec.lock IF it exists (it will not until
-#     p0.2). It only WARNS on a match; p0.3 makes matches fatal and adds the
-#     committed denylist file, the extension docs, and a failing-fixture test.
+#   - Greps each package's pubspec.yaml (and pubspec.lock when present — it is
+#     gitignored, so usually only after `pub get`) for denylisted names.
+#   - Only WARNS on a match. p0.3 makes matches fatal and adds the committed
+#     denylist file, the extension docs, and a deliberately-failing fixture.
 #
 # Exit non-zero only on an internal error, never (yet) on a denylist hit.
 
@@ -34,17 +35,21 @@ DENYLIST=(
   facebook_app_events app_tracking_transparency
 )
 
-LOCKFILE="pubspec.lock"
-if [ ! -f "$LOCKFILE" ]; then
-  echo "No $LOCKFILE yet (Flutter workspace arrives in p0.2)."
-  echo "Nothing to audit. PASS (stub)."
+# Manifests to scan. pubspec.lock is added when it exists (transitive coverage).
+FILES=()
+for f in core/pubspec.yaml app/pubspec.yaml core/pubspec.lock app/pubspec.lock; do
+  [ -f "$f" ] && FILES+=("$f")
+done
+
+if [ "${#FILES[@]}" -eq 0 ]; then
+  echo "No pubspec manifests found. Nothing to audit. PASS (stub)."
   exit 0
 fi
 
-echo "Scanning $LOCKFILE against ${#DENYLIST[@]} denylisted package names..."
+echo "Scanning ${FILES[*]} against ${#DENYLIST[@]} denylisted package names..."
 hits=0
 for pkg in "${DENYLIST[@]}"; do
-  if grep -Eq "^\s{2}${pkg}:" "$LOCKFILE"; then
+  if grep -Eqs "(^|[[:space:]\"'])${pkg}:" "${FILES[@]}"; then
     echo "::warning::denylisted dependency present: ${pkg} (p0.3 will make this fatal)"
     hits=$((hits + 1))
   fi

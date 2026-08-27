@@ -228,16 +228,62 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     CONTRIBUTING.md §0 toolchain instructions.
 
 #### p0.2 — Flutter workspace: `core` + `app`
-- **Status:** TODO
+- **Status:** IN PROGRESS
+- **PR:** —
+- **Branch / worktree:** `feat/p0.2-flutter-workspace` in `../olf-wt/p0.2`
+- **Owner:** worker: phase0
 - **Depends on:** p0.1
 - **Goal:** Melos (or plain path deps) monorepo with a pure-Dart `core` package and a Flutter
   `app` package. App launches to an empty themed home screen (light + dark).
 - **Acceptance criteria:**
   - `core` has **no Flutter dependency**.
+    - *Status:* `core/pubspec.yaml` (`olf_core`) depends only on `meta`; dev-deps `lints`,
+      `test`. No `flutter` / `flutter_test`. Analyzed with plain `dart analyze` and tested with
+      plain `dart test` (no Flutter tooling) in CI, which would break if a Flutter import crept
+      in.
   - App builds and runs on iOS simulator and Android emulator.
+    - *Status:* build verified **in CI** — `build` job runs `flutter build apk --debug`
+      (ubuntu) and `flutter build ios --debug --no-codesign` (macos). Local Android/iOS
+      build+run was **not** possible on the worker box (no Android SDK; Linux, so no macOS);
+      an emulator/simulator smoke-run is left for the reviewer/orchestrator before merge.
   - One trivial unit test in `core` and one widget test in `app` run in CI.
+    - *Status:* `core/test/date_math_test.dart` (6 tests over `daysBetween` / `dayCountSince`)
+      and `app/test/widget_test.dart` (2 tests: home-screen copy + dark-mode render). Both run
+      in the `test` CI job. These gate all future PRs.
 - **Tests required:** the two sample tests above; they gate all future PRs.
-- **Log:** — created.
+- **Notes / detail:**
+  - **Layout:** plain `path:` dependency monorepo, **not Melos** (decision recorded in §7).
+    `core/` = `olf_core` (pure Dart, `version: 0.1.0`); `app/` = `olf_app`
+    (`flutter create --org com.olf --platforms ios,android`), depends on
+    `olf_core: { path: ../core }`. Root `README.md` documents the layout.
+  - **`core` first real code:** `lib/src/date_math.dart` — `dateOnly`, `daysBetween` (DST-safe
+    via UTC-normalised midnights), `dayCountSince` (1-based, start = Day 1). Chosen because
+    p0.4's home screen needs a "Day N" readout; keeps the sample test non-vacuous.
+  - **`app`:** `main.dart` trimmed to `OlfApp` + `HomePage`. Material 3,
+    `ColorScheme.fromSeed`, `themeMode: ThemeMode.system`, explicit `theme` + `darkTheme`.
+    Provisional neutral seed `0xFF4C6B5A` (not pink/gendered) with a `// TODO(p1.9)` — the real
+    design-token/pronoun baseline is p1.9. Home screen shows only an `olf` app bar + centred
+    "Nothing logged yet." (p0.4 adds the first action). `olf_core` is a declared dependency;
+    first actual consumer is p0.4.
+  - **Lints:** `core` uses `package:lints/recommended.yaml` + strict-casts/inference/raw-types;
+    `app` keeps `package:flutter_lints`. `flutter analyze --fatal-infos --fatal-warnings` and
+    `dart analyze --fatal-infos --fatal-warnings` both clean.
+  - **CI:** `ci.yml` updated from the p0.1 stub — `format` now targets `core app`; `analyze`
+    and `test` run per-package (plain `dart` for core, `flutter` for app); `build` uses
+    `working-directory: app`. `detect` now requires both `core/` and `app/` pubspecs.
+    `dependency_audit.sh` stub now scans both packages' `pubspec.yaml`/`.lock` (still
+    warn-only; p0.3 makes it real).
+  - **SDK:** Flutter 3.35.5 / Dart 3.9.2 (matches `mise.toml` and CI `FLUTTER_VERSION`) —
+    verified via `mise exec -- flutter --version`. No change to the provisional pin.
+  - **Follow-ups:** (a) `pubspec.lock` stays gitignored (inherited from initial commit); if
+    reproducible CI builds want it, commit `app/pubspec.lock` in p0.3. (b) Riverpod is
+    **not** added yet (no state to manage) — introduce it with the first stateful screen.
+    (c) `integration_test` package added in p0.4.
+- **Log:**
+  - — created.
+  - 2026-08-27 — claimed by worker: phase0; worktree `../olf-wt/p0.2`, branch
+    `feat/p0.2-flutter-workspace`. Set IN PROGRESS. Scaffolded `core` + `app`, wired CI,
+    added the two sample tests (all green locally).
 
 #### p0.3 — CI gates: format, analyze, test, dependency audit, build
 - **Status:** TODO
@@ -703,6 +749,15 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-27 — Monorepo wiring is **plain `path:` dependencies, not Melos** (p0.2). Two
+  packages (`core`, `app`); `app` depends on `core` via `path: ../core`. Rationale: two
+  packages do not justify Melos's bootstrap step and extra dev-dependency; per-package
+  `dart`/`flutter` commands in CI are explicit and readable, and running `core` with plain
+  `dart` (no Flutter tooling) actively enforces the "`core` has no Flutter dependency" rule.
+  Revisit if the package count grows (e.g. a desktop shell package in Phase 13). — worker: phase0.
+- 2026-08-27 — Toolchain pinned via **`mise`** (`mise.toml` at repo root): Flutter **3.35.5**
+  / Dart **3.9.2** (p0.1/p0.2). CI pins the same through `FLUTTER_VERSION` in `ci.yml`. This
+  confirms the §3 provisional Flutter choice for the MVP; no change to it. — worker: phase0.
 - 2026-08-27 — Framework provisionally **Flutter**; architecture is a pure-Dart `core` package
   plus a Flutter `app`, with a future desktop app as a *separate* lean shell reusing `core`.
   Rationale: one codebase for iOS+Android, native-compiled so it runs on low-end devices,
