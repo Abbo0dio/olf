@@ -147,7 +147,7 @@ A task is not `DONE` until **all** of these hold:
 
 | Phase | Theme | Status | Gate to move on |
 |-------|-------|--------|-----------------|
-| **0** | Repo, workflow, CI, app-runs-and-does-one-real-thing | `TODO` | CI green; a build installs; one real slice merged |
+| **0** | Repo, workflow, CI, app-runs-and-does-one-real-thing | `DONE` | CI green; a build installs; one real slice merged |
 | **1** | MVP core tracking — free, un-paywalled | `TODO` | Core tracking usable end-to-end; correction loop works; backup/restore works |
 | **2** | Privacy & security hardening | `TODO` | Lock + decoy + auto-delete + standalone policy shipped; audit gate enforced |
 | **3** | Correctable adaptive prediction engine v2 | `TODO` | Handles irregular cycles; backtesting harness + accuracy metrics; corrections visibly improve output |
@@ -173,12 +173,12 @@ Cross-cutting work (compliance ledger, release/store readiness, threat model) is
 
 ### Phase 0 — Repo, workflow, CI
 
-**Status:** `IN PROGRESS` · **Goal:** the repo exists, the workflow is enforced, and the app
+**Status:** `DONE` · **Goal:** the repo exists, the workflow is enforced, and the app
 builds and does exactly one real thing so Phase 1 has something to grow.
 
 #### p0.1 — Initialise repository & workflow
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/1
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/1 (merged)
 - **Branch / worktree:** `feat/p0.1-workflow-scaffolding` in `../olf-wt/p0.1`
 - **Owner:** worker: phase0
 - **Depends on:** none
@@ -224,12 +224,13 @@ builds and does exactly one real thing so Phase 1 has something to grow.
   - 2026-08-27 — claimed by worker: phase0; worktree `../olf-wt/p0.1`, branch
     `feat/p0.1-workflow-scaffolding`. Set IN PROGRESS.
   - 2026-08-27 — PR #1 opened (https://github.com/Abbo0dio/olf/pull/1). Set IN REVIEW.
+  - 2026-08-28 — PR #1 squash-merged to `main`; CI green on `main`. Set DONE.
   - 2026-08-27 — added `mise.toml` (Flutter 3.35.5 / Dart 3.9.2 pin) from orchestrator +
     CONTRIBUTING.md §0 toolchain instructions.
 
 #### p0.2 — Flutter workspace: `core` + `app`
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/2
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/2 (merged)
 - **Branch / worktree:** `feat/p0.2-flutter-workspace` in `../olf-wt/p0.2`
 - **Owner:** worker: phase0
 - **Depends on:** p0.1
@@ -285,10 +286,11 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     `feat/p0.2-flutter-workspace`. Set IN PROGRESS. Scaffolded `core` + `app`, wired CI,
     added the two sample tests (all green locally).
   - 2026-08-27 — PR #2 opened (https://github.com/Abbo0dio/olf/pull/2). Set IN REVIEW.
+  - 2026-08-28 — PR #2 squash-merged to `main`; CI green on `main`. Set DONE.
 
 #### p0.3 — CI gates: format, analyze, test, dependency audit, build
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/3
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/3 (merged)
 - **Branch / worktree:** `feat/p0.3-ci-gates` in `../olf-wt/p0.3`
 - **Owner:** worker: phase0
 - **Depends on:** p0.2
@@ -339,10 +341,12 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     `feat/p0.3-ci-gates`. Set IN PROGRESS. Built the real audit + failing-fixture tests,
     committed both `pubspec.lock`s, made `CI OK` a required status check on `protect-main`.
   - 2026-08-27 — PR #3 opened. Set IN REVIEW.
+  - 2026-08-28 — PR #3 squash-merged to `main`; CI green on `main`; `CI OK` required-check
+    active on `protect-main`. Set DONE.
 
 #### p0.4 — Encrypted local store + first real slice: *log that your period started today*
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/4
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/4 (merged)
 - **Branch / worktree:** `feat/p0.4-encrypted-store-log-period` in `../olf-wt/p0.4`
 - **Owner:** worker: phase0
 - **Depends on:** p0.3
@@ -414,8 +418,15 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     repository, `app` encrypted executor + secure key store + Riverpod wiring + home screen;
     17 core tests, 6 widget tests green locally.
   - 2026-08-28 — PR #4 opened. Set IN REVIEW.
+  - 2026-08-28 — PR #4 squash-merged to `main`; CI green on `main` (core 23 tests, app 6
+    widget tests, debug APK + unsigned iOS build). Set DONE. Manual device install/launch not
+    performed — tracked in §9 (see "Phase 0 exit-gate: device smoke + integration_test in CI").
 
-**Phase 0 exit gate:** CI enforces the workflow; app installs on both platforms; p0.4 merged.
+**Phase 0 exit gate:** CI enforces the worktree→PR→merge workflow (required `CI OK` check);
+every PR builds a debug APK (Ubuntu) and an unsigned iOS build (macOS); p0.4 merged and the app
+does one real thing (log a period, encrypted, "Day N", delete). **Caveat:** no automated or
+manual install-and-launch on a real device/emulator/simulator yet — see the §9 backlog item.
+Gate considered met for the purpose of starting Phase 1; the device-smoke gap is handed off.
 
 ---
 
@@ -892,7 +903,18 @@ Move these into the Decisions Log once answered.
 
 Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases later.
 
-- (none yet)
+- **Phase 0 exit-gate: device smoke + `integration_test` in CI.** Phase 0 shipped with CI
+  *building* a debug APK and an unsigned iOS app on every PR, but nothing installs or launches
+  the app on a real device / emulator / simulator, and `app/integration_test/log_period_test.dart`
+  is not run anywhere. Close the gap: (a) add an Android emulator job (e.g.
+  `reactivecircus/android-emulator-runner`) that runs `flutter test integration_test/` and, if
+  feasible, an iOS simulator job on `macos-latest`; (b) do a one-time manual install+launch on
+  one physical Android and one physical iOS device and record the result; (c) decide whether
+  the emulator job is required on every PR or nightly (it is slow/flaky — nightly + on-demand
+  is acceptable). Also fold in the p0.4 follow-ups: move `EncryptedDatabase` open to a
+  background isolate if first-frame jank appears; introduce drift schema-snapshot tooling with
+  the first real migration; revisit the DB directory choice when p1.10 (backup/export) lands.
+- (add more here)
 
 ## 10. Orphaned / cut work
 
