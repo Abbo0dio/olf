@@ -595,7 +595,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     new deps); `pubspec.lock` unchanged. Awaiting orchestrator review + merge.
 
 #### p1.2 — Flow intensity, spotting, clots — one/two-tap logging
-- **Status:** IN PROGRESS
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/10
 - **Branch / worktree:** `feat/p1.2-flow-intensity` / `../olf-wt/p1.2`
 - **Owner:** worker: phase1
 - **Depends on:** p1.1
@@ -635,6 +636,12 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     `feat/p1.2-flow-intensity` off `main` @ `4d0489f`. Building: `daily_flows` table (schema
     v3 + migration + test), `DailyFlowRepository`, flow quick-log sheet, calendar cell
     rendering, tap-count widget tests.
+  - 2026-08-28 — built. Schema v3 `daily_flows` (per-day, unlinked from `periods`),
+    `DriftDailyFlowRepository` (upsert preserving `created_at`), flow quick-log sheet,
+    calendar intensity bar + semantics, home summary "Today's flow" chip. v2→v3 migration
+    test + v1→v3 pass-through. core 74 / app 14 green, analyze + format clean, dependency
+    audit PASS, codegen committed. §7 decision + §9 follow-ups recorded. PR #10 opened into
+    `main`; **IN REVIEW** — awaiting orchestrator merge.
 
 #### p1.3 — Cycle derivation & history
 - **Status:** TODO
