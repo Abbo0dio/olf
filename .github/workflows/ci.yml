@@ -3,6 +3,13 @@ name: CI
 # Gates every PR into main and every push to main.
 # Jobs: format · analyze · test · dependency-audit · build  →  CI OK (aggregate)
 #
+# The on-device integration_test suite is NOT run here (GitHub's Linux runners
+# have no emulator, and spinning one up per PR is slow and flaky). It runs in a
+# SEPARATE, non-blocking workflow — .github/workflows/nightly-integration.yml
+# (nightly `schedule:` + manual `workflow_dispatch`) — which is deliberately not
+# wired into `CI OK`. The restart round-trip it covers is also covered headless
+# on every PR by core/test/db/persistence_test.dart + app/test/widget_test.dart.
+#
 # Workspace layout (p0.2): a pure-Dart `core/` package (olf_core) and a Flutter
 # `app/` package (olf_app) that path-depends on core. See /README.md.
 #
@@ -128,8 +135,8 @@ jobs:
         working-directory: app
         run: flutter test --coverage
       # The log→restart→delete round-trip is covered headless by
-      # core/test/db/persistence_test.dart; the on-device integration_test is not
-      # run here (no emulator).
+      # core/test/db/persistence_test.dart; the on-device integration_test runs
+      # in the separate nightly workflow (.github/workflows/nightly-integration.yml).
 
   dependency-audit:
     name: Dependency audit

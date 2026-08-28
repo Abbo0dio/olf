@@ -172,6 +172,24 @@ workspace-less branch without turning `CI OK` red.
 `pubspec.lock` is committed for both packages. After changing dependencies, run `pub get` and
 commit the updated lock in the same PR, or the audit job fails.
 
+### 5.1 Nightly integration tests (not a PR gate)
+
+[`.github/workflows/nightly-integration.yml`](./.github/workflows/nightly-integration.yml) runs
+`flutter test integration_test/` on a real Android emulator (API 26 + 34) and a real iOS
+simulator, exercising SQLCipher + the platform key store on a real OS image.
+
+| Job | What it does |
+|-----|--------------|
+| **android-emulator** | Boots a KVM-accelerated x86_64 emulator (`reactivecircus/android-emulator-runner`) per API level and runs `flutter test integration_test/log_period_test.dart` in `app/`. |
+| **ios-simulator** | Boots the newest available iPhone simulator on `macos-latest` via `xcrun simctl` and runs the same suite. |
+
+It is triggered by a nightly `schedule:` and by manual `workflow_dispatch` (Actions tab, or
+`gh workflow run nightly-integration.yml`). It is **deliberately not** part of `CI OK` and
+**does not block PRs** — emulator/simulator boots are slow and occasionally flaky, and the
+log→restart→delete round-trip is already covered headless on every PR by
+`core/test/db/persistence_test.dart` and `app/test/widget_test.dart`. A red nightly is a bug to
+chase, not a merge blocker.
+
 ---
 
 ## 6. Branch protection
