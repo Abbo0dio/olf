@@ -4,6 +4,8 @@
 /// §3): the mobile app and the future desktop shell both consume it.
 library;
 
+export 'src/cycle/cycle.dart';
+export 'src/cycle/cycle_derivation.dart';
 export 'src/date_math.dart';
 export 'src/db/app_database.dart';
 export 'src/db/database_key_store.dart';
