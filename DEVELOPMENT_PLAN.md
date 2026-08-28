@@ -535,7 +535,7 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
 - **Status:** IN REVIEW
 - **Branch / worktree:** `feat/p1.1-period-logging` / `../olf-wt/p1.1`
 - **Owner:** worker: phase1
-- **PR:** _pending — opened after local checks pass_
+- **PR:** [#9](https://github.com/Abbo0dio/olf/pull/9)
 - **Depends on:** p0.4
 - **Requirement refs:** §1, §9(1)
 - **Goal:** Log a period with start and (optional, later) end date; see periods on a month
@@ -589,6 +589,10 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     `feat/p1.1-period-logging` off `main` @ `3149365`. Building the slice: `periods` table
     (schema v2 + migration + migration test), `PeriodRepository` with validation at the seam,
     hand-rolled month calendar + history list + add/edit/delete editor, full test set.
+  - 2026-08-28 — **IN REVIEW**, PR [#9](https://github.com/Abbo0dio/olf/pull/9). Local checks
+    green (`mise exec --`): format 0 changed; core + app analyze — no issues; drift codegen no
+    diff; core `dart test` 64 passed; app `flutter test` 11 passed; dependency audit PASS (no
+    new deps); `pubspec.lock` unchanged. Awaiting orchestrator review + merge.
 
 #### p1.2 — Flow intensity, spotting, clots — one/two-tap logging
 - **Status:** TODO
