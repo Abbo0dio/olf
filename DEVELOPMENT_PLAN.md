@@ -423,8 +423,9 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     performed — handed off to p0.5.
 
 #### p0.5 — Device smoke: `integration_test` on an emulator/simulator (nightly)
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/6
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/6 (merged) + follow-up
+  https://github.com/Abbo0dio/olf/pull/7 (merged)
 - **Branch / worktree:** `feat/p0.5-device-smoke` in `../olf-wt/p0.5`
 - **Owner:** worker: phase0
 - **Depends on:** p0.4
@@ -508,6 +509,12 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     ([33181230300](https://github.com/Abbo0dio/olf/actions/runs/33181230300)): **fully
     green** — iOS simulator ✅ + Android emulator API 34 ✅, no red jobs. p0.5 acceptance
     is met on both platforms; the physical-device table remains the only open item.
+  - 2026-08-28 — PR #7 merged; nightly workflow now on `main`. Confirming
+    `workflow_dispatch` run on `main`:
+    [33184198626](https://github.com/Abbo0dio/olf/actions/runs/33184198626). Set DONE
+    on the strength of runs 33181230300 (iOS + API 34 green) and 33178785364. Only
+    open item: the manual physical-device smoke table above — not a Phase 0 blocker,
+    automated emulator + simulator coverage is in place.
 
 **Phase 0 exit gate:** CI enforces the worktree→PR→merge workflow (required `CI OK` check);
 every PR builds a debug APK (Ubuntu) and an unsigned iOS build (macOS); p0.4 merged and the app
