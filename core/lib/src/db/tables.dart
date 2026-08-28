@@ -44,3 +44,31 @@ class Periods extends Table {
 
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
+
+/// Menstrual-flow intensity for a single day, lightest to heaviest.
+enum FlowIntensity { spotting, light, medium, heavy }
+
+/// Optional clot-size note for a single day.
+enum ClotSize { small, medium, large }
+
+/// What the user recorded about a single calendar day's bleeding.
+///
+/// Keyed by `date` (one row per day), and deliberately **not** linked to a
+/// [Periods] row: editing or deleting a period must never disturb what was
+/// logged for a day. Introduced in schema v3 (p1.2).
+@DataClassName('DailyFlow')
+class DailyFlows extends Table {
+  /// Calendar date, time-of-day zeroed on write. Primary key.
+  DateTimeColumn get date => dateTime()();
+
+  TextColumn get intensity => textEnum<FlowIntensity>()();
+
+  TextColumn get clotSize => textEnum<ClotSize>().nullable()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {date};
+}

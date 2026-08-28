@@ -61,7 +61,23 @@ postpartum markers). Overlap and impossible-range rules are enforced in `PeriodR
 (`addPeriod` / `updatePeriod` throw `PeriodValidationException`), **not** by DB constraints, so
 the same rule covers every screen and stays unit-testable.
 
-`schemaVersion = 2`.
+## Schema v3 (p1.2)
+
+Adds `daily_flows` — one **per-calendar-day** flow log, keyed by the date itself:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `date` | INTEGER (unix seconds), **PRIMARY KEY** | **Calendar date**, `dateOnly` on write — one row per day. |
+| `intensity` | TEXT | `FlowIntensity` name (`spotting` / `light` / `medium` / `heavy`). |
+| `clot_size` | TEXT, **nullable** | `ClotSize` name (`small` / `medium` / `large`), or `null`. |
+| `created_at` / `updated_at` | INTEGER (unix seconds) | `setFlow` upserts on `date` and preserves `created_at`. |
+
+Deliberately **not** linked to a `periods` row — editing or deleting a period must never
+disturb what was logged for a day. There is nothing to validate (any intensity is fine, clots
+optional), so `DailyFlowRepository` is plain CRUD; the UI decides when to offer logging (period
+days + today).
+
+`schemaVersion = 3`.
 
 ## Migrations
 
@@ -75,24 +91,29 @@ the same rule covers every screen and stays unit-testable.
 | Step | Does |
 |------|------|
 | `from < 2` (p1.1) | Creates `periods`; copies every `cycle_events` row of type `periodStart` into it as an open-ended period (`start_date` = `date`, `end_date` = NULL). Verified by `core/test/db/period_migration_test.dart` (real on-disk v1 file → upgrade → assert shape + row survival). |
+| `from < 3` (p1.2) | Creates `daily_flows`. Purely additive — nothing is backfilled, and existing `periods` / `cycle_events` rows are left untouched. Verified by `core/test/db/flow_migration_test.dart` (real on-disk v2 file → upgrade → assert `daily_flows` shape, period row intact, table usable). `period_migration_test.dart` also runs v1 straight through to v3. |
 
 drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) is still **not** wired up
-— the v1→v2 test hand-builds the old schema. Adopting the snapshot tooling is a tracked
-follow-up for the next migration (`DEVELOPMENT_PLAN.md` §9).
+— both migration tests hand-build the old schema. Adopting the snapshot tooling is a tracked
+follow-up (`DEVELOPMENT_PLAN.md` §9); a hand-rolled test has been enough for the two small
+additive migrations so far.
 
 ## Tests
 
 | File | Covers |
 |------|--------|
-| `core/test/db/app_database_test.dart` | schemaVersion (2), `onCreate` columns/types for `cycle_events` **and** `periods`, `user_version`, `beforeOpen` FKs. |
-| `core/test/db/period_migration_test.dart` | v1 on-disk DB → open through `AppDatabase` → `periods` created, every `periodStart` carried over, `cycle_events` intact. |
+| `core/test/db/app_database_test.dart` | schemaVersion (3), `onCreate` columns/types for `cycle_events`, `periods` **and** `daily_flows`, `user_version`, `beforeOpen` FKs. |
+| `core/test/db/period_migration_test.dart` | v1 on-disk DB → open through `AppDatabase` → upgraded to v3, `periods` created, every `periodStart` carried over, `cycle_events` intact, `daily_flows` present. |
+| `core/test/db/flow_migration_test.dart` | v2 on-disk DB → open through `AppDatabase` → `daily_flows` created with the expected shape, existing period untouched, table usable. |
+| `core/test/flow/drift_daily_flow_repository_test.dart` | `setFlow` date-only + optional clot, upsert preserves `created_at` / bumps `updated_at`, dropping a clot, `clearFlow` + no-op, `watchAll` emissions, flow survives period delete. |
 | `core/test/period/period_validation_test.dart` | impossible ranges, inclusive overlap, open-ended periods, `editingId` self-exclusion, error copy. |
 | `core/test/period/drift_period_repository_test.dart` | add / watch / update / delete, ordering, validation-throws-write-nothing, **edit touches only its own row**. |
 | `core/test/repository/cycle_event_repository_test.dart` | log / read / watch / delete, ordering, no-op delete. |
 | `core/test/db/persistence_test.dart` | write → close → reopen → still there → delete → reopen → gone (headless restart round-trip). |
 | `app/test/widget_test.dart` | empty state, dark mode, **missing key → fail-safe screen**. |
-| `app/test/period/period_calendar_test.dart` | seeded period in sync across summary / calendar / history; add, edit, delete round-trip; tap a calendar day. |
+| `app/test/period/period_calendar_test.dart` | seeded period in sync across summary / calendar / history; add, edit, delete round-trip; tapping a period day opens the flow quick-log, whose "Edit period dates" reaches the editor. |
 | `app/test/period/period_editor_test.dart` | date fields, "has ended" toggle, valid save, overlap blocked with a clear message + Save disabled. |
+| `app/test/flow/flow_quick_log_test.dart` | flow logged in two taps from the calendar (clots one more); a logged day renders on its calendar cell + the summary chip; the sheet preselects an existing entry and can remove it. |
 | `app/integration_test/log_period_test.dart` | add → edit → delete on a real device against the encrypted DB, across a DB close/reopen. Not in CI (no emulator). |
 
 ## Codegen
