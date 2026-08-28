@@ -24,16 +24,6 @@ final appDatabaseProvider = FutureProvider<AppDatabase>((ref) async {
   return db;
 });
 
-/// Repository over the opened database. Reading this before [appDatabaseProvider]
-/// has resolved throws — the UI only builds dependents inside its `data` branch.
-final cycleEventRepositoryProvider = Provider<CycleEventRepository>((ref) {
-  final db = ref.watch(appDatabaseProvider).requireValue;
-  return DriftCycleEventRepository(db);
-});
-
-/// The most recent `periodStart`, live. Not `autoDispose` — the home screen
-/// always listens, and disposing mid-frame leaves a drift stream-close timer
-/// pending (which trips widget tests).
-final mostRecentPeriodStartProvider = StreamProvider<CycleEvent?>((ref) {
-  return ref.watch(cycleEventRepositoryProvider).watchMostRecentPeriodStart();
-});
+// Period CRUD lives in `period/period_providers.dart`. `CycleEventRepository`
+// in olf_core is retained for the point-in-time markers p1.11 adds (loss,
+// birth, postpartum) and is not wired into the app yet.

@@ -25,3 +25,29 @@ int daysBetween(DateTime from, DateTime to) {
 /// next calendar day, and so on. Days before [start] return zero or negative
 /// values (caller decides how to present a future start date).
 int dayCountSince(DateTime start, DateTime now) => daysBetween(start, now) + 1;
+
+/// `true` when [day] falls within the inclusive range \[[start], [end]\].
+///
+/// A `null` [end] means the range is open — every day on or after [start] is
+/// inside it. All three are compared as calendar dates.
+bool isWithinRange(DateTime day, DateTime start, DateTime? end) {
+  final d = dateOnly(day);
+  final s = dateOnly(start);
+  if (d.isBefore(s)) return false;
+  if (end == null) return true;
+  return !d.isAfter(dateOnly(end));
+}
+
+/// Midnight on the first day of [d]'s month (local time).
+DateTime firstOfMonth(DateTime d) => DateTime(d.year, d.month, 1);
+
+/// Midnight on the last day of [d]'s month (local time).
+DateTime lastOfMonth(DateTime d) => DateTime(d.year, d.month + 1, 0);
+
+/// Number of days in [d]'s month.
+int daysInMonth(DateTime d) => lastOfMonth(d).day;
+
+/// [d]'s month shifted by [delta] whole months (negative goes back), anchored
+/// to the first of the month so it never lands on an impossible date.
+DateTime addMonths(DateTime d, int delta) =>
+    DateTime(d.year, d.month + delta, 1);

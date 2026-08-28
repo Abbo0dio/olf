@@ -1,9 +1,10 @@
 import 'package:drift/drift.dart';
 
-/// The kinds of event that can sit on the cycle timeline.
+/// The kinds of point-in-time event that can sit on the cycle timeline.
 ///
-/// v1 has exactly one — the day a period started. Phase 1 extends this
-/// (period end, loss, birth, …); each addition is a schema migration.
+/// v1 had exactly one — the day a period started. As of schema v2, period
+/// tracking moved to its own interval table ([Periods]); this log stays for
+/// the point-in-time markers p1.11 adds (loss, birth, postpartum).
 enum CycleEventType { periodStart }
 
 /// One dated event on the user's cycle timeline.
@@ -19,4 +20,27 @@ class CycleEvents extends Table {
   DateTimeColumn get date => dateTime()();
 
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// One logged menstrual period: a start date and an **optional** end date.
+///
+/// Both are **calendar dates** (local, time-of-day zeroed on write). `endDate`
+/// is `null` while a period is ongoing or the user simply hasn't recorded when
+/// it stopped. `updatedAt` is bumped on every edit so a later correction can be
+/// told apart from the original entry (and so the "fixing a past period does not
+/// cascade forward" guarantee is auditable).
+///
+/// Introduced in schema v2 (p1.1). Overlap / impossible-range rules are enforced
+/// in `PeriodRepository`, not by the database.
+@DataClassName('Period')
+class Periods extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  DateTimeColumn get startDate => dateTime()();
+
+  DateTimeColumn get endDate => dateTime().nullable()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
