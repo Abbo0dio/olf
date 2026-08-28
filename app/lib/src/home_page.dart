@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import 'period/period_calendar_page.dart';
 import 'providers.dart';
 
-/// Home screen. p0.4 scope: one real action — log that your period started
-/// today — plus the "Day N" readout and an undo/remove path.
+/// Home screen. Gates on the encrypted database opening, then hands off to the
+/// period calendar (p1.1). A missing key is a deliberate dead-end.
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
@@ -14,16 +15,21 @@ class HomePage extends ConsumerWidget {
     final database = ref.watch(appDatabaseProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('olf')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: switch (database) {
-            AsyncData() => const _HomeBody(),
-            AsyncError(:final error) => _DatabaseUnavailable(error: error),
-            _ => const _Busy(message: 'Opening your private database'),
-          },
+      body: switch (database) {
+        AsyncData() => const PeriodCalendarView(),
+        AsyncError(:final error) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: _DatabaseUnavailable(error: error),
+          ),
         ),
-      ),
+        _ => const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: _Busy(message: 'Opening your private database'),
+          ),
+        ),
+      },
     );
   }
 }
@@ -72,111 +78,4 @@ class _DatabaseUnavailable extends StatelessWidget {
       ],
     );
   }
-}
-
-class _HomeBody extends ConsumerWidget {
-  const _HomeBody();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final latest = ref.watch(mostRecentPeriodStartProvider);
-    return switch (latest) {
-      AsyncData(:final value?) => _LoggedState(event: value),
-      AsyncData() => const _EmptyState(),
-      AsyncError() => const Text('Could not read your entries.'),
-      _ => const _Busy(message: 'Loading your entries'),
-    };
-  }
-}
-
-class _EmptyState extends ConsumerWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Nothing logged yet.',
-          style: Theme.of(context).textTheme.bodyLarge,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
-        FilledButton.icon(
-          onPressed: () => _logToday(context, ref),
-          style: FilledButton.styleFrom(minimumSize: const Size(240, 52)),
-          icon: const Icon(Icons.water_drop_outlined),
-          label: const Text('Period started today'),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _logToday(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final repo = ref.read(cycleEventRepositoryProvider);
-    final id = await repo.logPeriodStart(DateTime.now());
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('Logged. This is day 1.'),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () => repo.deleteEvent(id),
-        ),
-      ),
-    );
-  }
-}
-
-class _LoggedState extends ConsumerWidget {
-  const _LoggedState({required this.event});
-  final CycleEvent event;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final day = dayCountSince(event.date, DateTime.now());
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Day $day',
-          style: theme.textTheme.displaySmall,
-          semanticsLabel: 'Day $day of your period',
-        ),
-        const SizedBox(height: 8),
-        Text('Period started ${_formatDate(event.date)}'),
-        const SizedBox(height: 24),
-        OutlinedButton.icon(
-          onPressed: () => _remove(context, ref),
-          style: OutlinedButton.styleFrom(minimumSize: const Size(240, 52)),
-          icon: const Icon(Icons.undo),
-          label: const Text('Remove this entry'),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _remove(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final repo = ref.read(cycleEventRepositoryProvider);
-    final date = event.date;
-    await repo.deleteEvent(event.id);
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('Removed.'),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () => repo.logPeriodStart(date),
-        ),
-      ),
-    );
-  }
-}
-
-String _formatDate(DateTime d) {
-  final mm = d.month.toString().padLeft(2, '0');
-  final dd = d.day.toString().padLeft(2, '0');
-  return '${d.year}-$mm-$dd';
 }

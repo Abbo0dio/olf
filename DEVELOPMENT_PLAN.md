@@ -532,7 +532,10 @@ starting Phase 1.
 and inclusivity basics, all free. After this phase the app is a genuinely useful daily tracker.
 
 #### p1.1 — Period logging: start/end, edit, delete, calendar view
-- **Status:** TODO
+- **Status:** IN REVIEW
+- **Branch / worktree:** `feat/p1.1-period-logging` / `../olf-wt/p1.1`
+- **Owner:** worker: phase1
+- **PR:** _pending — opened after local checks pass_
 - **Depends on:** p0.4
 - **Requirement refs:** §1, §9(1)
 - **Goal:** Log a period with start and (optional, later) end date; see periods on a month
@@ -544,7 +547,48 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   - Calendar and history stay in sync after any edit.
 - **Tests required:** unit (validation, overlap rules); widget (calendar, editor); integration
   (log → edit → delete round trip).
-- **Log:** — created.
+- **Notes / detail:**
+  - **Schema v1 → v2.** New `periods` table (interval entity), separate from the existing
+    `cycle_events` event log:
+    | Column | Type | Notes |
+    |--------|------|-------|
+    | `id` | INTEGER PK AUTOINCREMENT | |
+    | `start_date` | INTEGER (unix s) | calendar date, `dateOnly()` on write |
+    | `end_date` | INTEGER (unix s), nullable | `null` = ongoing / end not recorded yet |
+    | `created_at` | INTEGER (unix s) | |
+    | `updated_at` | INTEGER (unix s) | bumped on every edit; lets a correction be told from the original |
+    `schemaVersion` bumped to `2`. `migration.onUpgrade` `if (from < 2)` creates `periods` and
+    copies every `cycle_events` row of type `periodStart` into it (`start_date` = `date`,
+    `end_date` = NULL). Covered by `core/test/db/period_migration_test.dart` (real on-disk
+    v1 DB → upgrade → assert shape + row survival).
+  - **Why a new table, not a `periodEnd` event type.** A period is an interval; overlap
+    checking, editing and deletion are all natural on an interval row and awkward on paired
+    start/end events. `cycle_events` stays as the generic point-in-time event log for p1.11
+    (loss / birth / postpartum markers). `CycleEventRepository` is retained but the app no
+    longer reads it. Recorded in §7.
+  - **Validation lives at the repository seam** (`PeriodRepository.addPeriod` / `updatePeriod`
+    both call `validatePeriod` and throw `PeriodValidationException`), so the invariant holds
+    regardless of which screen calls it. Rules: `endBeforeStart`, `startInFuture`,
+    `endInFuture`, `overlapsExisting` (inclusive interval intersection on date-only values; an
+    end-less period is treated as open-ended for the check). "Today" is an injected clock so
+    the check is deterministic and offline.
+  - **No forward cascade.** p1.1 persists nothing derived, so editing one period touches only
+    that row — asserted in `drift_period_repository_test.dart` (edit period A; period B's row
+    is byte-for-byte unchanged). Cycle/prediction recompute-on-edit is p1.3 / p1.4.
+  - **Calendar is a hand-rolled month grid** (`_MonthCalendar`), no `table_calendar` package —
+    keeps the dependency-audit surface at zero. Date entry uses Flutter's built-in
+    `showDatePicker`.
+  - **Sync** is automatic: calendar, history and the header all watch one drift stream
+    (`periodsProvider`), so any add / edit / delete refreshes every view.
+  - **Follow-ups discovered** (added as TODO rows in §9): period-length sanity ceiling
+    (`tooLong`); a one-tap "period ended today" quick action; adopt `drift_dev schema`
+    snapshot tooling for the *next* migration.
+- **Log:**
+  - 2026-08-28 — created.
+  - 2026-08-28 — claimed by worker: phase1; worktree `../olf-wt/p1.1`, branch
+    `feat/p1.1-period-logging` off `main` @ `3149365`. Building the slice: `periods` table
+    (schema v2 + migration + migration test), `PeriodRepository` with validation at the seam,
+    hand-rolled month calendar + history list + add/edit/delete editor, full test set.
 
 #### p1.2 — Flow intensity, spotting, clots — one/two-tap logging
 - **Status:** TODO
@@ -948,6 +992,16 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-28 — **Periods are a dedicated interval table, not paired events (p1.1).** Schema
+  `schemaVersion` bumped to **2**: new `periods(id, start_date, end_date?, created_at,
+  updated_at)`. `cycle_events` stays as the point-in-time event log for p1.11 (loss / birth /
+  postpartum). Rationale: overlap checking, editing and deletion are natural on an interval
+  row and awkward on paired start/end events. The overlap / impossible-range invariant is
+  enforced in `PeriodRepository` (`addPeriod` / `updatePeriod` throw
+  `PeriodValidationException`), **not** by DB constraints, so one rule covers every screen and
+  stays unit-testable; "today" is an injected clock so it is deterministic and offline.
+  `CycleEventRepository` is retained in `core` but unused by the app. No new dependencies —
+  the month calendar is a hand-rolled grid. — worker: phase1.
 - 2026-08-28 — **Local store realised (p0.4):** `drift` over SQLCipher
   (`sqlcipher_flutter_libs`), key in `flutter_secure_storage`, **Riverpod** for state — all
   three per the §3 provisional table, now committed. Schema + queries + migrations live in
@@ -1007,9 +1061,16 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   reliably on GitHub runners). One-time manual install+launch on a physical Android + iOS
   device remains open — see the p0.5 table in Phase 0.
 - **p0.4 follow-ups still open:** move `EncryptedDatabase` open to a background isolate if
-  first-frame jank appears; introduce drift schema-snapshot tooling (`drift_dev schema`) with
-  the first real migration in Phase 1; revisit the DB directory choice when p1.10
-  (backup/export) lands.
+  first-frame jank appears; revisit the DB directory choice when p1.10 (backup/export) lands.
+- **Adopt `drift_dev schema` snapshot tooling** for the next migration. The p1.1 v1→v2
+  migration test (`core/test/db/period_migration_test.dart`) hand-builds the old schema; the
+  snapshot generator would let each future upgrade be tested step-by-step from a dumped
+  schema. (Was a p0.4 follow-up; deferred once more — a hand-rolled test was enough for one
+  small additive migration.) — noted by worker: phase1 during p1.1.
+- **p1.1 follow-ups:** period-length sanity ceiling (a `tooLong` validation error, e.g. warn
+  past ~15 days) — deliberately left out of p1.1, which blocks only overlaps and impossible
+  ranges; a one-tap "period ended today" quick action from the home summary (the editor
+  already supports adding an end date). — noted by worker: phase1.
 - (add more here)
 
 ## 10. Orphaned / cut work

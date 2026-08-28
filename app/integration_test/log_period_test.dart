@@ -1,14 +1,16 @@
-// On-device integration test for the p0.4 slice, run in CI by the **nightly**
-// workflow (.github/workflows/nightly-integration.yml) on an Android emulator
-// and an iOS simulator. Not part of the PR-blocking `CI` workflow.
+// On-device integration test for the p1.1 slice (period logging), run in CI by
+// the **nightly** workflow (.github/workflows/nightly-integration.yml) on an
+// Android emulator and an iOS simulator. Not part of the PR-blocking `CI`
+// workflow.
 //
 //   flutter test integration_test/log_period_test.dart      # needs a device
 //
 // It exercises the real path: SQLCipher (sqlcipher_flutter_libs) + the platform
 // key store (flutter_secure_storage). The headless equivalents that DO run on
-// every PR are core/test/db/persistence_test.dart and app/test/widget_test.dart.
+// every PR are core/test/db/period_migration_test.dart,
+// core/test/db/persistence_test.dart and app/test/period/*.
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -37,6 +39,14 @@ void main() {
     fail('timed out waiting for home content to render');
   }
 
+  Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(finder);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+  }
+
   Future<bool> isClosed(AppDatabase db) async {
     try {
       await db.customSelect('SELECT 1').get();
@@ -46,61 +56,57 @@ void main() {
     }
   }
 
-  testWidgets(
-    'log -> relaunch (DB closed then reopened from disk) -> persists -> remove',
-    (tester) async {
-      final logButton = find.text('Period started today');
-      final dayReadout = find.textContaining('Day ');
-      final removeButton = find.text('Remove this entry');
-      final emptyState = find.text('Nothing logged yet.');
+  testWidgets('add -> relaunch (DB closed then reopened) -> edit -> delete', (
+    tester,
+  ) async {
+    final addButton = find.text('Add a period');
+    final saveButton = find.widgetWithText(FilledButton, 'Save');
+    final dayReadout = find.textContaining('Day ');
+    final editButton = find.byTooltip('Edit period');
+    final deleteButton = find.byTooltip('Delete period');
+    final emptyState = find.text('No periods logged yet.');
+    final endedToggle = find.text('This period has ended');
 
-      // --- launch 1: log today ---
-      final c1 = ProviderContainer();
-      await launch(
-        tester,
-        c1,
-        () =>
-            logButton.evaluate().isNotEmpty || dayReadout.evaluate().isNotEmpty,
-      );
+    // --- launch 1: add a period for today ---
+    final c1 = ProviderContainer();
+    await launch(tester, c1, () => addButton.evaluate().isNotEmpty);
 
-      if (logButton.evaluate().isNotEmpty) {
-        await tester.tap(logButton);
-        await tester.pump(const Duration(seconds: 1));
-      }
-      expect(dayReadout, findsOneWidget);
+    await tapVisible(tester, addButton);
+    expect(find.text('Log a period'), findsOneWidget);
+    await tapVisible(tester, saveButton);
+    expect(dayReadout, findsOneWidget); // summary now reads "Day 1"
 
-      final db1 = c1.read(appDatabaseProvider).requireValue;
+    final db1 = c1.read(appDatabaseProvider).requireValue;
 
-      // --- relaunch: tear launch 1 down; its onDispose closes the database ---
-      await tester.pumpWidget(const SizedBox());
-      c1.dispose();
-      await tester.pump(const Duration(seconds: 1));
-      expect(
-        await isClosed(db1),
-        isTrue,
-        reason: 'the pre-relaunch database must actually be closed',
-      );
+    // --- relaunch: tear launch 1 down; its onDispose closes the database ---
+    await tester.pumpWidget(const SizedBox());
+    c1.dispose();
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      await isClosed(db1),
+      isTrue,
+      reason: 'the pre-relaunch database must actually be closed',
+    );
 
-      // --- launch 2: a fresh container reopens the SAME encrypted file ---
-      final c2 = ProviderContainer();
-      addTearDown(c2.dispose);
-      await launch(tester, c2, () => dayReadout.evaluate().isNotEmpty);
+    // --- launch 2: a fresh container reopens the SAME encrypted file ---
+    final c2 = ProviderContainer();
+    addTearDown(c2.dispose);
+    await launch(tester, c2, () => dayReadout.evaluate().isNotEmpty);
 
-      final db2 = c2.read(appDatabaseProvider).requireValue;
-      expect(
-        identical(db1, db2),
-        isFalse,
-        reason: 'launch 2 must build a new database instance',
-      );
-      expect(
-        dayReadout,
-        findsOneWidget,
-      ); // the logged entry survived the reopen
+    final db2 = c2.read(appDatabaseProvider).requireValue;
+    expect(identical(db1, db2), isFalse);
+    expect(dayReadout, findsOneWidget); // the entry survived the reopen
 
-      // --- leave state clean for the next nightly run ---
-      await tester.tap(removeButton);
-      await tester.pump(const Duration(seconds: 1));
-      expect(emptyState, findsOneWidget);
-    },
-  );
+    // --- edit it from the history list ---
+    await tapVisible(tester, editButton);
+    expect(find.text('Edit period'), findsOneWidget);
+    await tapVisible(tester, endedToggle); // give it an end date
+    await tapVisible(tester, saveButton);
+    expect(find.text('Period saved.'), findsOneWidget);
+
+    // --- delete it, leaving state clean for the next nightly run ---
+    await tapVisible(tester, deleteButton);
+    await tapVisible(tester, find.widgetWithText(TextButton, 'Delete'));
+    expect(emptyState, findsOneWidget);
+  });
 }
