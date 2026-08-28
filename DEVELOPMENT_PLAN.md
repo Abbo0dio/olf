@@ -424,7 +424,7 @@ builds and does exactly one real thing so Phase 1 has something to grow.
 
 #### p0.5 — Device smoke: `integration_test` on an emulator/simulator (nightly)
 - **Status:** IN REVIEW
-- **PR:** _(open — fill in)_
+- **PR:** https://github.com/Abbo0dio/olf/pull/6
 - **Branch / worktree:** `feat/p0.5-device-smoke` in `../olf-wt/p0.5`
 - **Owner:** worker: phase0
 - **Depends on:** p0.4
