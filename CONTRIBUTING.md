@@ -175,12 +175,12 @@ commit the updated lock in the same PR, or the audit job fails.
 ### 5.1 Nightly integration tests (not a PR gate)
 
 [`.github/workflows/nightly-integration.yml`](./.github/workflows/nightly-integration.yml) runs
-`flutter test integration_test/` on a real Android emulator (API 26 + 34) and a real iOS
+`flutter test integration_test/` on a real Android emulator (API 34) and a real iOS
 simulator, exercising SQLCipher + the platform key store on a real OS image.
 
 | Job | What it does |
 |-----|--------------|
-| **android-emulator** | Boots a KVM-accelerated x86_64 emulator (`reactivecircus/android-emulator-runner`) per API level and runs `flutter test integration_test/log_period_test.dart` in `app/`. |
+| **android-emulator** | Boots a KVM-accelerated x86_64 emulator (`reactivecircus/android-emulator-runner`, API 34) and runs `flutter test integration_test/log_period_test.dart` in `app/`. (API 26, our documented minimum, was tried but its x86_64 image is too flaky to boot on GitHub runners; min-SDK is enforced by `minSdk` + the manual device smoke.) |
 | **ios-simulator** | Boots the newest available iPhone simulator on `macos-latest` via `xcrun simctl` and runs the same suite. |
 
 It is triggered by a nightly `schedule:` and by manual `workflow_dispatch` (Actions tab, or
