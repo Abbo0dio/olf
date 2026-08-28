@@ -404,8 +404,8 @@ builds and does exactly one real thing so Phase 1 has something to grow.
   - **Undo/delete:** logging shows an "Undo" SnackBar (deletes the new row); the logged state
     has a "Remove this entry" button with its own Undo (re-logs the same date).
   - **Follow-ups:**
-    (a) Wire `app/integration_test/` into CI once emulator CI exists (own task, likely p5.5
-        or a Phase 0 addendum) — until then the round-trip is covered headless in `core`.
+    (a) ~~Wire `app/integration_test/` into CI once emulator CI exists~~ — done in **p0.5**
+        (nightly, non-blocking).
     (b) drift schema-snapshot tooling (`drift_dev schema`) lands with the first real migration
         in Phase 1.
     (c) `EncryptedDatabase` opens on the main isolate (`LazyDatabase`); move to a background
@@ -420,13 +420,79 @@ builds and does exactly one real thing so Phase 1 has something to grow.
   - 2026-08-28 — PR #4 opened. Set IN REVIEW.
   - 2026-08-28 — PR #4 squash-merged to `main`; CI green on `main` (core 23 tests, app 6
     widget tests, debug APK + unsigned iOS build). Set DONE. Manual device install/launch not
-    performed — tracked in §9 (see "Phase 0 exit-gate: device smoke + integration_test in CI").
+    performed — handed off to p0.5.
+
+#### p0.5 — Device smoke: `integration_test` on an emulator/simulator (nightly)
+- **Status:** IN REVIEW
+- **PR:** _(open — fill in)_
+- **Branch / worktree:** `feat/p0.5-device-smoke` in `../olf-wt/p0.5`
+- **Owner:** worker: phase0
+- **Depends on:** p0.4
+- **Requirement refs:** requirements.md §1, §3, §9(1)
+- **Goal:** Close the Phase 0 exit-gate caveat — actually *run* the app's on-device
+  `integration_test` on a real Android emulator and iOS simulator, and prove the p0.4
+  log→relaunch→delete round-trip survives a genuine close-and-reopen of the on-disk SQLCipher
+  database. Wired as a **separate, non-blocking nightly workflow** — not a PR gate.
+- **Acceptance criteria:**
+  - `flutter test integration_test/` passes on an Android emulator (API ≥ 26) in CI,
+    exercising real SQLCipher (`sqlcipher_flutter_libs`) + `flutter_secure_storage`.
+    - *Status:* `.github/workflows/nightly-integration.yml` → job `android-emulator` (matrix
+      API 26 + 34, `reactivecircus/android-emulator-runner@v2`, KVM-accelerated x86_64,
+      `working-directory: app`, `script: flutter test integration_test/log_period_test.dart`).
+      Evidence: _(nightly run link — fill in)_.
+  - An iOS simulator job on `macos-latest` runs the same suite (or a documented reason it
+    can't).
+    - *Status:* `.github/workflows/nightly-integration.yml` → job `ios-simulator` boots the
+      newest available iPhone simulator via `xcrun simctl` and runs `flutter test
+      integration_test/log_period_test.dart -d <device>`. Evidence: _(nightly run link — fill
+      in)_.
+  - The integration test genuinely closes and reopens the DB from disk and leaves state clean.
+    - *Status:* `app/integration_test/log_period_test.dart` rewritten to drive two explicit
+      `ProviderContainer` launches: launch 1 logs today; the container is disposed and the
+      test asserts the first `AppDatabase` is **actually closed** (`SELECT 1` throws); launch 2
+      builds a **new** `AppDatabase` instance (`identical(db1, db2)` is false) on the same
+      encrypted file, the "Day N" entry is still there, then it's removed so the next nightly
+      starts from the empty state.
+  - Job wiring keeps `CI OK` semantics coherent.
+    - *Status:* the nightly workflow is `schedule:` + `workflow_dispatch` only and is **not**
+      in `ci.yml`'s `ci-ok` `needs:` list, so it can never affect a PR's required check.
+      `ci.yml` header comment + the `test` job comment now point at it.
+- **Manual physical-device smoke (TODO — orchestrator to complete):** one-time install + launch
+  on one physical Android and one physical iOS device (log a period, kill the app, relaunch,
+  confirm "Day N" persists, delete). Not a blocker for this PR.
+
+  | Device | OS version | Date | Result |
+  |---|---|---|---|
+  | _(Android)_ | | | |
+  | _(iOS)_ | | | |
+- **Notes / detail:**
+  - **Nightly, not required — rationale.** Emulator/simulator boots take minutes and are
+    occasionally flaky; gating every PR on them trades real signal for noise. The p0.4
+    restart round-trip is *already* covered headless on every PR by
+    `core/test/db/persistence_test.dart` (write → `close()` → reopen → row present → delete)
+    and `app/test/widget_test.dart`. The nightly adds the one thing those can't: the real
+    SQLCipher native libs + the real platform key store, on a real OS image. A red nightly is
+    a bug to chase, not a merge blocker.
+  - **No new deps.** `integration_test` (Flutter SDK) was already a dev-dependency from p0.4.
+    `sqlite3_flutter_libs` is deliberately **not** added (collides with
+    `sqlcipher_flutter_libs` — see p0.4 Gotcha).
+  - Resolves p0.4 follow-up (a).
+- **Log:**
+  - 2026-08-28 — claimed by worker: phase0; worktree `../olf-wt/p0.5`, branch
+    `feat/p0.5-device-smoke`. Set IN PROGRESS. Added `.github/workflows/nightly-integration.yml`
+    (android-emulator + ios-simulator, nightly + dispatch, non-blocking); rewrote
+    `app/integration_test/log_period_test.dart` to prove close-then-reopen; updated `ci.yml`
+    comments, CONTRIBUTING.md §5, and §9.
+  - 2026-08-28 — PR opened. Set IN REVIEW. Nightly workflow triggered via `workflow_dispatch`
+    for evidence.
 
 **Phase 0 exit gate:** CI enforces the worktree→PR→merge workflow (required `CI OK` check);
 every PR builds a debug APK (Ubuntu) and an unsigned iOS build (macOS); p0.4 merged and the app
-does one real thing (log a period, encrypted, "Day N", delete). **Caveat:** no automated or
-manual install-and-launch on a real device/emulator/simulator yet — see the §9 backlog item.
-Gate considered met for the purpose of starting Phase 1; the device-smoke gap is handed off.
+does one real thing (log a period, encrypted, "Day N", delete). p0.5 adds a nightly
+`integration_test` run on a real Android emulator + iOS simulator (SQLCipher + key store
+exercised for real). **Remaining caveat:** one-time manual install+launch on a physical Android
+and physical iOS device is still open (p0.5 table above). Gate considered met for the purpose of
+starting Phase 1.
 
 ---
 
@@ -903,17 +969,16 @@ Move these into the Decisions Log once answered.
 
 Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases later.
 
-- **Phase 0 exit-gate: device smoke + `integration_test` in CI.** Phase 0 shipped with CI
-  *building* a debug APK and an unsigned iOS app on every PR, but nothing installs or launches
-  the app on a real device / emulator / simulator, and `app/integration_test/log_period_test.dart`
-  is not run anywhere. Close the gap: (a) add an Android emulator job (e.g.
-  `reactivecircus/android-emulator-runner`) that runs `flutter test integration_test/` and, if
-  feasible, an iOS simulator job on `macos-latest`; (b) do a one-time manual install+launch on
-  one physical Android and one physical iOS device and record the result; (c) decide whether
-  the emulator job is required on every PR or nightly (it is slow/flaky — nightly + on-demand
-  is acceptable). Also fold in the p0.4 follow-ups: move `EncryptedDatabase` open to a
-  background isolate if first-frame jank appears; introduce drift schema-snapshot tooling with
-  the first real migration; revisit the DB directory choice when p1.10 (backup/export) lands.
+- ~~**Phase 0 exit-gate: device smoke + `integration_test` in CI.**~~ **Closed → p0.5.**
+  `.github/workflows/nightly-integration.yml` runs `flutter test integration_test/` on an
+  Android emulator (API 26 + 34) and an iOS simulator nightly + on demand — deliberately a
+  separate, non-blocking workflow, not a PR gate (emulator boots are slow/flaky; the restart
+  round-trip is covered headless on every PR). One-time manual install+launch on a physical
+  Android + iOS device remains open — see the p0.5 table in Phase 0.
+- **p0.4 follow-ups still open:** move `EncryptedDatabase` open to a background isolate if
+  first-frame jank appears; introduce drift schema-snapshot tooling (`drift_dev schema`) with
+  the first real migration in Phase 1; revisit the DB directory choice when p1.10
+  (backup/export) lands.
 - (add more here)
 
 ## 10. Orphaned / cut work
