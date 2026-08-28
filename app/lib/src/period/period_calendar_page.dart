@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../cycle/cycle_format.dart';
+import '../cycle/cycle_providers.dart';
 import '../flow/flow_format.dart';
 import '../flow/flow_providers.dart';
 import '../flow/flow_quick_log.dart';
@@ -146,6 +148,12 @@ class _LoadedState extends ConsumerState<_Loaded> {
     };
     DailyFlow? flowOn(DateTime day) => flowByDay[dateOnly(day)];
 
+    final cycles = ref.watch(cyclesProvider);
+    final cycleStats = ref.watch(cycleStatsProvider);
+    final cycleByStart = <DateTime, Cycle>{
+      for (final c in cycles) c.periodStart: c,
+    };
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
@@ -157,6 +165,10 @@ class _LoadedState extends ConsumerState<_Loaded> {
             todayFlow: flowOn(today),
             onLogTodayFlow: () => showFlowQuickLog(context, date: today),
           ),
+          if (_periods.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _CycleStatsCard(stats: cycleStats),
+          ],
           const SizedBox(height: 24),
           _MonthCalendar(
             month: _visibleMonth,
@@ -185,6 +197,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
           _History(
             periods: _periods,
             today: today,
+            cycleByStart: cycleByStart,
             onEdit: _edit,
             onDelete: _deleteFromHistory,
           ),
@@ -479,12 +492,16 @@ class _History extends StatelessWidget {
   const _History({
     required this.periods,
     required this.today,
+    required this.cycleByStart,
     required this.onEdit,
     required this.onDelete,
   });
 
   final List<Period> periods;
   final DateTime today;
+
+  /// The derived cycle each period opens, keyed by `dateOnly(startDate)`.
+  final Map<DateTime, Cycle> cycleByStart;
   final ValueChanged<Period> onEdit;
   final ValueChanged<Period> onDelete;
 
@@ -506,8 +523,13 @@ class _History extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(formatRange(period.startDate, period.endDate)),
-              subtitle: Text(
-                formatLength(period.startDate, period.endDate, today),
+              subtitle: _HistoryRowDetail(
+                periodLength: formatLength(
+                  period.startDate,
+                  period.endDate,
+                  today,
+                ),
+                cycle: cycleByStart[dateOnly(period.startDate)],
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -526,6 +548,108 @@ class _History extends StatelessWidget {
               ),
             ),
       ],
+    );
+  }
+}
+
+/// A history row's two-line subtitle: the period's own length, then the cycle it
+/// opened (once one can be derived).
+class _HistoryRowDetail extends StatelessWidget {
+  const _HistoryRowDetail({required this.periodLength, required this.cycle});
+
+  final String periodLength;
+  final Cycle? cycle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final c = cycle;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(periodLength),
+        if (c != null)
+          Text(
+            cycleLengthNote(c),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Cycle-length and variability summary, shown once at least one period exists.
+/// Falls back to a "keep logging" nudge rather than assuming any cycle length.
+class _CycleStatsCard extends StatelessWidget {
+  const _CycleStatsCard({required this.stats});
+
+  final CycleStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final typical = stats.typicalCycleLength;
+    final hasRange = stats.shortestCycleLength != stats.longestCycleLength;
+
+    return Semantics(
+      container: true,
+      label: 'Cycle insights. ${summariseStats(stats)}',
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your cycles',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (typical != null) ...[
+              Text(
+                '$typical-day typical cycle',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                hasRange
+                    ? '${stats.shortestCycleLength}–${stats.longestCycleLength} '
+                          'days  ·  ${stats.regularity.label}'
+                    : stats.regularity.label,
+                style: theme.textTheme.bodyMedium,
+              ),
+              if (stats.typicalPeriodLength != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'Typical period ${stats.typicalPeriodLength} days',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              if (stats.hasLikelyGap) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'A long gap is set aside — a period may not have been logged '
+                  'then.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ] else
+              Text(summariseStats(stats), style: theme.textTheme.bodyMedium),
+          ],
+        ),
+      ),
     );
   }
 }

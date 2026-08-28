@@ -646,7 +646,10 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   - 2026-08-28 — PR #10 squash-merged to `main` (`76b0f44`); CI green on `main`. Set **DONE**.
 
 #### p1.3 — Cycle derivation & history
-- **Status:** TODO
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/12
+- **Branch / worktree:** `feat/p1.3-cycle-derivation` / `../olf-wt/p1.3`
+- **Owner:** worker: phase1
 - **Depends on:** p1.1
 - **Requirement refs:** §1
 - **Goal:** Derive cycles (start-to-start), cycle length, period length; show a history view
@@ -654,7 +657,52 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
 - **Acceptance criteria:** cycles recompute correctly after any period edit; handles gaps and
   a single logged period gracefully.
 - **Tests required:** unit tests over hand-built histories incl. irregular and sparse data.
-- **Log:** — created.
+- **Notes / detail:**
+  - **No schema change.** Cycles are *derived* from the `periods` table on every read, never
+    stored — consistent with p1.1's "persist nothing derived, no forward cascade". Any period
+    add / edit / delete just recomputes; there is no derived row to migrate or invalidate.
+  - **`core/lib/src/cycle/`** (pure Dart, no Flutter):
+    - **`Cycle`** — one derived cycle: `periodStart`, `periodEnd?`, `nextPeriodStart?` (`null`
+      ⇒ current, still-open cycle). Getters: `lengthInDays` = `daysBetween(periodStart,
+      nextPeriodStart)` (start-to-start; `null` while current), `periodLengthInDays` =
+      inclusive bleed days (`null` while no end recorded), `isCurrent`, `isLikelyGap`
+      (`lengthInDays > longestPlausibleCycleDays`, const **45** — a stretch that long is more
+      likely a missed entry than a true cycle). Dates normalised via `dateOnly` in the ctor.
+    - **`deriveCycles(Iterable<Period>) → List<Cycle>`** — sort by start, pair each period
+      with the next; last becomes the current cycle. Newest-first (matches `periodsProvider`).
+      Empty in → empty out; one period → one current cycle; input order irrelevant.
+    - **`CycleStats.from(Iterable<Cycle>)`** — `completedCycleCount`, `typicalCycleLength`
+      (median), `shortestCycleLength` / `longestCycleLength`, `typicalPeriodLength` (median),
+      `regularity` (`CycleRegularity { notEnoughData, regular, mostlyRegular, irregular }` by
+      max−min spread over the recent ≤ `recentWindow` (12) completed **non-gap** cycles: ≤ 4
+      `regular`, ≤ 9 `mostlyRegular`, else `irregular`; < 2 → `notEnoughData`), `hasLikelyGap`.
+      Likely-gap cycles are excluded from the length/variability maths but still surfaced via
+      the flag. **Every figure is nullable and `null` with no history — no 28-day (or any)
+      default.**
+  - **`app/lib/src/cycle/`:** `cycle_providers.dart` (`cyclesProvider`, `cycleStatsProvider` —
+    plain `Provider`s derived from `periodsProvider.value`; recompute on every period change),
+    `cycle_format.dart` (`CycleRegularityLabel.label`, `cycleLengthNote(Cycle)`,
+    `summariseStats(CycleStats)` — asks for more logging rather than inventing a number).
+  - **`period_calendar_page.dart`:** new `_CycleStatsCard` between the summary and the calendar
+    (typical length, min–max range, regularity, a "long gap set aside" note, or the
+    "log two periods" nudge — shown once ≥ 1 period exists); each `_History` row subtitle gains
+    the derived cycle length via `_HistoryRowDetail`. Heading text, empty-state copy and the
+    `Edit period` / `Delete period` tooltips are unchanged, so p1.1 / integration tests still
+    pass. a11y: the card is one `Semantics` container labelled with the full summary sentence.
+  - **Follow-ups discovered** (added to §9): the regularity thresholds (4 / 9 days) and the
+    45-day gap cutoff are heuristics — revisit against real data / p1.4's predictor. History is
+    still period-first, not cycle-first; a dedicated per-cycle detail view is later work.
+- **Log:**
+  - 2026-08-28 — created.
+  - 2026-08-28 — claimed by worker: phase1; worktree `../olf-wt/p1.3`, branch
+    `feat/p1.3-cycle-derivation` off `main` @ `ae9d4ca`. Building: `core/cycle` derivation +
+    stats (no schema change), `cycle` providers/format, cycle-stats card + history subtitle.
+  - 2026-08-28 — built. `Cycle` + `deriveCycles` + `CycleStats` (median cycle/period length,
+    coarse `CycleRegularity`, `hasLikelyGap`; all figures nullable, no 28-day default).
+    `_CycleStatsCard` + per-row cycle length in history; both recompute off `periodsProvider`
+    with no stored state. core 93 / app 18 green, analyze + format clean, no codegen diff (no
+    schema change), dependency audit PASS, no lock drift. §7 decision + §9 follow-ups recorded.
+    PR #12 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
 
 #### p1.4 — Prediction v1: next period + fertile window, as ranges, correctable
 - **Status:** TODO
@@ -1036,6 +1084,17 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-28 — **Cycles are derived on read, never stored (p1.3).** `core/lib/src/cycle/`
+  turns the `periods` list into `List<Cycle>` (start-to-start pairing; newest period opens the
+  current cycle) plus a `CycleStats` summary — median cycle / period length, min–max range, a
+  coarse `CycleRegularity` (spread-based: ≤ 4 / ≤ 9 / more), and a `hasLikelyGap` flag for
+  intervals over **45** days that more likely mean a missed entry. **No schema change** in
+  p1.3. Rationale: derived data stored is derived data that can go stale or need its own
+  migration; recomputing off `periods` on every change keeps "editing history changes the
+  numbers" true for free and matches p1.1's no-forward-cascade rule. **No 28-day (or any)
+  default anywhere** — with too little history every figure is `null` and the UI asks for more
+  logging. Regularity thresholds and the gap cutoff are heuristics flagged for revisit in §9.
+  — worker: phase1.
 - 2026-08-28 — **Per-day flow is its own table, unlinked from `periods` (p1.2).** Schema
   `schemaVersion` bumped to **3**: new `daily_flows(date PK, intensity, clot_size?, created_at,
   updated_at)` — one row per calendar day, keyed by the date itself (no autoinc id, no FK to
@@ -1134,6 +1193,13 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   entry point (spotting between periods) is not yet designed — revisit alongside p1.11 events
   or a dedicated symptom-logging slice. The `daily_flows` row has no "notes"/free-text field;
   add if a later slice needs it. — noted by worker: phase1 during p1.2.
+- **p1.3 follow-ups:** the `CycleStats` regularity thresholds (spread ≤ 4 `regular`, ≤ 9
+  `mostlyRegular`) and the 45-day likely-gap cutoff are heuristics chosen from typical ranges,
+  not tuned against data — revisit once p1.4's predictor and real histories exist (they may
+  want to share one definition of "irregular"). Also: the history list is still period-first;
+  a dedicated per-cycle detail view (this cycle's flow, symptoms, length vs. your typical) is
+  later work. And `deriveCycles` treats every gap as a single long cycle plus a flag — it does
+  not try to *infer* how many cycles were missed. — noted by worker: phase1 during p1.3.
 - (add more here)
 
 ## 10. Orphaned / cut work

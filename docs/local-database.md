@@ -98,6 +98,17 @@ drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) is still 
 follow-up (`DEVELOPMENT_PLAN.md` §9); a hand-rolled test has been enough for the two small
 additive migrations so far.
 
+## Derived data — not stored (p1.3)
+
+**Cycles are computed from `periods` on every read, never persisted.** `core/lib/src/cycle/`
+turns the period list into a `List<Cycle>` (start-to-start pairing; the newest period opens the
+current, still-open cycle) plus a `CycleStats` summary — median cycle / period length, min–max
+range, a coarse `CycleRegularity`, and a `hasLikelyGap` flag for intervals over ~45 days that
+more likely mean a missed entry. Because nothing is stored, any period edit / delete simply
+recomputes — there is **no derived row to migrate or invalidate, and no schema change in p1.3**.
+There is no 28-day (or any) default: with too little history the figures are `null` and the UI
+asks for more logging.
+
 ## Tests
 
 | File | Covers |
@@ -109,9 +120,11 @@ additive migrations so far.
 | `core/test/period/period_validation_test.dart` | impossible ranges, inclusive overlap, open-ended periods, `editingId` self-exclusion, error copy. |
 | `core/test/period/drift_period_repository_test.dart` | add / watch / update / delete, ordering, validation-throws-write-nothing, **edit touches only its own row**. |
 | `core/test/repository/cycle_event_repository_test.dart` | log / read / watch / delete, ordering, no-op delete. |
+| `core/test/cycle/cycle_derivation_test.dart` | `deriveCycles` start-to-start pairing, newest-first, single / ongoing period, order-independence, likely-gap flag (45 vs 46 days), time-of-day ignored; `CycleStats.from` median cycle/period length, regularity buckets, gaps excluded from figures but surfaced, recent-12 window, no 28-day default, recompute after an edit. |
 | `core/test/db/persistence_test.dart` | write → close → reopen → still there → delete → reopen → gone (headless restart round-trip). |
 | `app/test/widget_test.dart` | empty state, dark mode, **missing key → fail-safe screen**. |
 | `app/test/period/period_calendar_test.dart` | seeded period in sync across summary / calendar / history; add, edit, delete round-trip; tapping a period day opens the flow quick-log, whose "Edit period dates" reaches the editor. |
+| `app/test/cycle/cycle_stats_test.dart` | the cycle-stats card shows typical length + variability for a regular history; a single period shows a keep-logging nudge (no crash); the card recomputes when a period is deleted; a long gap is flagged, not treated as one cycle. |
 | `app/test/period/period_editor_test.dart` | date fields, "has ended" toggle, valid save, overlap blocked with a clear message + Save disabled. |
 | `app/test/flow/flow_quick_log_test.dart` | flow logged in two taps from the calendar (clots one more); a logged day renders on its calendar cell + the summary chip; the sheet preselects an existing entry and can remove it. |
 | `app/integration_test/log_period_test.dart` | add → edit → delete on a real device against the encrypted DB, across a DB close/reopen. Not in CI (no emulator). |
