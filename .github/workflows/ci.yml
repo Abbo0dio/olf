@@ -88,6 +88,12 @@ jobs:
         run: |
           dart pub get
           dart analyze --fatal-infos --fatal-warnings
+      - name: core — drift codegen is committed and current
+        working-directory: core
+        run: |
+          dart run build_runner build
+          git diff --exit-code -- 'lib/**/*.g.dart' \
+            || { echo "::error::generated drift code is stale — run 'dart run build_runner build' in core/ and commit"; exit 1; }
       - name: app — resolve & analyze
         working-directory: app
         run: |

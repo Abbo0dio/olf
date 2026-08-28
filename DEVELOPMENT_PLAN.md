@@ -341,7 +341,10 @@ builds and does exactly one real thing so Phase 1 has something to grow.
   - 2026-08-27 — PR #3 opened. Set IN REVIEW.
 
 #### p0.4 — Encrypted local store + first real slice: *log that your period started today*
-- **Status:** TODO
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/4
+- **Branch / worktree:** `feat/p0.4-encrypted-store-log-period` in `../olf-wt/p0.4`
+- **Owner:** worker: phase0
 - **Depends on:** p0.3
 - **Requirement refs:** requirements.md §1, §3, §9(1)
 - **Goal:** The smallest genuine feature: a one-tap "Period started today" button on the home
@@ -349,13 +352,64 @@ builds and does exactly one real thing so Phase 1 has something to grow.
   since that date; the user can undo/delete it.
 - **Acceptance criteria:**
   - DB file is encrypted; key stored in secure storage; app fails safe if key missing.
+    - *Status:* `app/lib/src/data/encrypted_database.dart` opens SQLCipher via
+      `sqlcipher_flutter_libs`; asserts `PRAGMA cipher_version` is non-empty (refuses to run
+      on a plain sqlite3 that would write plaintext). 256-bit key from `Random.secure`, stored
+      in Keychain/Keystore via `flutter_secure_storage` (`SecureStorageKeyStore` implementing
+      `core`'s `DatabaseKeyStore`). Key missing **and** DB file present → throws
+      `MissingDatabaseKeyException`; the UI shows a dead-end "Can't unlock your data" screen
+      and writes nothing (widget test `missing key → fail-safe screen`).
   - Logging, viewing, and deleting the event all work and survive an app restart.
+    - *Status:* `core/test/db/persistence_test.dart` — write → `close()` → reopen (new
+      `AppDatabase` on the same file) → row present → delete → reopen → gone. Widget tests
+      cover log→"Day 1", pre-seeded "Day N", and remove→empty. On-device version in
+      `app/integration_test/log_period_test.dart` (not in CI — no emulator).
   - Migration framework in place (versioned schema) from the first table.
+    - *Status:* `AppDatabase` in `core` — `schemaVersion = 1`, `MigrationStrategy` with
+      `onCreate` (createAll), an `onUpgrade` skeleton (empty at v1), and `beforeOpen`
+      (`PRAGMA foreign_keys = ON`). `core/test/db/app_database_test.dart` asserts version,
+      columns/types, `user_version`, FKs. Process for the first real migration documented in
+      `docs/local-database.md`.
 - **Tests required:** unit tests for the repository + migration; widget test for the button and
   "Day N" display; integration test for log→restart→still-there→delete.
-- **Notes / detail:** This establishes the `core` storage interface + `drift` implementation
-  that all of Phase 1 builds on. Keep the schema minimal; Phase 1 extends it.
-- **Log:** — created.
+  - *Status:* core 17 new tests (`app_database` 4, `cycle_event_repository` 6, `persistence` 1,
+    plus `date_math` 6 unchanged); app 6 widget tests; 1 device integration test (documented,
+    not gated). The headless persistence round-trip stands in for the device integration test
+    in CI — see follow-ups.
+- **Notes / detail:**
+  - **Package split (per §3):** schema + queries + migrations + repositories live in **`core`**
+    (`drift` is pure Dart). The **encrypted executor** and **key store** live in **`app`** and
+    are handed to `core` through `QueryExecutor` / the `DatabaseKeyStore` interface — `core`
+    stays Flutter- and SQLCipher-free so the Phase 13 desktop shell can reuse it. Full write-up
+    in `docs/local-database.md`.
+  - **Schema v1:** `cycle_events(id, type TEXT enum, date INTEGER unix-seconds, created_at)`.
+    `date` is stored date-only (`dateOnly` from `core`) so "Day N" is time-of-day independent;
+    `created_at` is an audit trail for future corrections. Only `periodStart` is ever written.
+  - **New deps:** `core` → `drift ^2.28`, dev `drift_dev` + `build_runner` + `sqlite3`
+    (tests). `app` → `flutter_riverpod ^2.6`, `drift`, `sqlite3`, `sqlcipher_flutter_libs
+    ^0.6.5`, `flutter_secure_storage ^9.2`, `path_provider`, `path`; dev `integration_test` +
+    `sqlite3_flutter_libs`. None on the denylist; audit passes. **Riverpod is now actually
+    introduced** (§7).
+  - **Codegen:** drift's `app_database.g.dart` is committed; CI `analyze` regenerates and
+    fails on any diff. `core/analysis_options.yaml` excludes `lib/**/*.g.dart`.
+  - **"Day N":** `dayCountSince(latestPeriodStart.date, DateTime.now())` (start = Day 1).
+  - **Undo/delete:** logging shows an "Undo" SnackBar (deletes the new row); the logged state
+    has a "Remove this entry" button with its own Undo (re-logs the same date).
+  - **Follow-ups:**
+    (a) Wire `app/integration_test/` into CI once emulator CI exists (own task, likely p5.5
+        or a Phase 0 addendum) — until then the round-trip is covered headless in `core`.
+    (b) drift schema-snapshot tooling (`drift_dev schema`) lands with the first real migration
+        in Phase 1.
+    (c) `EncryptedDatabase` opens on the main isolate (`LazyDatabase`); move to a background
+        isolate if the DB grows enough to jank the first frame.
+    (d) DB lives in `getApplicationSupportDirectory()`; revisit for the p1.10 backup/export.
+- **Log:**
+  - — created.
+  - 2026-08-28 — claimed by worker: phase0; worktree `../olf-wt/p0.4`, branch
+    `feat/p0.4-encrypted-store-log-period`. Set IN PROGRESS. Built `core` drift store +
+    repository, `app` encrypted executor + secure key store + Riverpod wiring + home screen;
+    17 core tests, 6 widget tests green locally.
+  - 2026-08-28 — PR #4 opened. Set IN REVIEW.
 
 **Phase 0 exit gate:** CI enforces the workflow; app installs on both platforms; p0.4 merged.
 
@@ -783,6 +837,12 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-28 — **Local store realised (p0.4):** `drift` over SQLCipher
+  (`sqlcipher_flutter_libs`), key in `flutter_secure_storage`, **Riverpod** for state — all
+  three per the §3 provisional table, now committed. Schema + queries + migrations live in
+  `core`; the encrypted `QueryExecutor` and key store are injected from `app` so `core` stays
+  Flutter/SQLCipher-free (protects Phase 13). drift codegen output is committed and diff-checked
+  in CI. — worker: phase0.
 - 2026-08-27 — **`CI OK` is a required status check** on the `protect-main` ruleset (p0.3);
   `strict_required_status_checks_policy: false`. A PR now cannot merge unless
   format/analyze/test/dependency-audit/build all pass. — worker: phase0.
