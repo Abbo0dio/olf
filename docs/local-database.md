@@ -98,16 +98,20 @@ drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) is still 
 follow-up (`DEVELOPMENT_PLAN.md` §9); a hand-rolled test has been enough for the two small
 additive migrations so far.
 
-## Derived data — not stored (p1.3)
+## Derived data — not stored (p1.3, p1.4)
 
-**Cycles are computed from `periods` on every read, never persisted.** `core/lib/src/cycle/`
-turns the period list into a `List<Cycle>` (start-to-start pairing; the newest period opens the
-current, still-open cycle) plus a `CycleStats` summary — median cycle / period length, min–max
-range, a coarse `CycleRegularity`, and a `hasLikelyGap` flag for intervals over ~45 days that
-more likely mean a missed entry. Because nothing is stored, any period edit / delete simply
-recomputes — there is **no derived row to migrate or invalidate, and no schema change in p1.3**.
-There is no 28-day (or any) default: with too little history the figures are `null` and the UI
-asks for more logging.
+**Cycles and predictions are computed from `periods` on every read, never persisted.**
+`core/lib/src/cycle/` turns the period list into a `List<Cycle>` (start-to-start pairing; the
+newest period opens the current, still-open cycle) plus a `CycleStats` summary — median cycle /
+period length, min–max range, a coarse `CycleRegularity`, and a `hasLikelyGap` flag for
+intervals over ~45 days that more likely mean a missed entry. `core/lib/src/prediction/` then
+turns those cycles into a `CyclePrediction` (p1.4) — next-period and fertile windows as
+`DateRange`s, a confidence bucket, and an `overdue` status that **never rolls the estimate
+forward** — behind a `Predictor` seam so Phase 3 can swap the engine.
+
+Because nothing is stored, any period edit / delete simply recomputes — there is **no derived
+row to migrate or invalidate, and no schema change in p1.3 or p1.4**. There is no 28-day (or
+any) default: with too little history the figures are `null` and the UI asks for more logging.
 
 ## Tests
 
@@ -121,10 +125,13 @@ asks for more logging.
 | `core/test/period/drift_period_repository_test.dart` | add / watch / update / delete, ordering, validation-throws-write-nothing, **edit touches only its own row**. |
 | `core/test/repository/cycle_event_repository_test.dart` | log / read / watch / delete, ordering, no-op delete. |
 | `core/test/cycle/cycle_derivation_test.dart` | `deriveCycles` start-to-start pairing, newest-first, single / ongoing period, order-independence, likely-gap flag (45 vs 46 days), time-of-day ignored; `CycleStats.from` median cycle/period length, regularity buckets, gaps excluded from figures but surfaced, recent-12 window, no 28-day default, recompute after an edit. |
+| `core/test/prediction/robust_predictor_test.dart` | `RobustPredictor` over regular / one-cycle / irregular / gap fixtures: anchor on last period start, median projection, ±1-day-floor window, fertile-window shape, `upcoming`/`dueNow`/`overdue`, **overdue never rolls forward**, confidence buckets, recompute after an edit. |
+| `core/test/prediction/date_range_test.dart` | inclusive length, `contains`, time-of-day stripped, value equality, end-before-start rejected. |
 | `core/test/db/persistence_test.dart` | write → close → reopen → still there → delete → reopen → gone (headless restart round-trip). |
 | `app/test/widget_test.dart` | empty state, dark mode, **missing key → fail-safe screen**. |
 | `app/test/period/period_calendar_test.dart` | seeded period in sync across summary / calendar / history; add, edit, delete round-trip; tapping a period day opens the flow quick-log, whose "Edit period dates" reaches the editor. |
 | `app/test/cycle/cycle_stats_test.dart` | the cycle-stats card shows typical length + variability for a regular history; a single period shows a keep-logging nudge (no crash); the card recomputes when a period is deleted; a long gap is flagged, not treated as one cycle. |
+| `app/test/prediction/prediction_card_test.dart` | a regular history renders next-period + fertile-window ranges with a confidence note; a late period shows the "Period check-in" (no rolled-forward date) with a *Log period start* action; editing history updates the card on the same screen; one logged period → no card yet. |
 | `app/test/period/period_editor_test.dart` | date fields, "has ended" toggle, valid save, overlap blocked with a clear message + Save disabled. |
 | `app/test/flow/flow_quick_log_test.dart` | flow logged in two taps from the calendar (clots one more); a logged day renders on its calendar cell + the summary chip; the sheet preselects an existing entry and can remove it. |
 | `app/integration_test/log_period_test.dart` | add → edit → delete on a real device against the encrypted DB, across a DB close/reopen. Not in CI (no emulator). |

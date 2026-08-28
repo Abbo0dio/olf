@@ -38,6 +38,12 @@ bool isWithinRange(DateTime day, DateTime start, DateTime? end) {
   return !d.isAfter(dateOnly(end));
 }
 
+/// [d]'s calendar date shifted by [delta] whole days (negative goes back),
+/// time-of-day stripped. DST-safe: it builds a fresh local midnight rather than
+/// adding a fixed 24h [Duration].
+DateTime addDays(DateTime d, int delta) =>
+    DateTime(d.year, d.month, d.day + delta);
+
 /// Midnight on the first day of [d]'s month (local time).
 DateTime firstOfMonth(DateTime d) => DateTime(d.year, d.month, 1);
 

@@ -705,7 +705,10 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     PR #12 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
 
 #### p1.4 — Prediction v1: next period + fertile window, as ranges, correctable
-- **Status:** TODO
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/13
+- **Branch / worktree:** `feat/p1.4-prediction-v1` / `../olf-wt/p1.4`
+- **Owner:** worker: phase1
 - **Depends on:** p1.3
 - **Requirement refs:** §1, §2, §4, §9(1) — the headline differentiator
 - **Goal:** Predict next period start and the fertile window **from the user's own history**,
@@ -721,9 +724,63 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     `Predictor` interface so Phase 3 can replace it.
 - **Tests required:** unit tests for the predictor over regular + irregular + late-period
   fixtures; widget test for range rendering and the late-period state.
-- **Notes / detail:** Full adaptive/irregular-cycle engine + backtesting is **Phase 3**. This
-  slice must ship a *correct, humble, correctable* v1, not a stub.
-- **Log:** — created.
+- **Notes / detail:**
+  - **No schema change.** The prediction is *derived* from `cyclesProvider` (itself derived
+    from `periods`) on every read — like p1.3, editing history just recomputes.
+  - **`core/lib/src/prediction/`** (pure Dart):
+    - **`Predictor`** — `CyclePrediction? predict({required List<Cycle> cycles, required
+      DateTime today})`. The seam Phase 3's adaptive engine slots into with **no call site
+      change**. Returns `null` when history is too thin (0 completed cycles) — the caller shows
+      a "keep logging" state, never a fabricated date.
+    - **`CyclePrediction`** — `nextPeriod` (`DateRange`), `nextPeriodExpected` (midpoint, only
+      shown *with* the range), `fertileWindow` (`DateRange`), `confidence`
+      (`PredictionConfidence { low, medium, high }`), `basedOnCycles`, `status`
+      (`PredictionStatus { upcoming, dueNow, overdue }`), `daysPastExpected` (int?, overdue
+      only).
+    - **`DateRange`** — inclusive calendar-day span (`start`, `end`, `lengthInDays`,
+      `contains`); the shared "show an uncertain date as a window" type (reused by p1.6).
+    - **`RobustPredictor implements Predictor`** — the v1 engine. Anchor on the **last logged
+      period start** (`cycles.first.periodStart`); `expected = anchor + typicalCycleLength`
+      (median of recent ≤12 non-gap cycles, from `CycleStats`); window
+      `[anchor + shortest, anchor + longest]` with a **±1-day floor** (`minPredictionMarginDays`)
+      so even a metronomic history is never a single day. Fertile window: `expected − 14`
+      (`lutealPhaseDays`, treated as fixed for v1) is estimated ovulation; window is
+      `[ovulation − 5, ovulation + 1]` (`fertileDaysBeforeOvulation` / `AfterOvulation`) → a
+      7-day span. **Status:** `today < earliest` → upcoming; within window → dueNow; past
+      `latest` → overdue with `daysPastExpected = daysBetween(expected, today)`. **The estimate
+      never rolls forward** — `expected`/`earliest`/`latest` depend only on the anchor, so a
+      late period stays put and the UI shows a check-in. **Confidence:** `high` = regular +
+      ≥ 3 cycles; `medium` = regular/mostly-regular + ≥ 2; else `low`; any likely gap forces
+      `low`.
+    - `date_math.dart` gains `addDays(d, delta)` (DST-safe calendar-day shift).
+  - **`app/lib/src/prediction/`:** `prediction_providers.dart` (`predictorProvider` =
+    `const RobustPredictor()`; `predictionProvider` — `Provider<CyclePrediction?>` off
+    `cyclesProvider` + `DateTime.now()`), `prediction_format.dart` (compact `formatDateRange`,
+    `confidenceLabel` / `confidenceNote`, `overdueHeadline` / `overdueBody` — neutral,
+    non-alarming, never names a rolled-forward date).
+  - **`period_calendar_page.dart`:** `_PredictionCard` between the summary and the cycle-stats
+    card, shown only when `predictionProvider` is non-null. Forecast state: "Next period" +
+    the range + "most likely <day>" + "Fertile window (estimate)" + the range + a confidence
+    note. Overdue state: a distinct "Period check-in" card — "<n> days later than usual",
+    reassuring body copy, and a **"Log period start"** button (reuses `_addPeriod`). One
+    `Semantics` container with a full-sentence label. Existing screen text unchanged.
+  - **Follow-ups discovered** (added to §9): the window uses raw recent min/max, not
+    percentiles/MAD — Phase 3; the fertile window is anchored on the point estimate, not
+    widened by the next-period uncertainty; the luteal phase is a fixed 14 days (p1.6's
+    BBT/mucus inputs can refine it).
+- **Log:**
+  - 2026-08-28 — created.
+  - 2026-08-28 — claimed by worker: phase1; worktree `../olf-wt/p1.4`, branch
+    `feat/p1.4-prediction-v1` off `main` @ `dfba13a`. Building: `core/prediction` (`Predictor`
+    seam + `CyclePrediction` + `DateRange` + `RobustPredictor`), `prediction` providers/format,
+    `_PredictionCard` with forecast + late-period check-in states.
+  - 2026-08-28 — built. `RobustPredictor` behind the `Predictor` interface: median recent
+    cycle length anchored on the last period start, next-period + fertile windows as
+    `DateRange`s with a ±1-day floor, three-bucket confidence, overdue state that never rolls
+    forward. `_PredictionCard` (forecast / check-in). core 110 / app 22 green, analyze +
+    format clean, no codegen diff (no schema change), dependency audit PASS, no lock drift.
+    §7 decision + §9 follow-ups recorded. PR #13 opened into `main`; **IN REVIEW** — awaiting
+    orchestrator merge.
 
 #### p1.5 — Symptom, mood & discharge logging with custom symptoms
 - **Status:** TODO
@@ -1084,6 +1141,23 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-28 — **Prediction v1 is a stats-based `RobustPredictor` behind a `Predictor` seam
+  (p1.4).** `Predictor.predict({cycles, today}) → CyclePrediction?` in `core`; Phase 3's
+  adaptive/backtested engine replaces the implementation with no call site change. **No schema
+  change** — the forecast derives from `cyclesProvider` on every read, so editing history
+  recomputes it on the same screen. v1 maths: anchor on the **last logged period start**,
+  project the median recent (≤ 12, non-gap) cycle length, widen to `[anchor + shortest,
+  anchor + longest]` with a ±1-day floor so a date is never claimed to the day. Fertile window
+  = `expected − 14` (luteal phase treated as a fixed 14 days for v1) ± sperm/ovum viability
+  → a 7-day `DateRange`. **A late period never rolls the estimate forward**: `expected` depends
+  only on the anchor, and once `today` passes the window the status is `overdue` and the UI
+  shows a "Period check-in" ("N days later than usual" + a *Log period start* button), not a
+  new future date. Confidence is a coarse three-bucket hint (`high` = regular + ≥ 3 cycles;
+  `medium` = regular/mostly-regular + ≥ 2; else `low`; any likely gap → `low`). Rationale:
+  ships the headline differentiator as *correct, humble, correctable* now without pretending
+  to Phase 3's accuracy; every date is a range with an uncertainty note; the seam keeps the
+  swap cheap. Raw min/max (not percentiles), point-anchored fertile window, and the fixed
+  luteal length are follow-ups in §9. — worker: phase1.
 - 2026-08-28 — **Cycles are derived on read, never stored (p1.3).** `core/lib/src/cycle/`
   turns the `periods` list into `List<Cycle>` (start-to-start pairing; newest period opens the
   current cycle) plus a `CycleStats` summary — median cycle / period length, min–max range, a
@@ -1200,6 +1274,14 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   a dedicated per-cycle detail view (this cycle's flow, symptoms, length vs. your typical) is
   later work. And `deriveCycles` treats every gap as a single long cycle plus a flag — it does
   not try to *infer* how many cycles were missed. — noted by worker: phase1 during p1.3.
+- **p1.4 follow-ups (feed Phase 3):** `RobustPredictor`'s next-period window is the raw recent
+  min/max around the median — no percentile/MAD trimming, so one outlier cycle widens it a lot.
+  The fertile window is anchored on the point estimate only (not widened by the next-period
+  uncertainty) and assumes a **fixed 14-day luteal phase** — p1.6's BBT / cervical-mucus inputs
+  should refine ovulation timing rather than this constant. Confidence is a 3-bucket hint with
+  hand-picked thresholds; no backtesting / calibration yet. `predictionProvider` reads
+  `DateTime.now()` directly (fine for v1; a `clockProvider` would make the late-state widget
+  test time-independent). — noted by worker: phase1 during p1.4.
 - (add more here)
 
 ## 10. Orphaned / cut work
