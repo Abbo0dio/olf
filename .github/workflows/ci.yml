@@ -88,6 +88,12 @@ jobs:
         run: |
           dart pub get
           dart analyze --fatal-infos --fatal-warnings
+      - name: core — drift codegen is committed and current
+        working-directory: core
+        run: |
+          dart run build_runner build
+          git diff --exit-code -- 'lib/**/*.g.dart' \
+            || { echo "::error::generated drift code is stale — run 'dart run build_runner build' in core/ and commit"; exit 1; }
       - name: app — resolve & analyze
         working-directory: app
         run: |
@@ -108,6 +114,8 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+      - name: Native SQLite for drift's host tests
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - name: app — resolve (so core's audit test can read app/pubspec.lock)
         working-directory: app
         run: flutter pub get
@@ -119,8 +127,9 @@ jobs:
       - name: app — widget tests
         working-directory: app
         run: flutter test --coverage
-      # p0.4 adds: repository/migration unit tests + a log→restart→delete
-      # integration test.
+      # The log→restart→delete round-trip is covered headless by
+      # core/test/db/persistence_test.dart; the on-device integration_test is not
+      # run here (no emulator).
 
   dependency-audit:
     name: Dependency audit

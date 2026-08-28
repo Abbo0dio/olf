@@ -5,3 +5,8 @@
 library;
 
 export 'src/date_math.dart';
+export 'src/db/app_database.dart';
+export 'src/db/database_key_store.dart';
+export 'src/db/tables.dart' show CycleEventType, CycleEvents;
+export 'src/repository/cycle_event_repository.dart';
+export 'src/repository/drift_cycle_event_repository.dart';
