@@ -46,75 +46,76 @@ void main() {
     raw.dispose();
   }
 
-  test(
-    'opening a v1 database upgrades it to v2 and keeps every start',
-    () async {
-      final starts = [DateTime(2026, 6, 1), DateTime(2026, 7, 3)];
-      createV1Database(starts);
+  test('opening a v1 database upgrades it through to the current version '
+      'and keeps every start', () async {
+    final starts = [DateTime(2026, 6, 1), DateTime(2026, 7, 3)];
+    createV1Database(starts);
 
-      final db = AppDatabase(NativeDatabase(dbFile));
-      addTearDown(db.close);
+    final db = AppDatabase(NativeDatabase(dbFile));
+    addTearDown(db.close);
 
-      // Force the upgrade to run.
-      final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.first, 2);
-      expect(db.schemaVersion, 2);
+    // Force the upgrade to run — v1 → v2 (periods) → v3 (daily_flows).
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.first, db.schemaVersion);
+    expect(db.schemaVersion, 3);
 
-      // The new table exists with the expected shape.
-      final columns = await db
-          .customSelect("PRAGMA table_info('periods')")
-          .get();
-      final types = {
-        for (final row in columns)
-          row.data['name'] as String: (row.data['type'] as String)
-              .toUpperCase(),
-      };
-      expect(
-        types.keys,
-        containsAll(<String>{
-          'id',
-          'start_date',
-          'end_date',
-          'created_at',
-          'updated_at',
-        }),
-      );
-      expect(types['start_date'], 'INTEGER');
-      expect(types['end_date'], 'INTEGER');
+    // The v3 table was created along the way too.
+    final flowTable = await db
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type='table' "
+          "AND name='daily_flows'",
+        )
+        .get();
+    expect(flowTable, hasLength(1));
 
-      // Every v1 periodStart became an open-ended period, dates intact.
-      final repo = DriftPeriodRepository(db);
-      final periods = await repo.allPeriods();
-      expect(periods.map((p) => p.startDate), [
-        DateTime(2026, 7, 3),
-        DateTime(2026, 6, 1),
-      ]);
-      expect(periods.every((p) => p.endDate == null), isTrue);
+    // The v2 table exists with the expected shape.
+    final columns = await db.customSelect("PRAGMA table_info('periods')").get();
+    final types = {
+      for (final row in columns)
+        row.data['name'] as String: (row.data['type'] as String).toUpperCase(),
+    };
+    expect(
+      types.keys,
+      containsAll(<String>{
+        'id',
+        'start_date',
+        'end_date',
+        'created_at',
+        'updated_at',
+      }),
+    );
+    expect(types['start_date'], 'INTEGER');
+    expect(types['end_date'], 'INTEGER');
 
-      // The original event log is left in place (p1.11 still uses it).
-      final events = await db
-          .customSelect('SELECT COUNT(*) AS n FROM cycle_events')
-          .getSingle();
-      expect(events.data['n'], 2);
-    },
-  );
+    // Every v1 periodStart became an open-ended period, dates intact.
+    final repo = DriftPeriodRepository(db);
+    final periods = await repo.allPeriods();
+    expect(periods.map((p) => p.startDate), [
+      DateTime(2026, 7, 3),
+      DateTime(2026, 6, 1),
+    ]);
+    expect(periods.every((p) => p.endDate == null), isTrue);
 
-  test(
-    'a fresh v2 database has no rows to migrate and works normally',
-    () async {
-      final db = AppDatabase(NativeDatabase(dbFile));
-      addTearDown(db.close);
+    // The original event log is left in place (p1.11 still uses it).
+    final events = await db
+        .customSelect('SELECT COUNT(*) AS n FROM cycle_events')
+        .getSingle();
+    expect(events.data['n'], 2);
+  });
 
-      final repo = DriftPeriodRepository(db, now: () => DateTime(2026, 8, 28));
-      expect(await repo.allPeriods(), isEmpty);
+  test('a fresh database has no rows to migrate and works normally', () async {
+    final db = AppDatabase(NativeDatabase(dbFile));
+    addTearDown(db.close);
 
-      await repo.addPeriod(
-        PeriodDraft(start: DateTime(2026, 8, 1), end: DateTime(2026, 8, 4)),
-      );
-      expect((await repo.allPeriods()).single.startDate, DateTime(2026, 8, 1));
+    final repo = DriftPeriodRepository(db, now: () => DateTime(2026, 8, 28));
+    expect(await repo.allPeriods(), isEmpty);
 
-      final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.first, 2);
-    },
-  );
+    await repo.addPeriod(
+      PeriodDraft(start: DateTime(2026, 8, 1), end: DateTime(2026, 8, 4)),
+    );
+    expect((await repo.allPeriods()).single.startDate, DateTime(2026, 8, 1));
+
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.first, db.schemaVersion);
+  });
 }

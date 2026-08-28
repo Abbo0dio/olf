@@ -7,7 +7,16 @@ library;
 export 'src/date_math.dart';
 export 'src/db/app_database.dart';
 export 'src/db/database_key_store.dart';
-export 'src/db/tables.dart' show CycleEventType, CycleEvents, Periods;
+export 'src/db/tables.dart'
+    show
+        ClotSize,
+        CycleEventType,
+        CycleEvents,
+        DailyFlows,
+        FlowIntensity,
+        Periods;
+export 'src/flow/daily_flow_repository.dart';
+export 'src/flow/drift_daily_flow_repository.dart';
 export 'src/period/drift_period_repository.dart';
 export 'src/period/period_repository.dart';
 export 'src/period/period_validation.dart';

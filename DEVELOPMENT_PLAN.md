@@ -595,7 +595,9 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     new deps); `pubspec.lock` unchanged. Awaiting orchestrator review + merge.
 
 #### p1.2 — Flow intensity, spotting, clots — one/two-tap logging
-- **Status:** TODO
+- **Status:** IN PROGRESS
+- **Branch / worktree:** `feat/p1.2-flow-intensity` / `../olf-wt/p1.2`
+- **Owner:** worker: phase1
 - **Depends on:** p1.1
 - **Requirement refs:** §1, §4 (fast logging), §9(10)
 - **Goal:** On any period day, record flow (spotting → light → medium → heavy) and optional
@@ -603,7 +605,36 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
 - **Acceptance criteria:** quick-log sheet reachable in one tap; each further choice is one tap;
   values render on the calendar day cell.
 - **Tests required:** widget test asserting tap-count; unit tests for the per-day model.
-- **Log:** — created.
+- **Notes / detail:**
+  - **Schema v2 → v3.** New `daily_flows` table — a per-calendar-day annotation, **not**
+    tied to a period row (so editing / deleting a period never cascades onto flow):
+    | Column | Type | Notes |
+    |--------|------|-------|
+    | `date` | INTEGER (unix s), **PK** | calendar date, `dateOnly()` on write — one row per day |
+    | `intensity` | TEXT enum `FlowIntensity {spotting,light,medium,heavy}` | |
+    | `clot_size` | TEXT enum `ClotSize {small,medium,large}`, nullable | optional |
+    | `created_at` / `updated_at` | INTEGER (unix s) | |
+    `schemaVersion` → `3`. `onUpgrade` `if (from < 3)` creates `daily_flows` (additive, no
+    data move). Migration test `core/test/db/flow_migration_test.dart` (real on-disk v2 → v3).
+  - **`DailyFlowRepository`** (`flowOn` / `watchAll` / `setFlow` / `clearFlow`). `setFlow`
+    upserts on `date` (preserves `created_at`), injectable clock. No validation rules — any
+    intensity is valid, clots optional; the UI only offers the sheet on period days + today.
+  - **Interaction change (from p1.1):** tapping a **period day** on the calendar now opens the
+    **flow quick-log sheet** (the fast path §4 wants) instead of the period-dates editor. The
+    sheet carries an "Edit period dates" button so p1.1's "edit from calendar" still holds.
+    Empty-day tap and the "Add a period" button still open the period editor. The home summary
+    gains a one-tap "flow" chip for today while a period is ongoing.
+  - Quick-log sheet: `ChoiceChip` rows for intensity (4) and clots (4, incl. "None",
+    disabled until an intensity is chosen). Each tap persists immediately (upsert) — no Save
+    button, so logging flow is exactly 2 taps (open + intensity) and each further choice is 1.
+  - Calendar `_DayCell` renders a 4-segment intensity bar + a clot marker, and its semantics
+    label gains `", flow <level>"` / `" with <size> clots"`.
+- **Log:**
+  - 2026-08-28 — created.
+  - 2026-08-28 — claimed by worker: phase1; worktree `../olf-wt/p1.2`, branch
+    `feat/p1.2-flow-intensity` off `main` @ `4d0489f`. Building: `daily_flows` table (schema
+    v3 + migration + test), `DailyFlowRepository`, flow quick-log sheet, calendar cell
+    rendering, tap-count widget tests.
 
 #### p1.3 — Cycle derivation & history
 - **Status:** TODO
@@ -996,6 +1027,19 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-28 — **Per-day flow is its own table, unlinked from `periods` (p1.2).** Schema
+  `schemaVersion` bumped to **3**: new `daily_flows(date PK, intensity, clot_size?, created_at,
+  updated_at)` — one row per calendar day, keyed by the date itself (no autoinc id, no FK to
+  `periods`). Rationale: flow is an observation about a *day*, not about a period row; keeping
+  them unlinked means editing or deleting a period never cascades onto what was logged, and the
+  same day can carry flow whether or not a period is recorded for it. `setFlow` upserts on
+  `date` and preserves `created_at` (a correction is auditable). No validation — any intensity
+  is valid and clots are optional — so `DailyFlowRepository` is plain CRUD; the UI decides when
+  to offer logging (period days + today). Migration `from < 3` is purely additive. No new
+  dependencies. **Interaction change from p1.1:** tapping a period day on the calendar now
+  opens the flow quick-log sheet (the §4 fast path) instead of the period-dates editor; the
+  sheet's "Edit period dates" button and the "Add a period" button preserve p1.1's editor
+  entry points. — worker: phase1.
 - 2026-08-28 — **Periods are a dedicated interval table, not paired events (p1.1).** Schema
   `schemaVersion` bumped to **2**: new `periods(id, start_date, end_date?, created_at,
   updated_at)`. `cycle_events` stays as the point-in-time event log for p1.11 (loss / birth /
@@ -1069,12 +1113,18 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
 - **Adopt `drift_dev schema` snapshot tooling** for the next migration. The p1.1 v1→v2
   migration test (`core/test/db/period_migration_test.dart`) hand-builds the old schema; the
   snapshot generator would let each future upgrade be tested step-by-step from a dumped
-  schema. (Was a p0.4 follow-up; deferred once more — a hand-rolled test was enough for one
-  small additive migration.) — noted by worker: phase1 during p1.1.
+  schema. (Was a p0.4 follow-up; deferred once more — a hand-rolled test was enough for two
+  small additive migrations, v1→v2 and v2→v3.) — noted by worker: phase1 during p1.1, still
+  open after p1.2.
 - **p1.1 follow-ups:** period-length sanity ceiling (a `tooLong` validation error, e.g. warn
   past ~15 days) — deliberately left out of p1.1, which blocks only overlaps and impossible
   ranges; a one-tap "period ended today" quick action from the home summary (the editor
   already supports adding an end date). — noted by worker: phase1.
+- **p1.2 follow-ups:** flow is loggable only on period days + today (the calendar tap opens the
+  period editor on any non-period day). A "log flow for an arbitrary past day without a period"
+  entry point (spotting between periods) is not yet designed — revisit alongside p1.11 events
+  or a dedicated symptom-logging slice. The `daily_flows` row has no "notes"/free-text field;
+  add if a later slice needs it. — noted by worker: phase1 during p1.2.
 - (add more here)
 
 ## 10. Orphaned / cut work

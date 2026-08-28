@@ -652,16 +652,396 @@ class PeriodsCompanion extends UpdateCompanion<Period> {
   }
 }
 
+class $DailyFlowsTable extends DailyFlows
+    with TableInfo<$DailyFlowsTable, DailyFlow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DailyFlowsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<FlowIntensity, String> intensity =
+      GeneratedColumn<String>(
+        'intensity',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<FlowIntensity>($DailyFlowsTable.$converterintensity);
+  @override
+  late final GeneratedColumnWithTypeConverter<ClotSize?, String> clotSize =
+      GeneratedColumn<String>(
+        'clot_size',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      ).withConverter<ClotSize?>($DailyFlowsTable.$converterclotSizen);
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    date,
+    intensity,
+    clotSize,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'daily_flows';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DailyFlow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {date};
+  @override
+  DailyFlow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DailyFlow(
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      intensity: $DailyFlowsTable.$converterintensity.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}intensity'],
+        )!,
+      ),
+      clotSize: $DailyFlowsTable.$converterclotSizen.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}clot_size'],
+        ),
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DailyFlowsTable createAlias(String alias) {
+    return $DailyFlowsTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<FlowIntensity, String, String> $converterintensity =
+      const EnumNameConverter<FlowIntensity>(FlowIntensity.values);
+  static JsonTypeConverter2<ClotSize, String, String> $converterclotSize =
+      const EnumNameConverter<ClotSize>(ClotSize.values);
+  static JsonTypeConverter2<ClotSize?, String?, String?> $converterclotSizen =
+      JsonTypeConverter2.asNullable($converterclotSize);
+}
+
+class DailyFlow extends DataClass implements Insertable<DailyFlow> {
+  /// Calendar date, time-of-day zeroed on write. Primary key.
+  final DateTime date;
+  final FlowIntensity intensity;
+  final ClotSize? clotSize;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const DailyFlow({
+    required this.date,
+    required this.intensity,
+    this.clotSize,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['date'] = Variable<DateTime>(date);
+    {
+      map['intensity'] = Variable<String>(
+        $DailyFlowsTable.$converterintensity.toSql(intensity),
+      );
+    }
+    if (!nullToAbsent || clotSize != null) {
+      map['clot_size'] = Variable<String>(
+        $DailyFlowsTable.$converterclotSizen.toSql(clotSize),
+      );
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  DailyFlowsCompanion toCompanion(bool nullToAbsent) {
+    return DailyFlowsCompanion(
+      date: Value(date),
+      intensity: Value(intensity),
+      clotSize: clotSize == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clotSize),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory DailyFlow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DailyFlow(
+      date: serializer.fromJson<DateTime>(json['date']),
+      intensity: $DailyFlowsTable.$converterintensity.fromJson(
+        serializer.fromJson<String>(json['intensity']),
+      ),
+      clotSize: $DailyFlowsTable.$converterclotSizen.fromJson(
+        serializer.fromJson<String?>(json['clotSize']),
+      ),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'date': serializer.toJson<DateTime>(date),
+      'intensity': serializer.toJson<String>(
+        $DailyFlowsTable.$converterintensity.toJson(intensity),
+      ),
+      'clotSize': serializer.toJson<String?>(
+        $DailyFlowsTable.$converterclotSizen.toJson(clotSize),
+      ),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  DailyFlow copyWith({
+    DateTime? date,
+    FlowIntensity? intensity,
+    Value<ClotSize?> clotSize = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => DailyFlow(
+    date: date ?? this.date,
+    intensity: intensity ?? this.intensity,
+    clotSize: clotSize.present ? clotSize.value : this.clotSize,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  DailyFlow copyWithCompanion(DailyFlowsCompanion data) {
+    return DailyFlow(
+      date: data.date.present ? data.date.value : this.date,
+      intensity: data.intensity.present ? data.intensity.value : this.intensity,
+      clotSize: data.clotSize.present ? data.clotSize.value : this.clotSize,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DailyFlow(')
+          ..write('date: $date, ')
+          ..write('intensity: $intensity, ')
+          ..write('clotSize: $clotSize, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(date, intensity, clotSize, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DailyFlow &&
+          other.date == this.date &&
+          other.intensity == this.intensity &&
+          other.clotSize == this.clotSize &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
+  final Value<DateTime> date;
+  final Value<FlowIntensity> intensity;
+  final Value<ClotSize?> clotSize;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const DailyFlowsCompanion({
+    this.date = const Value.absent(),
+    this.intensity = const Value.absent(),
+    this.clotSize = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DailyFlowsCompanion.insert({
+    required DateTime date,
+    required FlowIntensity intensity,
+    this.clotSize = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : date = Value(date),
+       intensity = Value(intensity);
+  static Insertable<DailyFlow> custom({
+    Expression<DateTime>? date,
+    Expression<String>? intensity,
+    Expression<String>? clotSize,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (date != null) 'date': date,
+      if (intensity != null) 'intensity': intensity,
+      if (clotSize != null) 'clot_size': clotSize,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DailyFlowsCompanion copyWith({
+    Value<DateTime>? date,
+    Value<FlowIntensity>? intensity,
+    Value<ClotSize?>? clotSize,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return DailyFlowsCompanion(
+      date: date ?? this.date,
+      intensity: intensity ?? this.intensity,
+      clotSize: clotSize ?? this.clotSize,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (intensity.present) {
+      map['intensity'] = Variable<String>(
+        $DailyFlowsTable.$converterintensity.toSql(intensity.value),
+      );
+    }
+    if (clotSize.present) {
+      map['clot_size'] = Variable<String>(
+        $DailyFlowsTable.$converterclotSizen.toSql(clotSize.value),
+      );
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DailyFlowsCompanion(')
+          ..write('date: $date, ')
+          ..write('intensity: $intensity, ')
+          ..write('clotSize: $clotSize, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $CycleEventsTable cycleEvents = $CycleEventsTable(this);
   late final $PeriodsTable periods = $PeriodsTable(this);
+  late final $DailyFlowsTable dailyFlows = $DailyFlowsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [cycleEvents, periods];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    cycleEvents,
+    periods,
+    dailyFlows,
+  ];
 }
 
 typedef $$CycleEventsTableCreateCompanionBuilder =
@@ -1028,6 +1408,205 @@ typedef $$PeriodsTableProcessedTableManager =
       Period,
       PrefetchHooks Function()
     >;
+typedef $$DailyFlowsTableCreateCompanionBuilder =
+    DailyFlowsCompanion Function({
+      required DateTime date,
+      required FlowIntensity intensity,
+      Value<ClotSize?> clotSize,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$DailyFlowsTableUpdateCompanionBuilder =
+    DailyFlowsCompanion Function({
+      Value<DateTime> date,
+      Value<FlowIntensity> intensity,
+      Value<ClotSize?> clotSize,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$DailyFlowsTableFilterComposer
+    extends Composer<_$AppDatabase, $DailyFlowsTable> {
+  $$DailyFlowsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<FlowIntensity, FlowIntensity, String>
+  get intensity => $composableBuilder(
+    column: $table.intensity,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<ClotSize?, ClotSize, String> get clotSize =>
+      $composableBuilder(
+        column: $table.clotSize,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DailyFlowsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DailyFlowsTable> {
+  $$DailyFlowsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get intensity => $composableBuilder(
+    column: $table.intensity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clotSize => $composableBuilder(
+    column: $table.clotSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DailyFlowsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DailyFlowsTable> {
+  $$DailyFlowsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<FlowIntensity, String> get intensity =>
+      $composableBuilder(column: $table.intensity, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<ClotSize?, String> get clotSize =>
+      $composableBuilder(column: $table.clotSize, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$DailyFlowsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DailyFlowsTable,
+          DailyFlow,
+          $$DailyFlowsTableFilterComposer,
+          $$DailyFlowsTableOrderingComposer,
+          $$DailyFlowsTableAnnotationComposer,
+          $$DailyFlowsTableCreateCompanionBuilder,
+          $$DailyFlowsTableUpdateCompanionBuilder,
+          (
+            DailyFlow,
+            BaseReferences<_$AppDatabase, $DailyFlowsTable, DailyFlow>,
+          ),
+          DailyFlow,
+          PrefetchHooks Function()
+        > {
+  $$DailyFlowsTableTableManager(_$AppDatabase db, $DailyFlowsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DailyFlowsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DailyFlowsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DailyFlowsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<DateTime> date = const Value.absent(),
+                Value<FlowIntensity> intensity = const Value.absent(),
+                Value<ClotSize?> clotSize = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DailyFlowsCompanion(
+                date: date,
+                intensity: intensity,
+                clotSize: clotSize,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required DateTime date,
+                required FlowIntensity intensity,
+                Value<ClotSize?> clotSize = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DailyFlowsCompanion.insert(
+                date: date,
+                intensity: intensity,
+                clotSize: clotSize,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DailyFlowsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DailyFlowsTable,
+      DailyFlow,
+      $$DailyFlowsTableFilterComposer,
+      $$DailyFlowsTableOrderingComposer,
+      $$DailyFlowsTableAnnotationComposer,
+      $$DailyFlowsTableCreateCompanionBuilder,
+      $$DailyFlowsTableUpdateCompanionBuilder,
+      (DailyFlow, BaseReferences<_$AppDatabase, $DailyFlowsTable, DailyFlow>),
+      DailyFlow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1036,4 +1615,6 @@ class $AppDatabaseManager {
       $$CycleEventsTableTableManager(_db, _db.cycleEvents);
   $$PeriodsTableTableManager get periods =>
       $$PeriodsTableTableManager(_db, _db.periods);
+  $$DailyFlowsTableTableManager get dailyFlows =>
+      $$DailyFlowsTableTableManager(_db, _db.dailyFlows);
 }

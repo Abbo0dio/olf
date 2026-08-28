@@ -120,28 +120,33 @@ void main() {
     );
   });
 
-  testWidgets('tapping a period day on the calendar opens its editor', (
-    tester,
-  ) async {
-    final db = memoryDb();
-    await seed(db, PeriodDraft(start: daysAgo(2), end: today));
+  testWidgets(
+    'tapping a period day opens the flow quick-log; "Edit period dates" '
+    'reaches the period editor',
+    (tester) async {
+      final db = memoryDb();
+      await seed(db, PeriodDraft(start: daysAgo(2), end: today));
 
-    await pumpOlf(
-      tester,
-      overrides: [dbOverride(db)],
-      body: () async {
-        await tester.tap(
-          find.bySemanticsLabel('${formatDay(today)}, period day'),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('Edit period'), findsOneWidget);
-        // delete is reachable straight from the calendar, not only from history
-        expect(find.text('Delete'), findsOneWidget);
+      await pumpOlf(
+        tester,
+        overrides: [dbOverride(db)],
+        body: () async {
+          await tester.tap(
+            find.bySemanticsLabel('${formatDay(today)}, period day'),
+          );
+          await tester.pumpAndSettle();
+          expect(find.text('Flow — ${formatDay(today)}'), findsOneWidget);
 
-        // close the sheet
-        await tester.tap(find.text('Cancel'));
-        await tester.pumpAndSettle();
-      },
-    );
-  });
+          // the period-dates editor is still one tap away from the calendar
+          await tester.tap(find.text('Edit period dates'));
+          await tester.pumpAndSettle();
+          expect(find.text('Edit period'), findsOneWidget);
+          expect(find.text('Delete'), findsOneWidget);
+
+          await tester.tap(find.text('Cancel'));
+          await tester.pumpAndSettle();
+        },
+      );
+    },
+  );
 }

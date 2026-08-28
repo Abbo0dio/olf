@@ -2,13 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../flow/flow_format.dart';
+import '../flow/flow_providers.dart';
+import '../flow/flow_quick_log.dart';
 import 'period_editor.dart';
 import 'period_format.dart';
 import 'period_providers.dart';
 
-/// The p1.1 screen: a month calendar of logged periods, a running summary, and
-/// a history list. Add / edit / delete is reachable from a calendar day and
-/// from a history row; every view watches one stream so they stay in sync.
+/// The home screen: a month calendar of logged periods and per-day flow, a
+/// running summary, and a history list.
+///
+/// Tapping a **period day** opens the flow quick-log (p1.2); tapping an empty
+/// day, or the "Add a period" button, opens the period-dates editor (p1.1).
+/// Every view watches the same two streams so they stay in sync.
 class PeriodCalendarView extends ConsumerWidget {
   const PeriodCalendarView({super.key});
 
@@ -61,13 +67,24 @@ class _LoadedState extends ConsumerState<_Loaded> {
   }
 
   Future<void> _openForDay(DateTime day) async {
-    final match = _periodOn(day);
-    final outcome = await showPeriodEditor(
-      context,
-      existing: match,
-      initialStart: match == null ? day : null,
+    final period = _periodOn(day);
+    if (period != null) {
+      // Period day → fast path: log what happened that day.
+      await showFlowQuickLog(
+        context,
+        date: day,
+        onEditPeriodDates: () => _edit(period),
+      );
+      return;
+    }
+    // Empty day → log a new period starting here.
+    _reportOutcome(await showPeriodEditor(context, initialStart: day));
+  }
+
+  Future<void> _addPeriod() async {
+    _reportOutcome(
+      await showPeriodEditor(context, initialStart: DateTime.now()),
     );
-    _reportOutcome(outcome);
   }
 
   Future<void> _edit(Period period) async {
@@ -123,17 +140,29 @@ class _LoadedState extends ConsumerState<_Loaded> {
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
+    final flows = ref.watch(dailyFlowsProvider).value ?? const <DailyFlow>[];
+    final flowByDay = <DateTime, DailyFlow>{
+      for (final f in flows) dateOnly(f.date): f,
+    };
+    DailyFlow? flowOn(DateTime day) => flowByDay[dateOnly(day)];
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Summary(periods: _periods, today: today),
+          _Summary(
+            periods: _periods,
+            today: today,
+            todayFlow: flowOn(today),
+            onLogTodayFlow: () => showFlowQuickLog(context, date: today),
+          ),
           const SizedBox(height: 24),
           _MonthCalendar(
             month: _visibleMonth,
             today: today,
             periodOn: _periodOn,
+            flowOn: flowOn,
             onPrev: () =>
                 setState(() => _visibleMonth = addMonths(_visibleMonth, -1)),
             onNext: _visibleMonth.isBefore(firstOfMonth(today))
@@ -146,7 +175,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
           const SizedBox(height: 16),
           Center(
             child: FilledButton.icon(
-              onPressed: () => _openForDay(today),
+              onPressed: _addPeriod,
               style: FilledButton.styleFrom(minimumSize: const Size(220, 48)),
               icon: const Icon(Icons.add),
               label: const Text('Add a period'),
@@ -166,10 +195,17 @@ class _LoadedState extends ConsumerState<_Loaded> {
 }
 
 class _Summary extends StatelessWidget {
-  const _Summary({required this.periods, required this.today});
+  const _Summary({
+    required this.periods,
+    required this.today,
+    required this.todayFlow,
+    required this.onLogTodayFlow,
+  });
 
   final List<Period> periods;
   final DateTime today;
+  final DailyFlow? todayFlow;
+  final VoidCallback onLogTodayFlow;
 
   @override
   Widget build(BuildContext context) {
@@ -185,6 +221,7 @@ class _Summary extends StatelessWidget {
 
     if (ongoing) {
       final day = dayCountSince(latest.startDate, today);
+      final flow = todayFlow;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -195,6 +232,19 @@ class _Summary extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text('Period started ${formatDay(latest.startDate)}'),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ActionChip(
+              avatar: const Icon(Icons.water_drop_outlined, size: 18),
+              label: Text(
+                flow == null
+                    ? "Log today's flow"
+                    : "Today's flow: ${flow.intensity.label}",
+              ),
+              onPressed: onLogTodayFlow,
+            ),
+          ),
         ],
       );
     }
@@ -218,6 +268,7 @@ class _MonthCalendar extends StatelessWidget {
     required this.month,
     required this.today,
     required this.periodOn,
+    required this.flowOn,
     required this.onPrev,
     required this.onNext,
     required this.onDayTap,
@@ -226,6 +277,7 @@ class _MonthCalendar extends StatelessWidget {
   final DateTime month;
   final DateTime today;
   final Period? Function(DateTime) periodOn;
+  final DailyFlow? Function(DateTime) flowOn;
   final VoidCallback onPrev;
   final VoidCallback? onNext;
   final ValueChanged<DateTime> onDayTap;
@@ -245,6 +297,7 @@ class _MonthCalendar extends StatelessWidget {
           date: DateTime(month.year, month.month, day),
           today: today,
           period: periodOn(DateTime(month.year, month.month, day)),
+          flow: flowOn(DateTime(month.year, month.month, day)),
           onTap: onDayTap,
         ),
     ];
@@ -306,12 +359,14 @@ class _DayCell extends StatelessWidget {
     required this.date,
     required this.today,
     required this.period,
+    required this.flow,
     required this.onTap,
   });
 
   final DateTime date;
   final DateTime today;
   final Period? period;
+  final DailyFlow? flow;
   final ValueChanged<DateTime> onTap;
 
   @override
@@ -319,10 +374,17 @@ class _DayCell extends StatelessWidget {
     final theme = Theme.of(context);
     final inPeriod = period != null;
     final isToday = dateOnly(date) == dateOnly(today);
+    final f = flow;
 
-    final semantic = inPeriod
-        ? '${formatDay(date)}, period day'
-        : '${formatDay(date)}, no period logged';
+    final parts = <String>[
+      inPeriod ? 'period day' : 'no period logged',
+      if (f != null) flowSemantics(f.intensity, f.clotSize),
+    ];
+    final semantic = '${formatDay(date)}, ${parts.join(', ')}';
+
+    final barColor = inPeriod
+        ? theme.colorScheme.onPrimaryContainer
+        : theme.colorScheme.primary;
 
     return Semantics(
       button: true,
@@ -333,8 +395,8 @@ class _DayCell extends StatelessWidget {
         radius: 24,
         child: Center(
           child: Container(
-            width: 36,
-            height: 36,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            padding: const EdgeInsets.symmetric(vertical: 3),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: inPeriod ? theme.colorScheme.primaryContainer : null,
@@ -342,19 +404,73 @@ class _DayCell extends StatelessWidget {
                   ? Border.all(color: theme.colorScheme.primary, width: 2)
                   : null,
             ),
-            alignment: Alignment.center,
-            child: Text(
-              '${date.day}',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: inPeriod
-                    ? theme.colorScheme.onPrimaryContainer
-                    : theme.colorScheme.onSurface,
-                fontWeight: isToday ? FontWeight.bold : null,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '${date.day}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: inPeriod
+                        ? theme.colorScheme.onPrimaryContainer
+                        : theme.colorScheme.onSurface,
+                    fontWeight: isToday ? FontWeight.bold : null,
+                  ),
+                ),
+                if (f != null) ...[
+                  const SizedBox(height: 2),
+                  _FlowBar(
+                    intensity: f.intensity,
+                    hasClot: f.clotSize != null,
+                    color: barColor,
+                  ),
+                ],
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A four-segment strength bar for the day cell; segments up to the intensity
+/// level are filled, plus a dot when clots were noted.
+class _FlowBar extends StatelessWidget {
+  const _FlowBar({
+    required this.intensity,
+    required this.hasClot,
+    required this.color,
+  });
+
+  final FlowIntensity intensity;
+  final bool hasClot;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = intensity.index + 1;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < FlowIntensity.values.length; i++)
+          Container(
+            width: 4,
+            height: 3,
+            margin: const EdgeInsets.symmetric(horizontal: 0.5),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(1),
+              color: i < filled ? color : color.withValues(alpha: 0.25),
+            ),
+          ),
+        if (hasClot)
+          Container(
+            width: 3,
+            height: 3,
+            margin: const EdgeInsets.only(left: 2),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+          ),
+      ],
     );
   }
 }

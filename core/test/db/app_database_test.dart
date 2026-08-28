@@ -8,8 +8,8 @@ void main() {
   setUp(() => db = AppDatabase(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  test('schemaVersion is 2', () {
-    expect(db.schemaVersion, 2);
+  test('schemaVersion is 3', () {
+    expect(db.schemaVersion, 3);
   });
 
   test(
@@ -59,6 +59,37 @@ void main() {
       expect(columns['start_date'], ('INTEGER', true));
       expect(columns['end_date'], ('INTEGER', false)); // nullable
       expect(columns['updated_at'], ('INTEGER', true));
+    },
+  );
+
+  test(
+    'onCreate builds daily_flows with the expected columns and types (v3)',
+    () async {
+      final rows = await db
+          .customSelect("PRAGMA table_info('daily_flows')")
+          .get();
+      final columns = {
+        for (final r in rows)
+          r.data['name'] as String: (
+            (r.data['type'] as String).toUpperCase(),
+            (r.data['notnull'] as int) == 1,
+            (r.data['pk'] as int) != 0,
+          ),
+      };
+
+      expect(
+        columns.keys,
+        containsAll(<String>{
+          'date',
+          'intensity',
+          'clot_size',
+          'created_at',
+          'updated_at',
+        }),
+      );
+      expect(columns['date'], ('INTEGER', true, true)); // primary key
+      expect(columns['intensity'], ('TEXT', true, false));
+      expect(columns['clot_size'], ('TEXT', false, false)); // nullable
     },
   );
 

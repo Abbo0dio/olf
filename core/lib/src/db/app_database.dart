@@ -10,7 +10,7 @@ part 'app_database.g.dart';
 /// **not** know how the bytes are stored: the constructor takes a
 /// [QueryExecutor] that the platform layer builds — an encrypted SQLCipher
 /// executor in the app, a plain in-memory/temp-file one in tests.
-@DriftDatabase(tables: [CycleEvents, Periods])
+@DriftDatabase(tables: [CycleEvents, Periods, DailyFlows])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
@@ -19,8 +19,9 @@ class AppDatabase extends _$AppDatabase {
   /// `docs/local-database.md`.
   ///
   /// v2 (p1.1): added the `periods` interval table.
+  /// v3 (p1.2): added the `daily_flows` per-day table.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -38,6 +39,10 @@ class AppDatabase extends _$AppDatabase {
           "SELECT date, NULL, created_at, created_at FROM cycle_events "
           "WHERE type = 'periodStart'",
         );
+      }
+      if (from < 3) {
+        // p1.2: per-day flow logging. Purely additive — nothing to backfill.
+        await m.createTable(dailyFlows);
       }
     },
     beforeOpen: (details) async {
