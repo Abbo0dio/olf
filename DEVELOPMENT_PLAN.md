@@ -148,7 +148,7 @@ A task is not `DONE` until **all** of these hold:
 | Phase | Theme | Status | Gate to move on |
 |-------|-------|--------|-----------------|
 | **0** | Repo, workflow, CI, app-runs-and-does-one-real-thing | `DONE` | CI green; a build installs; one real slice merged |
-| **1** | MVP core tracking — free, un-paywalled | `TODO` | Core tracking usable end-to-end; correction loop works; backup/restore works |
+| **1** | MVP core tracking — free, un-paywalled | `IN PROGRESS` | Core tracking usable end-to-end; correction loop works; backup/restore works |
 | **2** | Privacy & security hardening | `TODO` | Lock + decoy + auto-delete + standalone policy shipped; audit gate enforced |
 | **3** | Correctable adaptive prediction engine v2 | `TODO` | Handles irregular cycles; backtesting harness + accuracy metrics; corrections visibly improve output |
 | **4** | Notifications & reminders | `TODO` | Per-category controls; humane copy; quiet hours; "stop asking" control |
@@ -528,14 +528,14 @@ starting Phase 1.
 
 ### Phase 1 — MVP core tracking (free, un-paywalled)
 
-**Status:** `TODO` · **Goal:** everything in `requirements.md` §1 plus the MUST-HAVE privacy
+**Status:** `IN PROGRESS` · **Goal:** everything in `requirements.md` §1 plus the MUST-HAVE privacy
 and inclusivity basics, all free. After this phase the app is a genuinely useful daily tracker.
 
 #### p1.1 — Period logging: start/end, edit, delete, calendar view
-- **Status:** IN REVIEW
+- **Status:** DONE
 - **Branch / worktree:** `feat/p1.1-period-logging` / `../olf-wt/p1.1`
 - **Owner:** worker: phase1
-- **PR:** [#9](https://github.com/Abbo0dio/olf/pull/9)
+- **PR:** [#9](https://github.com/Abbo0dio/olf/pull/9) (merged)
 - **Depends on:** p0.4
 - **Requirement refs:** §1, §9(1)
 - **Goal:** Log a period with start and (optional, later) end date; see periods on a month
@@ -593,10 +593,11 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     green (`mise exec --`): format 0 changed; core + app analyze — no issues; drift codegen no
     diff; core `dart test` 64 passed; app `flutter test` 11 passed; dependency audit PASS (no
     new deps); `pubspec.lock` unchanged. Awaiting orchestrator review + merge.
+  - 2026-08-28 — PR #9 squash-merged to `main` (`4d0489f`); CI green on `main`. Set **DONE**.
 
 #### p1.2 — Flow intensity, spotting, clots — one/two-tap logging
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/10
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/10 (merged)
 - **Branch / worktree:** `feat/p1.2-flow-intensity` / `../olf-wt/p1.2`
 - **Owner:** worker: phase1
 - **Depends on:** p1.1
@@ -642,6 +643,7 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     test + v1→v3 pass-through. core 74 / app 14 green, analyze + format clean, dependency
     audit PASS, codegen committed. §7 decision + §9 follow-ups recorded. PR #10 opened into
     `main`; **IN REVIEW** — awaiting orchestrator merge.
+  - 2026-08-28 — PR #10 squash-merged to `main` (`76b0f44`); CI green on `main`. Set **DONE**.
 
 #### p1.3 — Cycle derivation & history
 - **Status:** TODO
