@@ -439,9 +439,9 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     - *Status:* **met** on **API 34** — `.github/workflows/nightly-integration.yml` → job
       `android-emulator` (`reactivecircus/android-emulator-runner@v2`, KVM-accelerated x86_64,
       `working-directory: app`, `script: flutter test integration_test/log_period_test.dart`).
-      Evidence: run [33178785364](https://github.com/Abbo0dio/olf/actions/runs/33178785364)
-      "Android emulator API 34" → pass (test green again on run
-      [33180054594](https://github.com/Abbo0dio/olf/actions/runs/33180054594)).
+      Evidence: runs [33178785364](https://github.com/Abbo0dio/olf/actions/runs/33178785364)
+      and [33181230300](https://github.com/Abbo0dio/olf/actions/runs/33181230300)
+      "Android emulator API 34" → pass.
       **API 26** (our documented minimum) was in the matrix but its x86_64 image would not
       boot on GitHub runners — two separate infra failures in two runs (userdata-partition
       sizing; then a corrupt emulator-package download, "Error on ZipFile unknown archive").
@@ -453,7 +453,7 @@ builds and does exactly one real thing so Phase 1 has something to grow.
       boots the newest available iPhone simulator via `xcrun simctl` and runs `flutter test
       integration_test/log_period_test.dart -d <device>`. Evidence: run
       [33178785364](https://github.com/Abbo0dio/olf/actions/runs/33178785364) "iOS simulator"
-      → `🎉 1 test passed.` (green again on run 33180054594).
+      → `🎉 1 test passed.` (green again on runs 33180054594 and 33181230300).
   - The integration test genuinely closes and reopens the DB from disk and leaves state clean.
     - *Status:* `app/integration_test/log_period_test.dart` rewritten to drive two explicit
       `ProviderContainer` launches: launch 1 logs today; the container is disposed and the
@@ -504,10 +504,10 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     simulator ✅** (`🎉 1 test passed`), **Android emulator API 34 ✅**, **API 26 ❌**
     (emulator never booted — runner disk / corrupt emulator-package download). Follow-up
     **PR #7** (`feat/p0.5-emulator-disk-fix`): frees runner disk before the emulator step
-    and drops the flaky API 26 leg. Re-run
-    ([33180054594](https://github.com/Abbo0dio/olf/actions/runs/33180054594)) confirmed
-    iOS + API 34 still green. p0.5 acceptance is functionally met on both platforms;
-    the physical-device table remains the only open item.
+    and drops the flaky API 26 leg. Final run with those changes
+    ([33181230300](https://github.com/Abbo0dio/olf/actions/runs/33181230300)): **fully
+    green** — iOS simulator ✅ + Android emulator API 34 ✅, no red jobs. p0.5 acceptance
+    is met on both platforms; the physical-device table remains the only open item.
 
 **Phase 0 exit gate:** CI enforces the worktree→PR→merge workflow (required `CI OK` check);
 every PR builds a debug APK (Ubuntu) and an unsigned iOS build (macOS); p0.4 merged and the app
