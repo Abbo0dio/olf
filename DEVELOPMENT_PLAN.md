@@ -439,13 +439,15 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     - *Status:* `.github/workflows/nightly-integration.yml` → job `android-emulator` (matrix
       API 26 + 34, `reactivecircus/android-emulator-runner@v2`, KVM-accelerated x86_64,
       `working-directory: app`, `script: flutter test integration_test/log_period_test.dart`).
-      Evidence: _(nightly run link — fill in)_.
+      Evidence: _pending — GitHub only allows `workflow_dispatch` / `schedule` once the
+      workflow file is on the default branch, so the first real run happens after this PR
+      merges. Run it on demand with `gh workflow run nightly-integration.yml` right after merge._
   - An iOS simulator job on `macos-latest` runs the same suite (or a documented reason it
     can't).
     - *Status:* `.github/workflows/nightly-integration.yml` → job `ios-simulator` boots the
       newest available iPhone simulator via `xcrun simctl` and runs `flutter test
-      integration_test/log_period_test.dart -d <device>`. Evidence: _(nightly run link — fill
-      in)_.
+      integration_test/log_period_test.dart -d <device>`. Evidence: _pending first
+      post-merge run (same `workflow_dispatch` constraint as above)._
   - The integration test genuinely closes and reopens the DB from disk and leaves state clean.
     - *Status:* `app/integration_test/log_period_test.dart` rewritten to drive two explicit
       `ProviderContainer` launches: launch 1 logs today; the container is disposed and the
@@ -483,8 +485,10 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     (android-emulator + ios-simulator, nightly + dispatch, non-blocking); rewrote
     `app/integration_test/log_period_test.dart` to prove close-then-reopen; updated `ci.yml`
     comments, CONTRIBUTING.md §5, and §9.
-  - 2026-08-28 — PR opened. Set IN REVIEW. Nightly workflow triggered via `workflow_dispatch`
-    for evidence.
+  - 2026-08-28 — PR #6 opened. Set IN REVIEW. Local checks green (format, analyze ×3,
+    core 23 tests, app 6 widget tests, dependency audit, YAML parse). Emulator/simulator
+    evidence run is blocked until the workflow is on `main` (GitHub `workflow_dispatch`
+    rule) — trigger it right after merge.
 
 **Phase 0 exit gate:** CI enforces the worktree→PR→merge workflow (required `CI OK` check);
 every PR builds a debug APK (Ubuntu) and an unsigned iOS build (macOS); p0.4 merged and the app
