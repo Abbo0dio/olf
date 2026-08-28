@@ -41,6 +41,9 @@ dependencies:
 
   # Local database + encryption-at-rest. `core` owns the schema; the app supplies
   # the encrypted executor (SQLCipher) and the key (Keychain / Keystore).
+  # sqlcipher_flutter_libs bundles the native SQLite (compiled with SQLCipher)
+  # for both platforms — do NOT also add sqlite3_flutter_libs: they ship the same
+  # Sqlite3FlutterLibsPlugin class and collide at dex-merge / link time.
   drift: ^2.28.0
   sqlite3: ^2.7.5
   sqlcipher_flutter_libs: ^0.6.5
@@ -60,8 +63,8 @@ dev_dependencies:
   integration_test:
     sdk: flutter
 
-  # In-memory SQLite for widget tests (no SQLCipher / secure storage needed).
-  sqlite3_flutter_libs: ^0.5.26
+  # Widget tests open NativeDatabase.memory() against the host's system SQLite
+  # (CI installs libsqlite3-dev; sqlcipher_flutter_libs covers real devices).
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

@@ -387,9 +387,13 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     `created_at` is an audit trail for future corrections. Only `periodStart` is ever written.
   - **New deps:** `core` → `drift ^2.28`, dev `drift_dev` + `build_runner` + `sqlite3`
     (tests). `app` → `flutter_riverpod ^2.6`, `drift`, `sqlite3`, `sqlcipher_flutter_libs
-    ^0.6.5`, `flutter_secure_storage ^9.2`, `path_provider`, `path`; dev `integration_test` +
-    `sqlite3_flutter_libs`. None on the denylist; audit passes. **Riverpod is now actually
-    introduced** (§7).
+    ^0.6.5`, `flutter_secure_storage ^9.2`, `path_provider`, `path`; dev `integration_test`.
+    None on the denylist; audit passes. **Riverpod is now actually introduced** (§7).
+  - **Gotcha:** `sqlcipher_flutter_libs` and `sqlite3_flutter_libs` both ship the same
+    `Sqlite3FlutterLibsPlugin` class and collide at Android dex-merge / iOS link time — you
+    can use only one. `sqlcipher_flutter_libs` is it (SQLCipher is a superset of SQLite).
+    Host/CI widget tests use the system `libsqlite3` instead (`libsqlite3-dev` in the `test`
+    job).
   - **Codegen:** drift's `app_database.g.dart` is committed; CI `analyze` regenerates and
     fails on any diff. `core/analysis_options.yaml` excludes `lib/**/*.g.dart`.
   - **"Day N":** `dayCountSince(latestPeriodStart.date, DateTime.now())` (start = Day 1).
