@@ -7,6 +7,8 @@ import '../cycle/cycle_providers.dart';
 import '../flow/flow_format.dart';
 import '../flow/flow_providers.dart';
 import '../flow/flow_quick_log.dart';
+import '../prediction/prediction_format.dart';
+import '../prediction/prediction_providers.dart';
 import 'period_editor.dart';
 import 'period_format.dart';
 import 'period_providers.dart';
@@ -150,6 +152,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
 
     final cycles = ref.watch(cyclesProvider);
     final cycleStats = ref.watch(cycleStatsProvider);
+    final prediction = ref.watch(predictionProvider);
     final cycleByStart = <DateTime, Cycle>{
       for (final c in cycles) c.periodStart: c,
     };
@@ -165,6 +168,13 @@ class _LoadedState extends ConsumerState<_Loaded> {
             todayFlow: flowOn(today),
             onLogTodayFlow: () => showFlowQuickLog(context, date: today),
           ),
+          if (prediction != null) ...[
+            const SizedBox(height: 16),
+            _PredictionCard(
+              prediction: prediction,
+              onLogPeriodStart: _addPeriod,
+            ),
+          ],
           if (_periods.isNotEmpty) ...[
             const SizedBox(height: 16),
             _CycleStatsCard(stats: cycleStats),
@@ -577,6 +587,135 @@ class _HistoryRowDetail extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+/// The headline forecast: the next-period and fertile windows as **ranges**
+/// with a confidence note — or, when a period is late, a calm check-in that
+/// does **not** roll the estimate forward (it still shows the from-last-period
+/// dates and asks the user to log the real start).
+class _PredictionCard extends StatelessWidget {
+  const _PredictionCard({
+    required this.prediction,
+    required this.onLogPeriodStart,
+  });
+
+  final CyclePrediction prediction;
+  final VoidCallback onLogPeriodStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      container: true,
+      label: _semanticLabel(),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: prediction.isOverdue
+              ? theme.colorScheme.tertiaryContainer
+              : theme.colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: prediction.isOverdue ? _overdue(context) : _forecast(context),
+      ),
+    );
+  }
+
+  Widget _forecast(BuildContext context) {
+    final theme = Theme.of(context);
+    final onColor = theme.colorScheme.onPrimaryContainer;
+    final expected = formatDay(prediction.nextPeriodExpected);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Next period',
+              style: theme.textTheme.labelMedium?.copyWith(color: onColor),
+            ),
+            const Spacer(),
+            Text(
+              confidenceLabel(prediction.confidence),
+              style: theme.textTheme.labelSmall?.copyWith(color: onColor),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          formatDateRange(prediction.nextPeriod),
+          style: theme.textTheme.titleLarge?.copyWith(color: onColor),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          prediction.status == PredictionStatus.dueNow
+              ? 'Expected around now — most likely $expected'
+              : 'Most likely $expected',
+          style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Fertile window (estimate)',
+          style: theme.textTheme.labelMedium?.copyWith(color: onColor),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          formatDateRange(prediction.fertileWindow),
+          style: theme.textTheme.bodyLarge?.copyWith(color: onColor),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          confidenceNote(prediction),
+          style: theme.textTheme.bodySmall?.copyWith(color: onColor),
+        ),
+      ],
+    );
+  }
+
+  Widget _overdue(BuildContext context) {
+    final theme = Theme.of(context);
+    final onColor = theme.colorScheme.onTertiaryContainer;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Period check-in',
+          style: theme.textTheme.labelMedium?.copyWith(color: onColor),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          overdueHeadline(prediction.daysPastExpected!),
+          style: theme.textTheme.titleMedium?.copyWith(color: onColor),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          overdueBody,
+          style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.tonal(
+            onPressed: onLogPeriodStart,
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+            child: const Text('Log period start'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _semanticLabel() {
+    if (prediction.isOverdue) {
+      return 'Period check-in. '
+          '${overdueHeadline(prediction.daysPastExpected!)}. $overdueBody';
+    }
+    return 'Next period estimated ${formatDateRange(prediction.nextPeriod)}, '
+        'most likely ${formatDay(prediction.nextPeriodExpected)}. '
+        'Fertile window estimated ${formatDateRange(prediction.fertileWindow)}. '
+        '${confidenceNote(prediction)}';
   }
 }
 
