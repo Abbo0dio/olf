@@ -1096,8 +1096,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     iOS build). Worktree + branch cleaned up. **DONE.**
 
 #### p1.8 — Anonymous-by-default, local PIN lock, disclaimers, first-run privacy explainer
-- **Status:** IN PROGRESS
-- **PR:** _(pending)_
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/17
 - **Branch / worktree:** `feat/p1.8-pin-disclaimers` / `../olf-wt/p1.8`
 - **Owner:** worker: phase1
 - **Depends on:** p0.4
@@ -1168,6 +1168,7 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     / `pinStore` knobs; all pre-existing tests untouched. core 232 / app 52 green, analyze +
     format clean, no schema change / no codegen change, dependency audit PASS (38 rules).
     `docs/privacy-and-lock.md` added; §7 decision + §9 follow-ups recorded.
+  - 2026-08-29 — PR #17 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
 
 #### p1.9 — Dark mode + gender-neutral, discreet theme baseline
 - **Status:** TODO
