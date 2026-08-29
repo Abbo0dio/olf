@@ -646,8 +646,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   - 2026-08-28 — PR #10 squash-merged to `main` (`76b0f44`); CI green on `main`. Set **DONE**.
 
 #### p1.3 — Cycle derivation & history
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/12
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/12 (merged)
 - **Branch / worktree:** `feat/p1.3-cycle-derivation` / `../olf-wt/p1.3`
 - **Owner:** worker: phase1
 - **Depends on:** p1.1
@@ -703,10 +703,12 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     with no stored state. core 93 / app 18 green, analyze + format clean, no codegen diff (no
     schema change), dependency audit PASS, no lock drift. §7 decision + §9 follow-ups recorded.
     PR #12 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
+  - 2026-08-29 — **merged** (PR #12, squash → `dfba13a`). CI green on all 8 checks. Worktree
+    + branch cleaned up. **DONE.**
 
 #### p1.4 — Prediction v1: next period + fertile window, as ranges, correctable
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/13
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/13 (merged)
 - **Branch / worktree:** `feat/p1.4-prediction-v1` / `../olf-wt/p1.4`
 - **Owner:** worker: phase1
 - **Depends on:** p1.3
@@ -781,9 +783,13 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     format clean, no codegen diff (no schema change), dependency audit PASS, no lock drift.
     §7 decision + §9 follow-ups recorded. PR #13 opened into `main`; **IN REVIEW** — awaiting
     orchestrator merge.
+  - 2026-08-29 — **merged** (PR #13, squash → `6ab2b33`). CI green on all 8 checks. Worktree
+    + branch cleaned up. **DONE.**
 
 #### p1.5 — Symptom, mood & discharge logging with custom symptoms
-- **Status:** TODO
+- **Status:** IN PROGRESS
+- **Branch / worktree:** `feat/p1.5-symptom-logging` / `../olf-wt/p1.5`
+- **Owner:** worker: phase1
 - **Depends on:** p0.4
 - **Requirement refs:** §1, §9(10)
 - **Goal:** Log cramps, mood, energy, cervical mucus / discharge, and **user-defined custom
@@ -792,7 +798,65 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   symptoms show on the calendar and in history.
 - **Tests required:** unit (custom-symptom CRUD); widget (daily sheet); integration (log across
   several days, verify history).
-- **Log:** — created.
+- **Notes / detail:**
+  - **Schema v4** — two new tables in `core/lib/src/db/tables.dart`:
+    - **`SymptomTypes`** (`@DataClassName('SymptomType')`) — the symptom *catalogue*: `id`
+      (autoIncrement), `name`, `sortOrder` (int, user-controlled ordering), `isBuiltIn` (bool,
+      default false), `archivedAt` (nullable — **soft-delete** so historical entries stay
+      meaningful and a name is never truly lost), `createdAt` / `updatedAt`
+      (`withDefault(currentDateAndTime)`).
+    - **`DailySymptomEntries`** (`@DataClassName('DailySymptomEntry')`) — one row per
+      (day, symptom) that is present: `date` (DateTimeColumn), `symptomTypeId` (int, FK
+      `REFERENCES symptom_types(id) ON DELETE CASCADE`), `createdAt`. Composite PK
+      `{date, symptomTypeId}` — toggling is idempotent, multi-select is just several rows.
+      Presence-only in v1 (no severity/scale).
+    - **Built-ins** (`kBuiltInSymptomNames`, gender-neutral): Cramps, Headache, Chest
+      tenderness, Bloating, Fatigue, Nausea, Backache, Low mood, Anxiety, Acne, Discharge.
+      Seeded by `_seedBuiltInSymptoms()` called from `onCreate` (after `createAll()`) **and**
+      from the `if (from < 4)` upgrade branch, with incrementing `sortOrder` and
+      `isBuiltIn: true`.
+  - **`core/lib/src/symptom/`** (pure Dart):
+    - `symptom_validation.dart` — `SymptomTypeError { empty, tooLong, duplicate }` + `describe()`
+      + `SymptomTypeException` + `validateSymptomName(name, {existingActiveNames,
+      editingCurrentName})` (trim → empty; > 40 chars → tooLong; case-insensitive clash with
+      another active name → duplicate). Mirrors `period_validation.dart`.
+    - `symptom_repository.dart` — `abstract interface class SymptomRepository`: `watchTypes()`,
+      `activeTypes()`, `addType(name)`, `renameType(id, name)`, `reorderTypes(orderedIds)`,
+      `archiveType(id)`, `symptomsOn(date) → Set<int>`, `watchAllEntries()`,
+      `setSymptom(date, typeId, {present})`, `clearDay(date)`.
+    - `drift_symptom_repository.dart` — `DriftSymptomRepository(this._db, {now})`. Active types
+      = `archivedAt IS NULL` ordered by `sortOrder`; validation throws before any write;
+      `setSymptom` present → insert-or-ignore, absent → delete row; `reorderTypes` rewrites
+      `sortOrder` from list index.
+  - **`app/lib/src/symptom/`:** `symptom_providers.dart` (`symptomRepositoryProvider`,
+    `symptomTypesProvider` / `symptomEntriesProvider` — plain non-autoDispose `StreamProvider`s,
+    same pattern as `flow_providers.dart`), `symptom_format.dart` (`symptomSummary(names)`,
+    day-cell fragment), `symptom_day_sheet.dart` (`showSymptomDaySheet(context, {date})` →
+    modal bottom sheet; `Wrap` of multi-select `FilterChip`s; each toggle persists immediately;
+    "Manage symptoms" → `ManageSymptomsPage`; non-period days also offer "Start a period on this
+    day" → `showPeriodEditor(initialStart: date)` to preserve the p1.1 affordance),
+    `manage_symptoms_page.dart` (`ReorderableListView` of active types; per-row Rename / Remove
+    `IconButton`s; "Add symptom" dialog with inline validation).
+  - **`period_calendar_page.dart`:** watch `symptomEntriesProvider` + `symptomTypesProvider` →
+    `symptomCountByDay`; `_openForDay` non-period day → `showSymptomDaySheet` (period day
+    unchanged — its flow sheet gains an "Add symptoms" button); `_DayCell` gains a
+    `symptomCount` indicator + semantic fragment (`'$n symptom(s)'`) — days with none keep the
+    exact existing label; new `_RecentSymptoms` section below `_History`.
+  - **Tests:** core — `symptom/symptom_validation_test.dart`,
+    `symptom/drift_symptom_repository_test.dart`, `db/symptom_migration_test.dart` (v3 → v4),
+    update `db/app_database_test.dart` (schemaVersion 4 + two new `onCreate` shape tests) and
+    `db/period_migration_test.dart` (→ 4 + `symptom_types` seeded). app —
+    `symptom/symptom_day_sheet_test.dart` (multi-select in two taps, persist, reopen, calendar
+    indicator), `symptom/manage_symptoms_test.dart` (add / rename / reorder / archive);
+    nightly `integration_test/log_symptoms_test.dart` (log across several days → history).
+  - **Codegen:** regenerate + commit `core/lib/src/db/app_database.g.dart`.
+- **Log:**
+  - 2026-08-29 — created.
+  - 2026-08-29 — claimed by worker: phase1; worktree `../olf-wt/p1.5`, branch
+    `feat/p1.5-symptom-logging` off `main` @ `6ab2b33`. Building: schema v4
+    (`symptom_types` + `daily_symptom_entries`, built-ins seeded in the migration),
+    `core/symptom` (validation + repository), `symptom` providers/format, low-friction day
+    sheet, manage-symptoms screen, calendar + recent-symptoms integration.
 
 #### p1.6 — BBT (manual) & cervical-mucus / fertility-awareness inputs
 - **Status:** TODO
@@ -1141,6 +1205,24 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-29 — **Symptoms are a user-editable catalogue + per-(day, type) presence rows
+  (p1.5).** `schemaVersion` bumped to **4**: `symptom_types(id, name, sort_order, is_built_in,
+  archived_at?, created_at, updated_at)` is the vocabulary; `daily_symptom_entries(date,
+  symptom_type_id → symptom_types ON DELETE CASCADE, created_at, PRIMARY KEY(date,
+  symptom_type_id))` is the log. Rationale: a catalogue table (not a fixed enum) is what makes
+  "add / rename / reorder your own symptoms" a data change rather than a code change; a
+  composite-key presence row makes multi-select logging idempotent (toggle = insert-or-ignore /
+  delete) with nothing to validate, so day logging is plain CRUD while the catalogue carries
+  the validation (`validateSymptomName`: empty / >40 / case-insensitive duplicate among active
+  names). **Removal is a soft archive** (`archived_at`), not a delete: a removed symptom leaves
+  the pickers but its historical entries stay meaningful and its name is never silently reused.
+  The ~11 built-in names are gender-neutral and seeded by `_seedBuiltInSymptoms()` from **both**
+  `onCreate` and the `from < 4` upgrade, so fresh and upgraded databases are identical. Entries
+  are **presence-only in v1** — no severity/scale; mood & energy are modelled as ordinary
+  toggle symptoms, not sliders. Entries are unlinked from `periods` (same reasoning as
+  `daily_flows`). On the calendar, tapping a **non-period** day now opens the symptom day sheet
+  (a period day still opens the flow sheet, which gains an "Add symptoms" button); the sheet
+  offers "Start a period" so p1.1's tap-an-empty-day affordance survives. — worker: phase1.
 - 2026-08-28 — **Prediction v1 is a stats-based `RobustPredictor` behind a `Predictor` seam
   (p1.4).** `Predictor.predict({cycles, today}) → CyclePrediction?` in `core`; Phase 3's
   adaptive/backtested engine replaces the implementation with no call site change. **No schema
@@ -1255,9 +1337,9 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
 - **Adopt `drift_dev schema` snapshot tooling** for the next migration. The p1.1 v1→v2
   migration test (`core/test/db/period_migration_test.dart`) hand-builds the old schema; the
   snapshot generator would let each future upgrade be tested step-by-step from a dumped
-  schema. (Was a p0.4 follow-up; deferred once more — a hand-rolled test was enough for two
-  small additive migrations, v1→v2 and v2→v3.) — noted by worker: phase1 during p1.1, still
-  open after p1.2.
+  schema. (Was a p0.4 follow-up; deferred again — a hand-rolled test was enough for three
+  small additive migrations, v1→v2, v2→v3 and v3→v4.) — noted by worker: phase1 during p1.1,
+  still open after p1.5.
 - **p1.1 follow-ups:** period-length sanity ceiling (a `tooLong` validation error, e.g. warn
   past ~15 days) — deliberately left out of p1.1, which blocks only overlaps and impossible
   ranges; a one-tap "period ended today" quick action from the home summary (the editor
@@ -1282,6 +1364,17 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   hand-picked thresholds; no backtesting / calibration yet. `predictionProvider` reads
   `DateTime.now()` directly (fine for v1; a `clockProvider` would make the late-state widget
   test time-independent). — noted by worker: phase1 during p1.4.
+- **p1.5 follow-ups:** symptom entries are **presence-only** — no per-entry severity/scale, and
+  no free-text note per day; add a severity column (or a notes field) if a later slice needs
+  it. Mood & energy are plain toggle symptoms, not ordered scales — a dedicated scale widget is
+  deferred. The "Recent symptoms" list resolves names against the **active** catalogue only, so
+  a day that has an archived symptom still counts on the calendar but that symptom's name drops
+  out of the list; a history view that resolves archived names (or a per-cycle "this cycle's
+  symptoms" rollup in `_History`) is later work. Cervical-mucus / discharge is a single toggle
+  symptom here — the structured Billings-style classification that feeds the fertile window is
+  **p1.6**. `reorderTypes` rewrites every `sort_order` on each drag (fine at this scale; a
+  sparse/fractional index would avoid the rewrite). No cap on the number of custom symptoms.
+  — noted by worker: phase1 during p1.5.
 - (add more here)
 
 ## 10. Orphaned / cut work

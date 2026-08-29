@@ -101,7 +101,7 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           working-directory: app
-          script: flutter test integration_test/log_period_test.dart
+          script: flutter test integration_test/
 
   ios-simulator:
     name: iOS simulator
@@ -136,4 +136,4 @@ jobs:
           echo "Using simulator: $device"
           xcrun simctl boot "$device" || true
           xcrun simctl bootstatus "$device" -b
-          flutter test integration_test/log_period_test.dart -d "$device"
+          flutter test integration_test/ -d "$device"

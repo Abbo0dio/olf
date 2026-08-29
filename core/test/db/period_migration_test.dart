@@ -54,10 +54,11 @@ void main() {
     final db = AppDatabase(NativeDatabase(dbFile));
     addTearDown(db.close);
 
-    // Force the upgrade to run — v1 → v2 (periods) → v3 (daily_flows).
+    // Force the upgrade to run — v1 → v2 (periods) → v3 (daily_flows) → v4
+    // (symptom catalogue + entries).
     final version = await db.customSelect('PRAGMA user_version').getSingle();
     expect(version.data.values.first, db.schemaVersion);
-    expect(db.schemaVersion, 3);
+    expect(db.schemaVersion, 4);
 
     // The v3 table was created along the way too.
     final flowTable = await db
@@ -67,6 +68,10 @@ void main() {
         )
         .get();
     expect(flowTable, hasLength(1));
+
+    // ...and the v4 symptom catalogue was created and seeded.
+    final symptomTypes = await DriftSymptomRepository(db).activeTypes();
+    expect(symptomTypes.map((t) => t.name), kBuiltInSymptomNames);
 
     // The v2 table exists with the expected shape.
     final columns = await db.customSelect("PRAGMA table_info('periods')").get();

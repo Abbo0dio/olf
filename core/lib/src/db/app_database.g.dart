@@ -1027,12 +1027,750 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
   }
 }
 
+class $SymptomTypesTable extends SymptomTypes
+    with TableInfo<$SymptomTypesTable, SymptomType> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SymptomTypesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 40,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isBuiltInMeta = const VerificationMeta(
+    'isBuiltIn',
+  );
+  @override
+  late final GeneratedColumn<bool> isBuiltIn = GeneratedColumn<bool>(
+    'is_built_in',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_built_in" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _archivedAtMeta = const VerificationMeta(
+    'archivedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> archivedAt = GeneratedColumn<DateTime>(
+    'archived_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    sortOrder,
+    isBuiltIn,
+    archivedAt,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'symptom_types';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SymptomType> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sortOrderMeta);
+    }
+    if (data.containsKey('is_built_in')) {
+      context.handle(
+        _isBuiltInMeta,
+        isBuiltIn.isAcceptableOrUnknown(data['is_built_in']!, _isBuiltInMeta),
+      );
+    }
+    if (data.containsKey('archived_at')) {
+      context.handle(
+        _archivedAtMeta,
+        archivedAt.isAcceptableOrUnknown(data['archived_at']!, _archivedAtMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SymptomType map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SymptomType(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      isBuiltIn: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_built_in'],
+      )!,
+      archivedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}archived_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SymptomTypesTable createAlias(String alias) {
+    return $SymptomTypesTable(attachedDatabase, alias);
+  }
+}
+
+class SymptomType extends DataClass implements Insertable<SymptomType> {
+  final int id;
+  final String name;
+
+  /// Ascending display order in the pickers and the manage screen.
+  final int sortOrder;
+
+  /// `true` for the names seeded by [kBuiltInSymptomNames]. Purely cosmetic —
+  /// built-ins can still be renamed, reordered and archived.
+  final bool isBuiltIn;
+
+  /// Set when the user removes the symptom; `null` while it is active.
+  final DateTime? archivedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const SymptomType({
+    required this.id,
+    required this.name,
+    required this.sortOrder,
+    required this.isBuiltIn,
+    this.archivedAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['is_built_in'] = Variable<bool>(isBuiltIn);
+    if (!nullToAbsent || archivedAt != null) {
+      map['archived_at'] = Variable<DateTime>(archivedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  SymptomTypesCompanion toCompanion(bool nullToAbsent) {
+    return SymptomTypesCompanion(
+      id: Value(id),
+      name: Value(name),
+      sortOrder: Value(sortOrder),
+      isBuiltIn: Value(isBuiltIn),
+      archivedAt: archivedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(archivedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SymptomType.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SymptomType(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      isBuiltIn: serializer.fromJson<bool>(json['isBuiltIn']),
+      archivedAt: serializer.fromJson<DateTime?>(json['archivedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'isBuiltIn': serializer.toJson<bool>(isBuiltIn),
+      'archivedAt': serializer.toJson<DateTime?>(archivedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  SymptomType copyWith({
+    int? id,
+    String? name,
+    int? sortOrder,
+    bool? isBuiltIn,
+    Value<DateTime?> archivedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => SymptomType(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    sortOrder: sortOrder ?? this.sortOrder,
+    isBuiltIn: isBuiltIn ?? this.isBuiltIn,
+    archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SymptomType copyWithCompanion(SymptomTypesCompanion data) {
+    return SymptomType(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      isBuiltIn: data.isBuiltIn.present ? data.isBuiltIn.value : this.isBuiltIn,
+      archivedAt: data.archivedAt.present
+          ? data.archivedAt.value
+          : this.archivedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SymptomType(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isBuiltIn: $isBuiltIn, ')
+          ..write('archivedAt: $archivedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    sortOrder,
+    isBuiltIn,
+    archivedAt,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SymptomType &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.sortOrder == this.sortOrder &&
+          other.isBuiltIn == this.isBuiltIn &&
+          other.archivedAt == this.archivedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SymptomTypesCompanion extends UpdateCompanion<SymptomType> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<int> sortOrder;
+  final Value<bool> isBuiltIn;
+  final Value<DateTime?> archivedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const SymptomTypesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.isBuiltIn = const Value.absent(),
+    this.archivedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  SymptomTypesCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required int sortOrder,
+    this.isBuiltIn = const Value.absent(),
+    this.archivedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : name = Value(name),
+       sortOrder = Value(sortOrder);
+  static Insertable<SymptomType> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<int>? sortOrder,
+    Expression<bool>? isBuiltIn,
+    Expression<DateTime>? archivedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (isBuiltIn != null) 'is_built_in': isBuiltIn,
+      if (archivedAt != null) 'archived_at': archivedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  SymptomTypesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<int>? sortOrder,
+    Value<bool>? isBuiltIn,
+    Value<DateTime?>? archivedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return SymptomTypesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      sortOrder: sortOrder ?? this.sortOrder,
+      isBuiltIn: isBuiltIn ?? this.isBuiltIn,
+      archivedAt: archivedAt ?? this.archivedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (isBuiltIn.present) {
+      map['is_built_in'] = Variable<bool>(isBuiltIn.value);
+    }
+    if (archivedAt.present) {
+      map['archived_at'] = Variable<DateTime>(archivedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SymptomTypesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isBuiltIn: $isBuiltIn, ')
+          ..write('archivedAt: $archivedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DailySymptomEntriesTable extends DailySymptomEntries
+    with TableInfo<$DailySymptomEntriesTable, DailySymptomEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DailySymptomEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _symptomTypeIdMeta = const VerificationMeta(
+    'symptomTypeId',
+  );
+  @override
+  late final GeneratedColumn<int> symptomTypeId = GeneratedColumn<int>(
+    'symptom_type_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [date, symptomTypeId, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'daily_symptom_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DailySymptomEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('symptom_type_id')) {
+      context.handle(
+        _symptomTypeIdMeta,
+        symptomTypeId.isAcceptableOrUnknown(
+          data['symptom_type_id']!,
+          _symptomTypeIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_symptomTypeIdMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {date, symptomTypeId};
+  @override
+  DailySymptomEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DailySymptomEntry(
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      symptomTypeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}symptom_type_id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DailySymptomEntriesTable createAlias(String alias) {
+    return $DailySymptomEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class DailySymptomEntry extends DataClass
+    implements Insertable<DailySymptomEntry> {
+  /// Calendar date, time-of-day zeroed on write.
+  final DateTime date;
+  final int symptomTypeId;
+  final DateTime createdAt;
+  const DailySymptomEntry({
+    required this.date,
+    required this.symptomTypeId,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['date'] = Variable<DateTime>(date);
+    map['symptom_type_id'] = Variable<int>(symptomTypeId);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  DailySymptomEntriesCompanion toCompanion(bool nullToAbsent) {
+    return DailySymptomEntriesCompanion(
+      date: Value(date),
+      symptomTypeId: Value(symptomTypeId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory DailySymptomEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DailySymptomEntry(
+      date: serializer.fromJson<DateTime>(json['date']),
+      symptomTypeId: serializer.fromJson<int>(json['symptomTypeId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'date': serializer.toJson<DateTime>(date),
+      'symptomTypeId': serializer.toJson<int>(symptomTypeId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  DailySymptomEntry copyWith({
+    DateTime? date,
+    int? symptomTypeId,
+    DateTime? createdAt,
+  }) => DailySymptomEntry(
+    date: date ?? this.date,
+    symptomTypeId: symptomTypeId ?? this.symptomTypeId,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  DailySymptomEntry copyWithCompanion(DailySymptomEntriesCompanion data) {
+    return DailySymptomEntry(
+      date: data.date.present ? data.date.value : this.date,
+      symptomTypeId: data.symptomTypeId.present
+          ? data.symptomTypeId.value
+          : this.symptomTypeId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DailySymptomEntry(')
+          ..write('date: $date, ')
+          ..write('symptomTypeId: $symptomTypeId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(date, symptomTypeId, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DailySymptomEntry &&
+          other.date == this.date &&
+          other.symptomTypeId == this.symptomTypeId &&
+          other.createdAt == this.createdAt);
+}
+
+class DailySymptomEntriesCompanion extends UpdateCompanion<DailySymptomEntry> {
+  final Value<DateTime> date;
+  final Value<int> symptomTypeId;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const DailySymptomEntriesCompanion({
+    this.date = const Value.absent(),
+    this.symptomTypeId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DailySymptomEntriesCompanion.insert({
+    required DateTime date,
+    required int symptomTypeId,
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : date = Value(date),
+       symptomTypeId = Value(symptomTypeId);
+  static Insertable<DailySymptomEntry> custom({
+    Expression<DateTime>? date,
+    Expression<int>? symptomTypeId,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (date != null) 'date': date,
+      if (symptomTypeId != null) 'symptom_type_id': symptomTypeId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DailySymptomEntriesCompanion copyWith({
+    Value<DateTime>? date,
+    Value<int>? symptomTypeId,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return DailySymptomEntriesCompanion(
+      date: date ?? this.date,
+      symptomTypeId: symptomTypeId ?? this.symptomTypeId,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (symptomTypeId.present) {
+      map['symptom_type_id'] = Variable<int>(symptomTypeId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DailySymptomEntriesCompanion(')
+          ..write('date: $date, ')
+          ..write('symptomTypeId: $symptomTypeId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $CycleEventsTable cycleEvents = $CycleEventsTable(this);
   late final $PeriodsTable periods = $PeriodsTable(this);
   late final $DailyFlowsTable dailyFlows = $DailyFlowsTable(this);
+  late final $SymptomTypesTable symptomTypes = $SymptomTypesTable(this);
+  late final $DailySymptomEntriesTable dailySymptomEntries =
+      $DailySymptomEntriesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1041,6 +1779,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     cycleEvents,
     periods,
     dailyFlows,
+    symptomTypes,
+    dailySymptomEntries,
   ];
 }
 
@@ -1607,6 +2347,420 @@ typedef $$DailyFlowsTableProcessedTableManager =
       DailyFlow,
       PrefetchHooks Function()
     >;
+typedef $$SymptomTypesTableCreateCompanionBuilder =
+    SymptomTypesCompanion Function({
+      Value<int> id,
+      required String name,
+      required int sortOrder,
+      Value<bool> isBuiltIn,
+      Value<DateTime?> archivedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+typedef $$SymptomTypesTableUpdateCompanionBuilder =
+    SymptomTypesCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<int> sortOrder,
+      Value<bool> isBuiltIn,
+      Value<DateTime?> archivedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+
+class $$SymptomTypesTableFilterComposer
+    extends Composer<_$AppDatabase, $SymptomTypesTable> {
+  $$SymptomTypesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isBuiltIn => $composableBuilder(
+    column: $table.isBuiltIn,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SymptomTypesTableOrderingComposer
+    extends Composer<_$AppDatabase, $SymptomTypesTable> {
+  $$SymptomTypesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isBuiltIn => $composableBuilder(
+    column: $table.isBuiltIn,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SymptomTypesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SymptomTypesTable> {
+  $$SymptomTypesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<bool> get isBuiltIn =>
+      $composableBuilder(column: $table.isBuiltIn, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SymptomTypesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SymptomTypesTable,
+          SymptomType,
+          $$SymptomTypesTableFilterComposer,
+          $$SymptomTypesTableOrderingComposer,
+          $$SymptomTypesTableAnnotationComposer,
+          $$SymptomTypesTableCreateCompanionBuilder,
+          $$SymptomTypesTableUpdateCompanionBuilder,
+          (
+            SymptomType,
+            BaseReferences<_$AppDatabase, $SymptomTypesTable, SymptomType>,
+          ),
+          SymptomType,
+          PrefetchHooks Function()
+        > {
+  $$SymptomTypesTableTableManager(_$AppDatabase db, $SymptomTypesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SymptomTypesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SymptomTypesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SymptomTypesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> isBuiltIn = const Value.absent(),
+                Value<DateTime?> archivedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => SymptomTypesCompanion(
+                id: id,
+                name: name,
+                sortOrder: sortOrder,
+                isBuiltIn: isBuiltIn,
+                archivedAt: archivedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                required int sortOrder,
+                Value<bool> isBuiltIn = const Value.absent(),
+                Value<DateTime?> archivedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => SymptomTypesCompanion.insert(
+                id: id,
+                name: name,
+                sortOrder: sortOrder,
+                isBuiltIn: isBuiltIn,
+                archivedAt: archivedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SymptomTypesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SymptomTypesTable,
+      SymptomType,
+      $$SymptomTypesTableFilterComposer,
+      $$SymptomTypesTableOrderingComposer,
+      $$SymptomTypesTableAnnotationComposer,
+      $$SymptomTypesTableCreateCompanionBuilder,
+      $$SymptomTypesTableUpdateCompanionBuilder,
+      (
+        SymptomType,
+        BaseReferences<_$AppDatabase, $SymptomTypesTable, SymptomType>,
+      ),
+      SymptomType,
+      PrefetchHooks Function()
+    >;
+typedef $$DailySymptomEntriesTableCreateCompanionBuilder =
+    DailySymptomEntriesCompanion Function({
+      required DateTime date,
+      required int symptomTypeId,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+typedef $$DailySymptomEntriesTableUpdateCompanionBuilder =
+    DailySymptomEntriesCompanion Function({
+      Value<DateTime> date,
+      Value<int> symptomTypeId,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$DailySymptomEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $DailySymptomEntriesTable> {
+  $$DailySymptomEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get symptomTypeId => $composableBuilder(
+    column: $table.symptomTypeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DailySymptomEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $DailySymptomEntriesTable> {
+  $$DailySymptomEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get symptomTypeId => $composableBuilder(
+    column: $table.symptomTypeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DailySymptomEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DailySymptomEntriesTable> {
+  $$DailySymptomEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<int> get symptomTypeId => $composableBuilder(
+    column: $table.symptomTypeId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$DailySymptomEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DailySymptomEntriesTable,
+          DailySymptomEntry,
+          $$DailySymptomEntriesTableFilterComposer,
+          $$DailySymptomEntriesTableOrderingComposer,
+          $$DailySymptomEntriesTableAnnotationComposer,
+          $$DailySymptomEntriesTableCreateCompanionBuilder,
+          $$DailySymptomEntriesTableUpdateCompanionBuilder,
+          (
+            DailySymptomEntry,
+            BaseReferences<
+              _$AppDatabase,
+              $DailySymptomEntriesTable,
+              DailySymptomEntry
+            >,
+          ),
+          DailySymptomEntry,
+          PrefetchHooks Function()
+        > {
+  $$DailySymptomEntriesTableTableManager(
+    _$AppDatabase db,
+    $DailySymptomEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DailySymptomEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DailySymptomEntriesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DailySymptomEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<DateTime> date = const Value.absent(),
+                Value<int> symptomTypeId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DailySymptomEntriesCompanion(
+                date: date,
+                symptomTypeId: symptomTypeId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required DateTime date,
+                required int symptomTypeId,
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DailySymptomEntriesCompanion.insert(
+                date: date,
+                symptomTypeId: symptomTypeId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DailySymptomEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DailySymptomEntriesTable,
+      DailySymptomEntry,
+      $$DailySymptomEntriesTableFilterComposer,
+      $$DailySymptomEntriesTableOrderingComposer,
+      $$DailySymptomEntriesTableAnnotationComposer,
+      $$DailySymptomEntriesTableCreateCompanionBuilder,
+      $$DailySymptomEntriesTableUpdateCompanionBuilder,
+      (
+        DailySymptomEntry,
+        BaseReferences<
+          _$AppDatabase,
+          $DailySymptomEntriesTable,
+          DailySymptomEntry
+        >,
+      ),
+      DailySymptomEntry,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1617,4 +2771,8 @@ class $AppDatabaseManager {
       $$PeriodsTableTableManager(_db, _db.periods);
   $$DailyFlowsTableTableManager get dailyFlows =>
       $$DailyFlowsTableTableManager(_db, _db.dailyFlows);
+  $$SymptomTypesTableTableManager get symptomTypes =>
+      $$SymptomTypesTableTableManager(_db, _db.symptomTypes);
+  $$DailySymptomEntriesTableTableManager get dailySymptomEntries =>
+      $$DailySymptomEntriesTableTableManager(_db, _db.dailySymptomEntries);
 }

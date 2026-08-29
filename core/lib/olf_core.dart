@@ -15,8 +15,11 @@ export 'src/db/tables.dart'
         CycleEventType,
         CycleEvents,
         DailyFlows,
+        DailySymptomEntries,
         FlowIntensity,
-        Periods;
+        Periods,
+        SymptomTypes,
+        kBuiltInSymptomNames;
 export 'src/flow/daily_flow_repository.dart';
 export 'src/flow/drift_daily_flow_repository.dart';
 export 'src/period/drift_period_repository.dart';
@@ -27,3 +30,6 @@ export 'src/prediction/predictor.dart';
 export 'src/prediction/robust_predictor.dart';
 export 'src/repository/cycle_event_repository.dart';
 export 'src/repository/drift_cycle_event_repository.dart';
+export 'src/symptom/drift_symptom_repository.dart';
+export 'src/symptom/symptom_repository.dart';
+export 'src/symptom/symptom_validation.dart';
