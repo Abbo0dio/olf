@@ -114,6 +114,45 @@ The built-in names are seeded by `_seedBuiltInSymptoms()`, called from **both** 
 
 `schemaVersion = 4`.
 
+## Schema v5 (p1.6)
+
+Adds manual basal body temperature, cervical-mucus observations, and a key/value preferences
+store. All three are keyed by `date` (except `app_settings`) and, like `daily_flows`, are **not**
+linked to a `periods` row.
+
+`bbt_entries` — one basal temperature per calendar day:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `date` | INTEGER (unix seconds), **PRIMARY KEY** | **Calendar date**, `dateOnly` on write. |
+| `temp_celsius` | REAL | **Canonical storage in °C.** The °C/°F choice is a display-only preference in `app_settings`. Plausible range (34–43 °C) is enforced in `BbtRepository.setTemp` (`validateCelsius`), not by a DB constraint. |
+| `created_at` / `updated_at` | INTEGER (unix seconds) | `setTemp` upserts on `date` and preserves `created_at`. |
+
+`cervical_mucus_entries` — one Billings-style observation per calendar day:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `date` | INTEGER (unix seconds), **PRIMARY KEY** | **Calendar date**, `dateOnly` on write. |
+| `type` | TEXT | `CervicalMucusType` name — `dry` / `sticky` / `creamy` / `watery` / `eggWhite`, ordered driest → most fertile. `creamy` and wetter are `isFertileQuality`. |
+| `created_at` / `updated_at` | INTEGER (unix seconds) | Upserts on `date`, preserves `created_at`. |
+
+`app_settings` — a tiny key/value preferences store:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `key` | TEXT, **PRIMARY KEY** | Well-known keys in `SettingKeys` (first: `temperature_unit`). |
+| `value` | TEXT | Opaque string; each caller owns its encoding. |
+| `updated_at` | INTEGER (unix seconds) | |
+
+Cervical-mucus observations feed an **observed fertile-window** line on the prediction card
+(`observedFertileWindow(...)` in `core/lib/src/mucus/fertile_window_signal.dart`): over the
+current cycle's fertile-quality days it returns `[first fertile-quality day … last +
+fertileDaysAfterOvulation]`, or `null` when there are none. The statistical `Predictor` /
+`RobustPredictor` seam is **untouched** — the observed window is merged in at the display layer
+only, so Phase 3's engine swap stays a drop-in.
+
+`schemaVersion = 5`.
+
 ## Migrations
 
 `MigrationStrategy.onUpgrade` runs the steps below in order. Every schema change:
@@ -128,6 +167,7 @@ The built-in names are seeded by `_seedBuiltInSymptoms()`, called from **both** 
 | `from < 2` (p1.1) | Creates `periods`; copies every `cycle_events` row of type `periodStart` into it as an open-ended period (`start_date` = `date`, `end_date` = NULL). Verified by `core/test/db/period_migration_test.dart` (real on-disk v1 file → upgrade → assert shape + row survival). |
 | `from < 3` (p1.2) | Creates `daily_flows`. Purely additive — nothing is backfilled, and existing `periods` / `cycle_events` rows are left untouched. Verified by `core/test/db/flow_migration_test.dart` (real on-disk v2 file → upgrade → assert `daily_flows` shape, period row intact, table usable). `period_migration_test.dart` also runs v1 straight through to the current version. |
 | `from < 4` (p1.5) | Creates `symptom_types` + `daily_symptom_entries` and seeds the built-in symptom names. Purely additive — existing `periods` / `daily_flows` / `cycle_events` rows are untouched. Verified by `core/test/db/symptom_migration_test.dart` (real on-disk v3 file → upgrade → assert both table shapes, catalogue seeded, period + flow rows intact, tables usable); `flow_migration_test.dart` and `period_migration_test.dart` also run older versions straight through and check the catalogue seeded. |
+| `from < 5` (p1.6) | Creates `bbt_entries`, `cervical_mucus_entries` and `app_settings`. Purely additive — nothing is backfilled, existing rows are untouched. Verified by `core/test/db/fertility_migration_test.dart` (real on-disk v4 file with period + flow + symptom rows → upgrade → assert the three new tables exist, old rows intact, all three new repos usable). |
 
 drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) is still **not** wired up
 — the migration tests hand-build the old schema. Adopting the snapshot tooling is a tracked
@@ -153,10 +193,11 @@ any) default: with too little history the figures are `null` and the UI asks for
 
 | File | Covers |
 |------|--------|
-| `core/test/db/app_database_test.dart` | schemaVersion (4), `onCreate` columns/types for `cycle_events`, `periods`, `daily_flows`, `symptom_types` **and** `daily_symptom_entries` (incl. composite PK), built-in seed order, `daily_symptom_entries` FK enforced, `user_version`, `beforeOpen` FKs. |
+| `core/test/db/app_database_test.dart` | schemaVersion (5), `onCreate` columns/types for `cycle_events`, `periods`, `daily_flows`, `symptom_types`, `daily_symptom_entries` (composite PK), `bbt_entries`, `cervical_mucus_entries` **and** `app_settings`, built-in seed order, `daily_symptom_entries` FK enforced, `user_version`, `beforeOpen` FKs. |
 | `core/test/db/period_migration_test.dart` | v1 on-disk DB → open through `AppDatabase` → upgraded to the current version, `periods` created, every `periodStart` carried over, `cycle_events` intact, `daily_flows` present, symptom catalogue seeded. |
 | `core/test/db/flow_migration_test.dart` | v2 on-disk DB → open through `AppDatabase` → `daily_flows` created with the expected shape, existing period untouched, later v4 migration also seeds the catalogue. |
 | `core/test/db/symptom_migration_test.dart` | v3 on-disk DB → open through `AppDatabase` → `symptom_types` + `daily_symptom_entries` created with the expected shapes, catalogue seeded in order, existing period + flow rows intact, tables usable. |
+| `core/test/db/fertility_migration_test.dart` | v4 on-disk DB (period + flow + symptom rows) → open through `AppDatabase` → `bbt_entries` / `cervical_mucus_entries` / `app_settings` created, old rows intact, all three new repos usable. |
 | `core/test/flow/drift_daily_flow_repository_test.dart` | `setFlow` date-only + optional clot, upsert preserves `created_at` / bumps `updated_at`, dropping a clot, `clearFlow` + no-op, `watchAll` emissions, flow survives period delete. |
 | `core/test/symptom/symptom_validation_test.dart` | `validateSymptomName` trims, empty / too-long / case-insensitive-duplicate, rename keeps its own name, error copy. |
 | `core/test/symptom/drift_symptom_repository_test.dart` | fresh DB seeded in order; `addType` append + validation throws; `renameType` incl. case change; `reorderTypes` rewrites `sort_order`; `archiveType` hides but keeps entries; archived name reusable; `watchTypes` emissions; `setSymptom` toggle idempotent on both edges, date-only; `clearDay`; `watchAllEntries` newest-first; independent of period delete. |
@@ -166,6 +207,13 @@ any) default: with too little history the figures are `null` and the UI asks for
 | `core/test/cycle/cycle_derivation_test.dart` | `deriveCycles` start-to-start pairing, newest-first, single / ongoing period, order-independence, likely-gap flag (45 vs 46 days), time-of-day ignored; `CycleStats.from` median cycle/period length, regularity buckets, gaps excluded from figures but surfaced, recent-12 window, no 28-day default, recompute after an edit. |
 | `core/test/prediction/robust_predictor_test.dart` | `RobustPredictor` over regular / one-cycle / irregular / gap fixtures: anchor on last period start, median projection, ±1-day-floor window, fertile-window shape, `upcoming`/`dueNow`/`overdue`, **overdue never rolls forward**, confidence buckets, recompute after an edit. |
 | `core/test/prediction/date_range_test.dart` | inclusive length, `contains`, time-of-day stripped, value equality, end-before-start rejected. |
+| `core/test/bbt/temperature_test.dart` | °C↔°F reference points + round-trips, unit-preference storage token, `validateCelsius` plausible-range checks (incl. °F-typed-as-°C), error copy. |
+| `core/test/bbt/drift_bbt_repository_test.dart` | `setTemp` date-only Celsius store, upsert preserves `created_at` / bumps `updated_at`, implausible reading rejected and nothing written, `clearTemp` + no-op, `watchAll` newest-first, independent of period delete. |
+| `core/test/bbt/bbt_chart_test.dart` | `bbtChartForCycle` maps in-cycle readings to 1-based cycle days sorted, drops readings before the start or on/after the next period, current-cycle keeps everything from its start, empty history → no points. |
+| `core/test/mucus/cervical_mucus_test.dart` | every type has label + description; `fertilityRank` follows enum order; `isFertileQuality` = creamy and wetter. |
+| `core/test/mucus/drift_cervical_mucus_repository_test.dart` | `setMucus` date-only store, upsert preserves `created_at`, `clearMucus` + no-op, `watchAll` emissions newest-first. |
+| `core/test/mucus/fertile_window_signal_test.dart` | `observedFertileWindow` → `null` with nothing fertile-quality; spans first fertile day to last + `fertileDaysAfterOvulation`; ignores observations outside `[cycleStart, today]`; a single day still yields a valid range. |
+| `core/test/settings/drift_settings_repository_test.dart` | `get` null when unset, `set` round-trips + replaces, `remove` + no-op, `watch` emits current value then every change. |
 | `core/test/db/persistence_test.dart` | write → close → reopen → still there → delete → reopen → gone (headless restart round-trip). |
 | `app/test/widget_test.dart` | empty state, dark mode, **missing key → fail-safe screen**. |
 | `app/test/period/period_calendar_test.dart` | seeded period in sync across summary / calendar / history; add, edit, delete round-trip; tapping a period day opens the flow quick-log, whose "Edit period dates" reaches the editor. |
@@ -175,6 +223,9 @@ any) default: with too little history the figures are `null` and the UI asks for
 | `app/test/flow/flow_quick_log_test.dart` | flow logged in two taps from the calendar (clots one more); a logged day renders on its calendar cell + the summary chip; the sheet preselects an existing entry and can remove it. |
 | `app/test/symptom/symptom_day_sheet_test.dart` | two symptoms logged in two taps from a non-period day, and they persist; reopening preselects them and unticking clears; the calendar cell + summary chip show the count; the sheet offers "Start a period" on a non-period day. |
 | `app/test/symptom/manage_symptoms_test.dart` | add a custom symptom → appears as a chip; rename; remove → gone from the sheet but the historical entry survives; drag-reorder sticks. |
+| `app/test/bbt/bbt_entry_test.dart` | enter a basal temperature in °F from the day sheet → stored canonically in °C, shown back in °F; an implausible reading is blocked with a message and Save disabled. |
+| `app/test/bbt/bbt_chart_test.dart` | the home screen shows a per-cycle BBT chart once there are two in-cycle readings (with a summarising semantics label); no chart with only one. |
+| `app/test/mucus/mucus_entry_test.dart` | pick a cervical-fluid quality → persists, tapping again clears; a fertile-quality observation surfaces a "Fertile signs (from your notes)" line on the prediction card. |
 | `app/integration_test/log_period_test.dart` | add → edit → delete on a real device against the encrypted DB, across a DB close/reopen. Not in CI (no emulator). |
 | `app/integration_test/log_symptoms_test.dart` | log symptoms on two days on a real device → both surface under "Recent symptoms"; cleans up after itself. Nightly only. |
 

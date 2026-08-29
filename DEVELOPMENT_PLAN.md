@@ -872,7 +872,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     up. **DONE.**
 
 #### p1.6 — BBT (manual) & cervical-mucus / fertility-awareness inputs
-- **Status:** IN PROGRESS
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/15
 - **Branch / worktree:** `feat/p1.6-fertility-inputs` / `../olf-wt/p1.6`
 - **Owner:** worker: phase1
 - **Depends on:** p1.5
@@ -956,6 +957,17 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     `cervical_mucus_entries`, `app_settings`), `core/bbt` + `core/mucus` + `core/settings`,
     temperature conversion + validation, per-cycle BBT chart, Billings mucus classification
     feeding an observed fertile-window line on the prediction card, day-sheet entry controls.
+  - 2026-08-29 — built. Schema v5: `bbt_entries` (°C canonical), `cervical_mucus_entries`
+    (Billings enum), `app_settings` key/value. `core/bbt` (°C/°F conversion + plausibility
+    validation + `DriftBbtRepository` + `bbtChartForCycle`), `core/mucus`
+    (`CervicalMucusTypeInfo` + repo + `observedFertileWindow` — display-layer signal, `Predictor`
+    seam untouched), `core/settings` (key/value repo). App: day sheet renamed "Day log" with a
+    Temperature & fluid section (°F/°C dialog that also stores the unit pref, single-select
+    mucus chips), self-contained `CustomPaint` `_BbtCard` on the home screen, "Fertile signs
+    (from your notes)" line on `_PredictionCard`. core 175 / app 36 green, analyze + format
+    clean, codegen regenerated + committed, v4→v5 migration test, dependency audit PASS
+    (no new deps), no lock drift. `docs/local-database.md` + §7 decision + §9 follow-ups
+    recorded. PR #15 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
 
 #### p1.7 — Medication & birth-control entries + one basic reminder
 - **Status:** TODO
@@ -1293,6 +1305,24 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-29 — **BBT is stored in Celsius; mucus is a Billings enum; both are day-keyed tables,
+  and mucus feeds the fertile window only at the display layer (p1.6).** `schemaVersion` bumped
+  to **5**: `bbt_entries(date PK, temp_celsius REAL, created_at, updated_at)`,
+  `cervical_mucus_entries(date PK, type TEXT, created_at, updated_at)`, and a general
+  `app_settings(key PK, value, updated_at)` key/value store. Rationale: (1) storing temperature
+  **canonically in °C** and treating °C/°F as a display preference keeps one number in the DB
+  and all rounding in one file — the alternative (store-as-entered) makes every read
+  unit-aware. (2) `CervicalMucusType { dry, sticky, creamy, watery, eggWhite }` is a small
+  fixed ordered scale, not a user vocabulary, so it's an enum column, not a catalogue like
+  symptoms. (3) A generic `app_settings` table (rather than a bespoke column) is the reusable
+  home for the unit choice and for p1.8's PIN-enabled flag / p1.9's theme + pronoun. (4) The
+  p1.4 acceptance "mucus feeds the fertile-window display" is met with a **display-layer merge**
+  (`observedFertileWindow(...)` → an extra "Fertile signs (from your notes)" line) rather than
+  by changing `RobustPredictor` or `CyclePrediction` — the `Predictor` seam stays pristine for
+  Phase 3's swap, and `p1.4`'s tests are untouched. BBT and mucus are day-keyed and unlinked
+  from `periods`, exactly like `daily_flows`. The per-cycle BBT chart is a self-contained
+  `CustomPaint` — no charting package, so the dependency denylist surface doesn't grow.
+  — worker: phase1.
 - 2026-08-29 — **Symptoms are a user-editable catalogue + per-(day, type) presence rows
   (p1.5).** `schemaVersion` bumped to **4**: `symptom_types(id, name, sort_order, is_built_in,
   archived_at?, created_at, updated_at)` is the vocabulary; `daily_symptom_entries(date,
@@ -1463,6 +1493,19 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   **p1.6**. `reorderTypes` rewrites every `sort_order` on each drag (fine at this scale; a
   sparse/fractional index would avoid the rewrite). No cap on the number of custom symptoms.
   — noted by worker: phase1 during p1.5.
+- **p1.6 follow-ups:** `observedFertileWindow` is a crude signal — it just brackets the
+  fertile-quality mucus days plus one; it does not detect a "peak day" / drop-off, cross-check
+  against the BBT thermal shift, or narrow the statistical estimate (it only shows alongside
+  it). The BBT chart has **no coverline / thermal-shift detection** and no smoothing — it is a
+  plain plot; a proper biphasic-shift marker and a fertile-window derived from BBT+mucus
+  together is Phase 3 territory (and would let `lutealPhaseDays` stop being a fixed 14). No
+  outlier rejection on BBT points (a disturbed-sleep reading skews the line). `temp_celsius`
+  has no DB `CHECK` — plausibility is repository-only, so a raw SQL insert could store nonsense.
+  Only one reading per day (no "took it twice" reconciliation). The °C/°F choice lives in
+  `app_settings` but there is no Settings screen yet — it is only reachable via the temperature
+  dialog's toggle; a real settings surface is p1.8/p1.9. Mucus is a single daily observation
+  (no sensation vs. appearance split, no "checked, saw nothing" vs. "didn't check").
+  — noted by worker: phase1 during p1.6.
 - (add more here)
 
 ## 10. Orphaned / cut work

@@ -6,7 +6,10 @@ import '../cycle/cycle_format.dart';
 import '../cycle/cycle_providers.dart';
 import '../flow/flow_format.dart';
 import '../flow/flow_providers.dart';
+import '../bbt/bbt_chart_widget.dart';
+import '../bbt/bbt_providers.dart';
 import '../flow/flow_quick_log.dart';
+import '../mucus/mucus_providers.dart';
 import '../prediction/prediction_format.dart';
 import '../prediction/prediction_providers.dart';
 import '../symptom/symptom_day_sheet.dart';
@@ -187,6 +190,16 @@ class _LoadedState extends ConsumerState<_Loaded> {
     int symptomCountOn(DateTime day) =>
         symptomIdsByDay[dateOnly(day)]?.length ?? 0;
 
+    final bbtEntries =
+        ref.watch(bbtEntriesProvider).value ?? const <BbtEntry>[];
+    final tempUnit =
+        ref.watch(temperatureUnitProvider).value ?? TemperatureUnit.celsius;
+    final currentCycle = cycles.isEmpty ? null : cycles.first;
+    final bbtPoints = currentCycle == null
+        ? const <BbtChartPoint>[]
+        : bbtChartForCycle(currentCycle, bbtEntries);
+    final observedFertile = ref.watch(observedFertileWindowProvider);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
@@ -209,12 +222,17 @@ class _LoadedState extends ConsumerState<_Loaded> {
             const SizedBox(height: 16),
             _PredictionCard(
               prediction: prediction,
+              observedFertileWindow: observedFertile,
               onLogPeriodStart: _addPeriod,
             ),
           ],
           if (_periods.isNotEmpty) ...[
             const SizedBox(height: 16),
             _CycleStatsCard(stats: cycleStats),
+          ],
+          if (bbtPoints.length >= 2) ...[
+            const SizedBox(height: 16),
+            _BbtCard(points: bbtPoints, unit: tempUnit),
           ],
           const SizedBox(height: 24),
           _MonthCalendar(
@@ -738,10 +756,15 @@ class _PredictionCard extends StatelessWidget {
   const _PredictionCard({
     required this.prediction,
     required this.onLogPeriodStart,
+    this.observedFertileWindow,
   });
 
   final CyclePrediction prediction;
   final VoidCallback onLogPeriodStart;
+
+  /// Fertile window observed from this cycle's cervical-mucus notes (p1.6).
+  /// Shown as an extra line alongside the statistical estimate when present.
+  final DateRange? observedFertileWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -805,6 +828,14 @@ class _PredictionCard extends StatelessWidget {
           formatDateRange(prediction.fertileWindow),
           style: theme.textTheme.bodyLarge?.copyWith(color: onColor),
         ),
+        if (observedFertileWindow != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Fertile signs (from your notes): '
+            '${formatDateRange(observedFertileWindow!)}',
+            style: theme.textTheme.bodySmall?.copyWith(color: onColor),
+          ),
+        ],
         const SizedBox(height: 12),
         Text(
           confidenceNote(prediction),
@@ -852,10 +883,14 @@ class _PredictionCard extends StatelessWidget {
       return 'Period check-in. '
           '${overdueHeadline(prediction.daysPastExpected!)}. $overdueBody';
     }
+    final signs = observedFertileWindow == null
+        ? ''
+        : 'Fertile signs from your notes '
+              '${formatDateRange(observedFertileWindow!)}. ';
     return 'Next period estimated ${formatDateRange(prediction.nextPeriod)}, '
         'most likely ${formatDay(prediction.nextPeriodExpected)}. '
         'Fertile window estimated ${formatDateRange(prediction.fertileWindow)}. '
-        '${confidenceNote(prediction)}';
+        '$signs${confidenceNote(prediction)}';
   }
 }
 
@@ -928,6 +963,41 @@ class _CycleStatsCard extends StatelessWidget {
               Text(summariseStats(stats), style: theme.textTheme.bodyMedium),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// This cycle's basal-temperature chart, shown once there are at least two
+/// readings to draw a line between.
+class _BbtCard extends StatelessWidget {
+  const _BbtCard({required this.points, required this.unit});
+
+  final List<BbtChartPoint> points;
+  final TemperatureUnit unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Basal temperature — this cycle',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          BbtChart(points: points, unit: unit),
+        ],
       ),
     );
   }

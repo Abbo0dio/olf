@@ -11,7 +11,16 @@ part 'app_database.g.dart';
 /// [QueryExecutor] that the platform layer builds — an encrypted SQLCipher
 /// executor in the app, a plain in-memory/temp-file one in tests.
 @DriftDatabase(
-  tables: [CycleEvents, Periods, DailyFlows, SymptomTypes, DailySymptomEntries],
+  tables: [
+    CycleEvents,
+    Periods,
+    DailyFlows,
+    SymptomTypes,
+    DailySymptomEntries,
+    BbtEntries,
+    CervicalMucusEntries,
+    AppSettings,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
@@ -24,8 +33,10 @@ class AppDatabase extends _$AppDatabase {
   /// v3 (p1.2): added the `daily_flows` per-day table.
   /// v4 (p1.5): added the `symptom_types` catalogue + `daily_symptom_entries`,
   ///            and seeded the built-in symptom names.
+  /// v5 (p1.6): added `bbt_entries`, `cervical_mucus_entries` and the
+  ///            `app_settings` key/value store.
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -56,6 +67,13 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(symptomTypes);
         await m.createTable(dailySymptomEntries);
         await _seedBuiltInSymptoms();
+      }
+      if (from < 5) {
+        // p1.6: manual BBT, cervical-mucus observations, and a key/value prefs
+        // store. Purely additive — nothing to backfill.
+        await m.createTable(bbtEntries);
+        await m.createTable(cervicalMucusEntries);
+        await m.createTable(appSettings);
       }
     },
     beforeOpen: (details) async {

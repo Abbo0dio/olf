@@ -67,7 +67,7 @@ void main() {
 
     // --- day 1: today — Cramps + Fatigue ---
     await tapVisible(tester, cell(today));
-    expect(find.text('Symptoms — ${formatDay(today)}'), findsOneWidget);
+    expect(find.text('Day log — ${formatDay(today)}'), findsOneWidget);
     await tapVisible(tester, chip('Cramps'));
     await tapVisible(tester, chip('Fatigue'));
     await tapVisible(tester, find.widgetWithText(FilledButton, 'Done'));

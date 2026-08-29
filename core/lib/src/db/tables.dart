@@ -145,3 +145,65 @@ class DailySymptomEntries extends Table {
     'FOREIGN KEY (symptom_type_id) REFERENCES symptom_types (id) ON DELETE CASCADE',
   ];
 }
+
+/// One basal body temperature reading for a single calendar day (schema v5,
+/// p1.6). Manual entry only — wearable BBT is Phase 8.
+///
+/// Stored **canonically in degrees Celsius**; the °C / °F choice is a
+/// display-only preference kept in [AppSettings]. Keyed by `date` (one reading
+/// per day) and, like [DailyFlows], not linked to a [Periods] row.
+@DataClassName('BbtEntry')
+class BbtEntries extends Table {
+  /// Calendar date, time-of-day zeroed on write. Primary key.
+  DateTimeColumn get date => dateTime()();
+
+  /// Basal temperature in °C. Plausible range is enforced in the repository
+  /// (`validateCelsius`), not by a DB constraint.
+  RealColumn get tempCelsius => real()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {date};
+}
+
+/// Cervical-mucus / fluid quality, driest to most fertile (Billings-style).
+///
+/// `creamy` and wetter are treated as fertile-quality (`isFertileQuality`) and
+/// feed the observed fertile-window line on the prediction card.
+enum CervicalMucusType { dry, sticky, creamy, watery, eggWhite }
+
+/// One cervical-mucus observation for a single calendar day (schema v5, p1.6).
+/// Keyed by `date`; not linked to a [Periods] row.
+@DataClassName('CervicalMucusEntry')
+class CervicalMucusEntries extends Table {
+  /// Calendar date, time-of-day zeroed on write. Primary key.
+  DateTimeColumn get date => dateTime()();
+
+  TextColumn get type => textEnum<CervicalMucusType>()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {date};
+}
+
+/// A tiny key/value store for user preferences (schema v5, p1.6).
+///
+/// First use is the temperature display unit; p1.8 / p1.9 will reuse it. Values
+/// are opaque strings — each caller owns its own encoding.
+@DataClassName('AppSetting')
+class AppSettings extends Table {
+  TextColumn get key => text()();
+
+  TextColumn get value => text()();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
