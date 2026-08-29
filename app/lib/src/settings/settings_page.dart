@@ -5,10 +5,12 @@ import 'package:olf_core/olf_core.dart';
 
 import '../backup/backup_page.dart';
 import '../personalization/personalization_providers.dart';
+import '../pregnancy/pregnancy_events_page.dart';
 import '../security/pin_providers.dart';
 import '../theme/theme_providers.dart';
 
-/// App settings (p1.8 lock; p1.9 appearance + pronouns; p1.10 backup).
+/// App settings (p1.8 lock; p1.9 appearance + pronouns; p1.10 backup;
+/// p1.11 pregnancy loss & birth).
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -75,6 +77,19 @@ class SettingsPage extends ConsumerWidget {
               title: const Text('Change PIN'),
               onTap: () => _setPin(context, ref),
             ),
+          const _SectionHeader('Cycle'),
+          ListTile(
+            leading: const Icon(Icons.favorite_border),
+            title: const Text('Pregnancy loss & birth'),
+            subtitle: const Text(
+              'Record a loss or birth so estimates adjust around it.',
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const PregnancyEventsPage(),
+              ),
+            ),
+          ),
           const _SectionHeader('Data'),
           ListTile(
             leading: const Icon(Icons.save_outlined),
