@@ -56,6 +56,8 @@ export 'src/reminders/reminder_repository.dart';
 export 'src/reminders/reminder_schedule.dart';
 export 'src/repository/cycle_event_repository.dart';
 export 'src/repository/drift_cycle_event_repository.dart';
+export 'src/security/pin.dart';
+export 'src/security/pin_store.dart';
 export 'src/settings/drift_settings_repository.dart';
 export 'src/settings/settings_repository.dart';
 export 'src/symptom/drift_symptom_repository.dart';

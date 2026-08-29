@@ -5,6 +5,7 @@ import 'package:olf_core/olf_core.dart';
 import 'meds/meds_page.dart';
 import 'period/period_calendar_page.dart';
 import 'providers.dart';
+import 'settings/settings_page.dart';
 
 /// Home screen. Gates on the encrypted database opening, then hands off to the
 /// period calendar (p1.1). A missing key is a deliberate dead-end.
@@ -18,7 +19,7 @@ class HomePage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('olf'),
         actions: [
-          if (database case AsyncData())
+          if (database case AsyncData()) ...[
             IconButton(
               icon: const Icon(Icons.medication_outlined),
               tooltip: 'Medications & reminders',
@@ -26,6 +27,14 @@ class HomePage extends ConsumerWidget {
                 context,
               ).push(MaterialPageRoute<void>(builder: (_) => const MedsPage())),
             ),
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Settings',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+              ),
+            ),
+          ],
         ],
       ),
       body: switch (database) {

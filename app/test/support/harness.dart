@@ -3,7 +3,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olf_app/main.dart';
+import 'package:olf_app/src/onboarding/onboarding_providers.dart';
 import 'package:olf_app/src/providers.dart';
+import 'package:olf_app/src/security/pin_providers.dart';
 import 'package:olf_core/olf_core.dart';
 
 /// A fresh in-memory database, closed automatically at the end of the test.
@@ -16,6 +18,24 @@ AppDatabase memoryDb() {
 /// Override [appDatabaseProvider] to hand out [db] already opened.
 Override dbOverride(AppDatabase db) =>
     appDatabaseProvider.overrideWith((ref) async => db);
+
+/// An in-memory [PinStore] for tests. Seed it with a credential (via
+/// [derivePinCredential]) to exercise the lock screen.
+class FakePinStore implements PinStore {
+  FakePinStore([this._credential]);
+
+  PinCredential? _credential;
+
+  @override
+  Future<PinCredential?> read() async => _credential;
+
+  @override
+  Future<void> write(PinCredential credential) async =>
+      _credential = credential;
+
+  @override
+  Future<void> delete() async => _credential = null;
+}
 
 /// Resolve Future/Stream microtasks and short animations. **Not**
 /// `pumpAndSettle` — the loading state animates a spinner forever.
@@ -35,14 +55,29 @@ Future<void> useTallSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
+/// Pump the app behind its p1.8 gate.
+///
+/// By default the gate is transparent: [onboarded] short-circuits the first-run
+/// explainer, and [pinStore] defaults to an empty in-memory store (no PIN, so
+/// no lock screen). Pass `onboarded: false` to land on the first-run screen, or
+/// a seeded [FakePinStore] to land on the lock screen.
 Future<void> pumpOlf(
   WidgetTester tester, {
   required List<Override> overrides,
   required Future<void> Function() body,
+  bool onboarded = true,
+  PinStore? pinStore,
 }) async {
   await useTallSurface(tester);
   await tester.pumpWidget(
-    ProviderScope(overrides: overrides, child: const OlfApp()),
+    ProviderScope(
+      overrides: [
+        ...overrides,
+        pinStoreProvider.overrideWithValue(pinStore ?? FakePinStore()),
+        if (onboarded) firstRunDoneProvider.overrideWith((ref) async => true),
+      ],
+      child: const OlfApp(),
+    ),
   );
   await flush(tester);
   await body();

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'src/home_page.dart';
+import 'src/app_gate.dart';
 import 'src/reminders/local_notification_reminder_scheduler.dart';
 
 Future<void> main() async {
@@ -44,7 +44,7 @@ class OlfApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const HomePage(),
+      home: const AppGate(),
     );
   }
 }

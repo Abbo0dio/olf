@@ -140,7 +140,7 @@ linked to a `periods` row.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `key` | TEXT, **PRIMARY KEY** | Well-known keys in `SettingKeys` (first: `temperature_unit`). |
+| `key` | TEXT, **PRIMARY KEY** | Well-known keys in `SettingKeys` — `temperature_unit` (p1.6), `onboarding_complete` (p1.8). |
 | `value` | TEXT | Opaque string; each caller owns its encoding. |
 | `updated_at` | INTEGER (unix seconds) | |
 
