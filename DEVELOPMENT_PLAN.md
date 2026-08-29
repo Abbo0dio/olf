@@ -1173,8 +1173,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     build). Worktree + branch cleaned up. **DONE.**
 
 #### p1.9 — Dark mode + gender-neutral, discreet theme baseline
-- **Status:** IN PROGRESS
-- **PR:** _(pending)_
+- **Status:** IN REVIEW
+- **PR:** [#18](https://github.com/Abbo0dio/olf/pull/18)
 - **Branch / worktree:** `feat/p1.9-theme-baseline` / `../olf-wt/p1.9`
 - **Owner:** worker: phase1
 - **Depends on:** p0.2
@@ -1243,6 +1243,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     scan, passes — existing copy was already clean). Docs: `docs/inclusive-language.md` (new),
     `docs/local-database.md` app_settings row. §7 decision + §9 follow-ups recorded. Full local
     verification batch green; no schema change, no lock drift. Opening PR into `main`.
+  - 2026-08-29 — PR [#18](https://github.com/Abbo0dio/olf/pull/18) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 #### p1.10 — Local backup & restore (encrypted export / import)
 - **Status:** TODO
