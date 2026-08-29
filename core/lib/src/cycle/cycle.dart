@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 
 import '../date_math.dart';
+import 'pregnancy_event.dart';
 
 /// A cycle length beyond which a period was more likely *not logged* than truly
 /// this long. Normal cycles run ~21–35 days; irregular ones stretch further, but
@@ -20,6 +21,7 @@ class Cycle {
     required DateTime periodStart,
     DateTime? periodEnd,
     DateTime? nextPeriodStart,
+    this.interruptedBy,
   }) : periodStart = dateOnly(periodStart),
        periodEnd = periodEnd == null ? null : dateOnly(periodEnd),
        nextPeriodStart = nextPeriodStart == null
@@ -35,6 +37,12 @@ class Cycle {
   /// First day of the *next* logged period. `null` for the current cycle.
   final DateTime? nextPeriodStart;
 
+  /// Set (p1.11) when a pregnancy-end event falls inside this cycle's span —
+  /// the interval covers a pregnancy, not a normal cycle, so it is excluded
+  /// from [CycleStats] the same way a [isLikelyGap] cycle is, and the
+  /// predictor treats history on the far side of it as no longer current.
+  final PregnancyEndKind? interruptedBy;
+
   /// `true` when this is the latest cycle and no following period is logged yet.
   bool get isCurrent => nextPeriodStart == null;
 
@@ -49,9 +57,14 @@ class Cycle {
   int? get periodLengthInDays =>
       periodEnd == null ? null : daysBetween(periodStart, periodEnd!) + 1;
 
+  /// `true` when this interval covers a recorded pregnancy loss or birth (p1.11).
+  bool get isPregnancyGap => interruptedBy != null;
+
   /// `true` when [lengthInDays] is so long that a period was probably not
-  /// logged in between (see [longestPlausibleCycleDays]).
+  /// logged in between (see [longestPlausibleCycleDays]). A pregnancy gap is
+  /// reported through [isPregnancyGap], not here.
   bool get isLikelyGap {
+    if (isPregnancyGap) return false;
     final length = lengthInDays;
     return length != null && length > longestPlausibleCycleDays;
   }
@@ -61,12 +74,15 @@ class Cycle {
       other is Cycle &&
       other.periodStart == periodStart &&
       other.periodEnd == periodEnd &&
-      other.nextPeriodStart == nextPeriodStart;
+      other.nextPeriodStart == nextPeriodStart &&
+      other.interruptedBy == interruptedBy;
 
   @override
-  int get hashCode => Object.hash(periodStart, periodEnd, nextPeriodStart);
+  int get hashCode =>
+      Object.hash(periodStart, periodEnd, nextPeriodStart, interruptedBy);
 
   @override
   String toString() =>
-      'Cycle(start: $periodStart, end: $periodEnd, next: $nextPeriodStart)';
+      'Cycle(start: $periodStart, end: $periodEnd, next: $nextPeriodStart'
+      '${interruptedBy == null ? '' : ', interruptedBy: ${interruptedBy!.name}'})';
 }

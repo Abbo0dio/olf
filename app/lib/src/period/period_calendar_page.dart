@@ -10,6 +10,8 @@ import '../bbt/bbt_chart_widget.dart';
 import '../bbt/bbt_providers.dart';
 import '../flow/flow_quick_log.dart';
 import '../mucus/mucus_providers.dart';
+import '../pregnancy/pregnancy_format.dart';
+import '../pregnancy/pregnancy_providers.dart';
 import '../prediction/prediction_format.dart';
 import '../prediction/prediction_providers.dart';
 import '../symptom/symptom_day_sheet.dart';
@@ -199,6 +201,8 @@ class _LoadedState extends ConsumerState<_Loaded> {
         ? const <BbtChartPoint>[]
         : bbtChartForCycle(currentCycle, bbtEntries);
     final observedFertile = ref.watch(observedFertileWindowProvider);
+    final pregnancyState = ref.watch(pregnancyRecoveryStateProvider);
+    final pregnancySince = ref.watch(mostRecentPregnancyEndProvider)?.date;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -218,6 +222,10 @@ class _LoadedState extends ConsumerState<_Loaded> {
                   : null,
             ),
           ),
+          if (pregnancyState != PregnancyRecoveryState.none) ...[
+            const SizedBox(height: 16),
+            _PregnancyStatusCard(state: pregnancyState, since: pregnancySince),
+          ],
           if (prediction != null) ...[
             const SizedBox(height: 16),
             _PredictionCard(
@@ -998,6 +1006,54 @@ class _BbtCard extends StatelessWidget {
           const SizedBox(height: 8),
           BbtChart(points: points, unit: unit),
         ],
+      ),
+    );
+  }
+}
+
+/// Gentle heads-up shown after a recorded pregnancy loss / birth while cycles
+/// have not resumed (p1.11). Explains why estimates are paused.
+class _PregnancyStatusCard extends StatelessWidget {
+  const _PregnancyStatusCard({required this.state, required this.since});
+
+  final PregnancyRecoveryState state;
+  final DateTime? since;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final message = pregnancyBanner(state, since);
+
+    return Semantics(
+      container: true,
+      label: message,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              state == PregnancyRecoveryState.postpartum
+                  ? Icons.child_friendly_outlined
+                  : Icons.favorite_border,
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSecondaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

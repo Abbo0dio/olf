@@ -249,4 +249,89 @@ void main() {
     );
     expect(after.typicalCycleLength, 34);
   });
+
+  group('pregnancy events (p1.11)', () {
+    PregnancyEvent pregEvent(PregnancyEndKind kind, DateTime date) =>
+        PregnancyEvent(id: nextId++, kind: kind, date: date);
+
+    test('a birth between two period starts marks that interval a gap', () {
+      final cycles = deriveCycles(
+        [
+          period(DateTime(2026, 1, 1)),
+          period(DateTime(2026, 1, 29)), // this interval spans the birth
+          period(DateTime(2026, 10, 20)),
+          period(DateTime(2026, 11, 18)),
+        ],
+        pregnancyEvents: [
+          pregEvent(PregnancyEndKind.birth, DateTime(2026, 7, 4)),
+        ],
+      );
+
+      final byStart = {for (final c in cycles) c.periodStart: c};
+      final gap = byStart[DateTime(2026, 1, 29)]!;
+      expect(gap.isPregnancyGap, isTrue);
+      expect(gap.interruptedBy, PregnancyEndKind.birth);
+      expect(gap.isLikelyGap, isFalse); // reported as a pregnancy gap, not this
+      expect(byStart[DateTime(2026, 1, 1)]!.isPregnancyGap, isFalse);
+      expect(byStart[DateTime(2026, 10, 20)]!.isPregnancyGap, isFalse);
+    });
+
+    test('a loss in the still-open cycle marks the current cycle', () {
+      final cycles = deriveCycles(
+        [period(DateTime(2026, 3, 1)), period(DateTime(2026, 4, 2))],
+        pregnancyEvents: [
+          pregEvent(PregnancyEndKind.loss, DateTime(2026, 6, 1)),
+        ],
+      );
+      expect(cycles.first.isCurrent, isTrue);
+      expect(cycles.first.isPregnancyGap, isTrue);
+      expect(cycles.first.interruptedBy, PregnancyEndKind.loss);
+    });
+
+    test('an event on a period-start day belongs to no interval', () {
+      final cycles = deriveCycles(
+        [period(DateTime(2026, 3, 1)), period(DateTime(2026, 4, 1))],
+        pregnancyEvents: [
+          pregEvent(PregnancyEndKind.loss, DateTime(2026, 4, 1)),
+        ],
+      );
+      expect(cycles.every((c) => !c.isPregnancyGap), isTrue);
+    });
+
+    test('CycleStats ignores everything on the far side of the latest gap', () {
+      // Three tight 28-day cycles, a birth gap, then two 34-day cycles.
+      final cycles = deriveCycles(
+        [
+          period(DateTime(2026, 1, 1)),
+          period(DateTime(2026, 1, 29)),
+          period(DateTime(2026, 2, 26)),
+          period(DateTime(2026, 3, 26)), // this interval spans the birth
+          period(DateTime(2026, 12, 1)),
+          period(DateTime(2027, 1, 4)), // +34
+          period(DateTime(2027, 2, 7)), // +34
+        ],
+        pregnancyEvents: [
+          pregEvent(PregnancyEndKind.birth, DateTime(2026, 8, 1)),
+        ],
+      );
+
+      final stats = CycleStats.from(cycles);
+      expect(stats.completedCycleCount, 2); // only the post-birth 34-day cycles
+      expect(stats.typicalCycleLength, 34);
+      expect(stats.shortestCycleLength, 34);
+      expect(stats.hasLikelyGap, isFalse);
+    });
+
+    test('with no pregnancy events, behaviour is unchanged', () {
+      final periods = [
+        period(DateTime(2026, 1, 1)),
+        period(DateTime(2026, 1, 29)),
+      ];
+      expect(
+        deriveCycles(periods),
+        deriveCycles(periods, pregnancyEvents: const []),
+      );
+      expect(deriveCycles(periods).every((c) => !c.isPregnancyGap), isTrue);
+    });
+  });
 }

@@ -1,7 +1,9 @@
 import 'package:meta/meta.dart';
 
+import '../date_math.dart';
 import '../db/app_database.dart';
 import 'cycle.dart';
+import 'pregnancy_event.dart';
 
 /// Derive the cycle history from logged [periods].
 ///
@@ -10,14 +12,38 @@ import 'cycle.dart';
 /// cycle ([Cycle.isCurrent]). Input order does not matter; the result is
 /// **newest cycle first**, matching `periodsProvider`.
 ///
+/// [pregnancyEvents] (p1.11): if a loss / birth falls inside a cycle's span
+/// (strictly after its `periodStart`, and before the next period start if there
+/// is one), that cycle is marked [Cycle.isPregnancyGap] — the interval covers a
+/// pregnancy, not a normal cycle. When several events fall in one span the most
+/// recent one wins.
+///
 /// Edge cases are deliberate, not accidental:
 /// * no periods → empty list;
 /// * one period → a single current cycle with no length;
 /// * a very long interval → a [Cycle] with [Cycle.isLikelyGap] set, kept in the
 ///   history but excluded from [CycleStats].
-List<Cycle> deriveCycles(Iterable<Period> periods) {
+List<Cycle> deriveCycles(
+  Iterable<Period> periods, {
+  Iterable<PregnancyEvent> pregnancyEvents = const [],
+}) {
   final sorted = periods.toList()
     ..sort((a, b) => a.startDate.compareTo(b.startDate));
+
+  final events = pregnancyEvents.toList()
+    ..sort((a, b) => a.date.compareTo(b.date));
+
+  PregnancyEndKind? interruptionFor(DateTime start, DateTime? nextStart) {
+    final from = dateOnly(start);
+    PregnancyEndKind? kind;
+    for (final e in events) {
+      if (e.date.isAfter(from) &&
+          (nextStart == null || e.date.isBefore(dateOnly(nextStart)))) {
+        kind = e.kind; // events are date-sorted, so the last match is newest
+      }
+    }
+    return kind;
+  }
 
   final cycles = <Cycle>[
     for (var i = 0; i < sorted.length; i++)
@@ -25,6 +51,10 @@ List<Cycle> deriveCycles(Iterable<Period> periods) {
         periodStart: sorted[i].startDate,
         periodEnd: sorted[i].endDate,
         nextPeriodStart: i + 1 < sorted.length ? sorted[i + 1].startDate : null,
+        interruptedBy: interruptionFor(
+          sorted[i].startDate,
+          i + 1 < sorted.length ? sorted[i + 1].startDate : null,
+        ),
       ),
   ];
 
@@ -109,18 +139,23 @@ class CycleStats {
     final all = cycles.toList();
     if (all.isEmpty) return empty;
 
-    // `cycles` is newest-first; take the most recent completed, non-gap ones.
+    // `cycles` is newest-first. A recorded pregnancy loss / birth resets the
+    // baseline (p1.11): only cycles more recent than the latest such gap feed
+    // the figures, so pre-pregnancy lengths never mix into the current picture.
+    final recent = all.takeWhile((c) => !c.isPregnancyGap).toList();
+
+    // The most recent completed, non-(likely-)gap cycles.
     final recentLengths = <int>[
-      for (final c in all)
+      for (final c in recent)
         if (!c.isCurrent && !c.isLikelyGap) c.lengthInDays!,
     ].take(recentWindow).toList();
 
     final periodLengths = <int>[
-      for (final c in all)
+      for (final c in recent)
         if (c.periodLengthInDays != null) c.periodLengthInDays!,
     ];
 
-    final anyGap = all.any((c) => c.isLikelyGap);
+    final anyGap = recent.any((c) => c.isLikelyGap);
 
     if (recentLengths.isEmpty) {
       return CycleStats(

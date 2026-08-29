@@ -34,6 +34,12 @@ class RobustPredictor implements Predictor {
   }) {
     if (cycles.isEmpty) return null;
 
+    // p1.11: the open cycle covers a recorded pregnancy loss / birth — there is
+    // no post-event anchor yet. Say nothing rather than project across it; the
+    // forecast resumes on its own once a period is logged and `CycleStats`
+    // (which ignores everything on the far side of the gap) has data again.
+    if (cycles.first.isPregnancyGap) return null;
+
     final stats = CycleStats.from(cycles);
     final typical = stats.typicalCycleLength;
     final shortest = stats.shortestCycleLength;

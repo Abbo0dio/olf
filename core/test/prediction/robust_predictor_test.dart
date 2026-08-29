@@ -149,4 +149,87 @@ void main() {
     expect(p.basedOnCycles, 2);
     expect(p.confidence, PredictionConfidence.medium);
   });
+
+  group('across a pregnancy loss / birth (p1.11)', () {
+    CyclePrediction? predictWith(
+      List<Period> periods,
+      List<PregnancyEvent> events,
+      DateTime today,
+    ) => predictor.predict(
+      cycles: deriveCycles(periods, pregnancyEvents: events),
+      today: today,
+    );
+
+    PregnancyEvent pregEvent(PregnancyEndKind kind, DateTime date) =>
+        PregnancyEvent(id: nextId++, kind: kind, date: date);
+
+    test('no forecast while the open cycle covers a birth', () {
+      expect(
+        predictWith(
+          runOf([28, 28, 28]), // solid pre-pregnancy history
+          [pregEvent(PregnancyEndKind.birth, DateTime(2026, 6, 1))],
+          DateTime(2026, 9, 1),
+        ),
+        isNull,
+      );
+    });
+
+    test('no forecast while the open cycle covers a loss', () {
+      expect(
+        predictWith(runOf([28, 28]), [
+          pregEvent(PregnancyEndKind.loss, DateTime(2026, 4, 15)),
+        ], DateTime(2026, 5, 20)),
+        isNull,
+      );
+    });
+
+    test('one logged period after the birth is still not enough', () {
+      final periods = [
+        period(DateTime(2026, 1, 1)),
+        period(DateTime(2026, 1, 29)),
+        period(DateTime(2026, 2, 26)),
+        period(DateTime(2026, 10, 1)), // first period back
+      ];
+      expect(
+        predictWith(periods, [
+          pregEvent(PregnancyEndKind.birth, DateTime(2026, 6, 1)),
+        ], DateTime(2026, 10, 15)),
+        isNull, // only the open post-birth cycle — nothing completed yet
+      );
+    });
+
+    test('forecast resumes on post-event cycles, not the old ones', () {
+      // Pre-birth cycles run a tight 28 days; post-birth they run 40.
+      final periods = [
+        period(DateTime(2026, 1, 1)),
+        period(DateTime(2026, 1, 29)),
+        period(DateTime(2026, 2, 26)),
+        period(DateTime(2026, 10, 1)), // first period back
+        period(DateTime(2026, 11, 10)), // +40
+        period(DateTime(2026, 12, 20)), // +40, opens the current cycle
+      ];
+      final p = predictWith(periods, [
+        pregEvent(PregnancyEndKind.birth, DateTime(2026, 6, 1)),
+      ], DateTime(2026, 12, 25))!;
+
+      // Anchored on the last start + the *post-birth* 40-day length, not 28.
+      expect(p.nextPeriodExpected, DateTime(2027, 1, 29)); // 20 Dec + 40
+      expect(p.basedOnCycles, 2); // the two completed post-birth cycles
+    });
+
+    test('an old loss with cycles fully resumed is business as usual', () {
+      final periods = [
+        period(DateTime(2026, 1, 1)),
+        period(DateTime(2026, 5, 1)), // loss falls in this interval
+        period(DateTime(2026, 5, 29)),
+        period(DateTime(2026, 6, 26)),
+        period(DateTime(2026, 7, 24)),
+      ];
+      final p = predictWith(periods, [
+        pregEvent(PregnancyEndKind.loss, DateTime(2026, 3, 15)),
+      ], DateTime(2026, 8, 1))!;
+      expect(p.nextPeriodExpected, DateTime(2026, 8, 21)); // 24 Jul + 28
+      expect(p.basedOnCycles, 3);
+    });
+  });
 }

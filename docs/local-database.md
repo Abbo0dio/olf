@@ -38,7 +38,7 @@ notification text — that rule is enforced in review and revisited in Phase 2's
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | INTEGER PK AUTOINCREMENT | |
-| `type` | TEXT | `CycleEventType` name. v1 only ever writes `periodStart`. |
+| `type` | TEXT | `CycleEventType` name: `periodStart` (v1, no longer written — p1.1 moved periods to their own table), plus `pregnancyLoss` and `birth` (p1.11). Stored by enum name, so adding values is **not** a schema change. |
 | `date` | INTEGER (unix seconds) | **Calendar date**, time-of-day zeroed on write (`dateOnly`). "Day N" must not depend on the time a row was written. |
 | `created_at` | INTEGER (unix seconds) | Audit trail — lets a later correction be told from the original entry. |
 
@@ -236,6 +236,23 @@ forward** — behind a `Predictor` seam so Phase 3 can swap the engine.
 Because nothing is stored, any period edit / delete simply recomputes — there is **no derived
 row to migrate or invalidate, and no schema change in p1.3 or p1.4**. There is no 28-day (or
 any) default: with too little history the figures are `null` and the UI asks for more logging.
+
+### Pregnancy loss / birth events (p1.11)
+
+`pregnancyLoss` / `birth` rows in `cycle_events` are the **only** point-in-time markers still
+written. They feed `deriveCycles(periods, pregnancyEvents: …)`: an interval that a loss / birth
+falls inside (strictly after its `periodStart`, before the next period start) is flagged
+`Cycle.isPregnancyGap`. `CycleStats` then uses **only cycles more recent than the latest such
+gap** — pre-pregnancy lengths never mix into the current picture — and `RobustPredictor`
+returns **no forecast at all** while the open cycle covers a loss / birth. Once a period is
+logged after the event, the forecast resumes on its own from the post-event cycles.
+
+`PregnancyRecoveryState` (`none` / `awaitingCyclesAfterLoss` / `postpartum`) drives one gentle
+home banner and nothing else. **No schema change** — the two enum values are stored by name in
+the existing `cycle_events.type` TEXT column, the drift codegen is unchanged, and a v1 database
+opens as-is. Verified by `core/test/cycle/pregnancy_event_test.dart`,
+`cycle_derivation_test.dart`, `prediction/robust_predictor_test.dart` and
+`repository/cycle_event_repository_test.dart`.
 
 ## Backup & restore (p1.10)
 

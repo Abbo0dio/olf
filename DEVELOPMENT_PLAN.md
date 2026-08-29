@@ -1248,8 +1248,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   - 2026-08-29 — merged (PR #18, squash → `fccfc37`). **DONE.**
 
 #### p1.10 — Local backup & restore (encrypted export / import)
-- **Status:** IN REVIEW
-- **PR:** [#19](https://github.com/Abbo0dio/olf/pull/19)
+- **Status:** DONE
+- **PR:** [#19](https://github.com/Abbo0dio/olf/pull/19) — merged (squash → `b53e6da`)
 - **Branch / worktree:** `feat/p1.10-backup-restore` / `../olf-wt/p1.10`
 - **Owner:** worker: phase1
 - **Depends on:** p1.1–p1.7 (whatever schema exists)
@@ -1322,9 +1322,13 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     changed for the new deps (noted in PR). Opening PR into `main`.
   - 2026-08-29 — PR [#19](https://github.com/Abbo0dio/olf/pull/19) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-29 — merged (PR #19, squash → `b53e6da`). **DONE.**
 
 #### p1.11 — Explicit pregnancy-loss, birth, and postpartum events (minimal)
-- **Status:** TODO
+- **Status:** IN REVIEW
+- **PR:** [#20](https://github.com/Abbo0dio/olf/pull/20)
+- **Branch / worktree:** `feat/p1.11-loss-birth-events` / `../olf-wt/p1.11`
+- **Owner:** worker: phase1
 - **Depends on:** p1.3
 - **Requirement refs:** §2, §9(3), Prioritized Matrix (MUST-HAVE)
 - **Goal:** Let the user log a miscarriage / pregnancy loss, a "gave birth" event, and enter a
@@ -1334,7 +1338,54 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   predictions exclude/adjust around it; sensitive, non-clinical copy.
 - **Tests required:** unit tests: loss/birth event breaks the cycle chain correctly; prediction
   does not produce nonsense across the event.
-- **Log:** — created.
+- **Notes / detail:**
+  - **No schema change.** The dormant `cycle_events` table (kept since v1 for exactly this)
+    gets two new `CycleEventType` values — `pregnancyLoss`, `birth` — stored by enum name in
+    the existing TEXT column. drift codegen is byte-identical; a v1 database opens as-is.
+  - **`core/lib/src/cycle/pregnancy_event.dart`** (pure Dart): `enum PregnancyEndKind
+    { loss, birth }` + `.eventType` / `pregnancyEndKindOf` mapping; `class PregnancyEvent`
+    (id, kind, date) + `fromRow`; `mostRecentPregnancyEnd`; `enum PregnancyRecoveryState
+    { none, awaitingCyclesAfterLoss, postpartum }` + `pregnancyRecoveryState({events,
+    periods})` — `none` again as soon as a period starts after the most recent end.
+  - **`Cycle`** gains `interruptedBy` (a `PregnancyEndKind?`) + `isPregnancyGap`.
+    **`deriveCycles(periods, {pregnancyEvents})`**: an interval a loss / birth falls inside
+    (strictly after its start, before the next start) is marked; newest event wins.
+    **`CycleStats.from`** uses only cycles *newer than the latest pregnancy gap*
+    (`takeWhile(!isPregnancyGap)`), so pre-pregnancy lengths never mix in.
+    **`RobustPredictor.predict`** returns `null` while `cycles.first.isPregnancyGap` — no
+    forecast projected across the event; it resumes on its own from post-event cycles.
+  - **`CycleEventRepository`** gains `logPregnancyEnd` / `watchPregnancyEvents` /
+    `pregnancyEvents` (reusing `deleteEvent`); `DriftCycleEventRepository` implements.
+  - **app:** `pregnancy/pregnancy_providers.dart` (`cycleEventRepositoryProvider`,
+    `pregnancyEventsProvider`, `pregnancyRecoveryStateProvider`,
+    `mostRecentPregnancyEndProvider`); `cyclesProvider` now feeds `deriveCycles` the events;
+    `pregnancy/pregnancy_events_page.dart` — a dedicated **Settings → Cycle → Pregnancy loss &
+    birth** screen (list + add via a kind/date sheet + remove); a gentle `_PregnancyStatusCard`
+    on the home body while `PregnancyRecoveryState != none`. Copy is neutral / non-clinical
+    ("Pregnancy loss", "Birth"); passes the p1.9 inclusive-language lint.
+  - **Tests:** core — `cycle/pregnancy_event_test.dart` (mapping, `mostRecentPregnancyEnd`,
+    `pregnancyRecoveryState`); `cycle_derivation_test.dart` +group (gap marking, `CycleStats`
+    ignores the far side, no-events = unchanged); `robust_predictor_test.dart` +group (no
+    forecast across a birth/loss; resumes on post-event cycles, not the old ones);
+    `repository/cycle_event_repository_test.dart` +group. app —
+    `pregnancy/pregnancy_events_test.dart` (record → remove), `pregnancy/pregnancy_home_test.dart`
+    (birth pauses the forecast + shows the note; note clears after a period).
+  - **Deferred:** no in-calendar affordance to log an event on a tapped day (Settings only);
+    `PregnancyRecoveryState` flips straight to `none` on the first post-event period rather than
+    easing over a few cycles; no pregnancy / TTC / postpartum *modes* (Phase 7); the loss / birth
+    day is not drawn on the month calendar. See §9.
+- **Log:**
+  - 2026-08-29 — created.
+  - 2026-08-29 — claimed by worker: phase1; worktree `../olf-wt/p1.11`, branch
+    `feat/p1.11-loss-birth-events` off `main` @ `b53e6da`.
+  - 2026-08-29 — built. `core/lib/src/cycle/pregnancy_event.dart` + `Cycle.isPregnancyGap` +
+    `deriveCycles(pregnancyEvents:)` + `CycleStats` far-side trim + `RobustPredictor` early
+    return; `CycleEventRepository` pregnancy-end methods. app: `pregnancy/` providers + page +
+    a home status card; Settings **Cycle** section. Tests: core +23, app +3. No schema change
+    (codegen unchanged), no lock drift, no new permission. `docs/local-database.md` updated.
+    §7 decision + §9 follow-ups recorded. Full local verification batch green. Opening PR.
+  - 2026-08-29 — PR [#20](https://github.com/Abbo0dio/olf/pull/20) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 **Phase 1 exit gate:** a new user can log periods/symptoms/BBT/meds, gets correctable range
 predictions, can lock the app, can back up and restore, and can log a loss/birth — all offline,
@@ -1610,6 +1661,25 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 ## 7. Decisions Log
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
+
+- 2026-08-29 — **p1.11 loss / birth are two `CycleEventType` values on the dormant
+  `cycle_events` table (no schema change); the cycle engine marks the interval they fall in as
+  a pregnancy gap and the predictor stays silent across it.** Rationale: (1) `cycle_events` has
+  been carried since v1 for exactly this; adding `pregnancyLoss` / `birth` enum values is a
+  Dart-only change (drift stores the enum name in the existing TEXT column, codegen is
+  byte-identical, a v1 DB opens unchanged) — **no `schemaVersion` bump, no migration**. (2) A
+  pregnancy is not a cycle: `deriveCycles(periods, {pregnancyEvents})` flags the interval an
+  event falls inside as `Cycle.isPregnancyGap`; `CycleStats` then uses only cycles **newer than
+  the latest such gap** (`takeWhile`), so pre-pregnancy lengths never contaminate the current
+  baseline, and `RobustPredictor` returns **`null` while the open cycle covers the event** —
+  no date is projected across a loss / birth. The forecast resumes on its own once a period is
+  logged (the thin post-event history makes it low-confidence, then sharpens) — no separate
+  "resume" state machine. (3) `PregnancyRecoveryState` (`none` / `awaitingCyclesAfterLoss` /
+  `postpartum`) is derived, drives **one** gentle home banner, and is `none` again the moment a
+  period starts after the event. (4) Logging lives on its **own Settings screen** (sensitive,
+  contained), not the day sheet; copy is "Pregnancy loss" / "Birth", non-clinical, and passes
+  the p1.9 inclusive-language lint. (5) Full pregnancy / TTC / postpartum *modes* stay Phase 7
+  — this is only the marker + engine handling. — worker: phase1.
 
 - 2026-08-29 — **p1.10 backup is a versioned plaintext JSON document, AES-256-GCM'd under a
   PBKDF2 passphrase, saved through the platform document picker; no schema change; the KDF
@@ -1964,6 +2034,18 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   scheduler. `.olfbackup` is not registered as an app file type, so "open with olf" from a
   file manager does nothing. No auto/periodic backup, no cloud target. — noted by worker:
   phase1 during p1.10.
+- **p1.11 follow-ups:** a loss / birth is only loggable from **Settings → Cycle** — there is no
+  affordance to record one on a tapped calendar day, and the event day is **not drawn** on the
+  month calendar. `PregnancyRecoveryState` flips straight to `none` on the first post-event
+  period rather than easing the forecast back over a few cycles (the predictor's own
+  low-confidence ramp is the only softening). No pregnancy / TTC / postpartum **modes**, no
+  due-date / gestational-age tracking, no tailored postpartum symptom set — all Phase 7. Banner
+  copy is fixed and not pronoun-personalised (the p1.9 infra exists but isn't wired here).
+  Multiple losses / births are stored, but only the **most recent** drives the banner and the
+  stats reset. `deriveCycles` treats an event dated exactly on a period-start day as belonging
+  to no interval (documented + tested), so a same-day "loss, then period resumes" needs the
+  period dated at least a day later for the stats to reset. — noted by worker: phase1 during
+  p1.11.
 - (add more here)
 
 ## 10. Orphaned / cut work

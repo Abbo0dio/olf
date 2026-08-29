@@ -13,6 +13,7 @@ export 'src/bbt/drift_bbt_repository.dart';
 export 'src/bbt/temperature.dart';
 export 'src/cycle/cycle.dart';
 export 'src/cycle/cycle_derivation.dart';
+export 'src/cycle/pregnancy_event.dart';
 export 'src/date_math.dart';
 export 'src/db/app_database.dart';
 export 'src/db/database_key_store.dart';

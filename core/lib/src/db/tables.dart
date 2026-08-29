@@ -3,9 +3,23 @@ import 'package:drift/drift.dart';
 /// The kinds of point-in-time event that can sit on the cycle timeline.
 ///
 /// v1 had exactly one — the day a period started. As of schema v2, period
-/// tracking moved to its own interval table ([Periods]); this log stays for
-/// the point-in-time markers p1.11 adds (loss, birth, postpartum).
-enum CycleEventType { periodStart }
+/// tracking moved to its own interval table ([Periods]), so `periodStart` rows
+/// are no longer written (older databases may still hold some).
+///
+/// p1.11 adds two **pregnancy-end** markers — [pregnancyLoss] and [birth] — so
+/// the cycle engine stops treating the pregnancy gap as one long normal cycle.
+/// These are stored by name in the existing `type` TEXT column: **no DDL
+/// change, no schema-version bump** (see `docs/local-database.md`).
+enum CycleEventType {
+  periodStart,
+
+  /// A miscarriage / pregnancy loss on [CycleEvents.date].
+  pregnancyLoss,
+
+  /// A birth on [CycleEvents.date]. The user is postpartum until the next
+  /// logged period start.
+  birth,
+}
 
 /// One dated event on the user's cycle timeline.
 ///
