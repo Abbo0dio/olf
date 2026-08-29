@@ -787,7 +787,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     + branch cleaned up. **DONE.**
 
 #### p1.5 — Symptom, mood & discharge logging with custom symptoms
-- **Status:** IN PROGRESS
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/14
 - **Branch / worktree:** `feat/p1.5-symptom-logging` / `../olf-wt/p1.5`
 - **Owner:** worker: phase1
 - **Depends on:** p0.4
@@ -857,6 +858,16 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     (`symptom_types` + `daily_symptom_entries`, built-ins seeded in the migration),
     `core/symptom` (validation + repository), `symptom` providers/format, low-friction day
     sheet, manage-symptoms screen, calendar + recent-symptoms integration.
+  - 2026-08-29 — built. Schema v4: user-editable `symptom_types` catalogue (soft-delete via
+    `archived_at`, ~11 gender-neutral built-ins seeded from both `onCreate` and `from < 4`) +
+    `daily_symptom_entries` (composite PK `{date, symptom_type_id}`, FK CASCADE, presence-only).
+    `DriftSymptomRepository` — validated add/rename, `reorderTypes`, archive, idempotent
+    `setSymptom`. App: multi-select day sheet, manage-symptoms `ReorderableListView`, calendar
+    day-cell count + dot, "Recent symptoms" section, summary chip; non-period day taps now open
+    the symptom sheet (with a "Start a period" shortcut). core 138 / app 30 green, analyze +
+    format clean, codegen regenerated + committed, v3→v4 migration test, dependency audit PASS,
+    no lock drift. `docs/local-database.md` + §7 decision + §9 follow-ups recorded. PR #14
+    opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
 
 #### p1.6 — BBT (manual) & cervical-mucus / fertility-awareness inputs
 - **Status:** TODO
