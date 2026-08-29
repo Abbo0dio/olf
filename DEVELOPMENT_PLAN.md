@@ -972,8 +972,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     cleaned up. **DONE.**
 
 #### p1.7 — Medication & birth-control entries + one basic reminder
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/16
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/16 (merged)
 - **Branch / worktree:** `feat/p1.7-meds-reminder` / `../olf-wt/p1.7`
 - **Owner:** worker: phase1
 - **Depends on:** p0.4
@@ -1092,9 +1092,14 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     are not ad/analytics/crash SDKs), no core lock drift. `docs/local-database.md` +
     §7 decision + §9 follow-ups recorded.
   - 2026-08-29 — PR #16 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
+  - 2026-08-29 — **merged** (PR #16, squash → `9a5b292`). CI green (incl. Android APK +
+    iOS build). Worktree + branch cleaned up. **DONE.**
 
 #### p1.8 — Anonymous-by-default, local PIN lock, disclaimers, first-run privacy explainer
-- **Status:** TODO
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/17
+- **Branch / worktree:** `feat/p1.8-pin-disclaimers` / `../olf-wt/p1.8`
+- **Owner:** worker: phase1
 - **Depends on:** p0.4
 - **Requirement refs:** §3, §6, §9(8)
 - **Goal:** No account required to use anything. Optional numeric PIN to open the app. First-run
@@ -1105,7 +1110,65 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   gate works and is optional; disclaimer copy reviewed against §6.
 - **Tests required:** widget/integration for the PIN gate; content test that disclaimer strings
   are present on first run.
-- **Log:** — created.
+- **Notes / detail:**
+  - **No schema change.** The one new persisted bit — the `onboarding_complete` flag — reuses
+    the p1.6 `app_settings` key/value store (`SettingKeys.onboardingComplete`). The PIN secret
+    lives in the platform secure enclave, not the DB.
+  - **`core/lib/src/security/`** (pure Dart, new `crypto` direct dep — Dart-team package, not
+    ad/analytics):
+    - `pin.dart` — `validatePin` (4–12 digits, digits only), `PinError` + `describe()` +
+      `PinException`; `PinCredential { saltBase64, hashBase64, iterations }` with a JSON
+      `toStorageString` / `fromStorageString` round-trip; `generatePinSalt` (16 random bytes),
+      `derivePinCredential` / `hashPin` (iterated HMAC-SHA256, `defaultPinIterations = 30000`),
+      `verifyPin` (constant-time compare). **Documented as a UI-level gate, not a crypto
+      boundary** — the PIN does not wrap the DB key in Phase 1.
+    - `pin_store.dart` — the `PinStore` interface (mirrors `DatabaseKeyStore`); **presence of a
+      stored credential is the "lock is on" signal**, no separate flag.
+  - **`app/lib/src/security/`:** `secure_storage_pin_store.dart` (`PinStore` over
+    `flutter_secure_storage`, same options as `SecureStorageKeyStore`); `pin_providers.dart`
+    (`pinStoreProvider`, `pinCredentialProvider` `FutureProvider`, `pinIsSetProvider`,
+    `sessionUnlockedProvider` `StateProvider`, and a `PinController` for set / change / clear /
+    verify); `pin_unlock_screen.dart` (numeric entry, wrong-PIN message, no lockout yet).
+  - **`app/lib/src/onboarding/`:** `disclaimers.dart` (the four disclaimer points as named
+    consts — data on this device / no sale, HIPAA doesn't apply, not medical advice, not a
+    contraceptive — reviewed against §3 / §6); `onboarding_providers.dart`
+    (`firstRunDoneProvider` off `app_settings`); `first_run_screen.dart` (the explainer +
+    optional PIN opt-in; "continue" writes the flag and enters the app).
+  - **`app/lib/src/app_gate.dart`** — new `MaterialApp.home`. Order: DB opens → first-run
+    explainer (once) → PIN lock (if set and session locked) → `HomePage`. A DB error falls
+    through to `HomePage` (which owns the fail-safe screen). Re-locks on
+    `AppLifecycleState.paused` / `hidden` via `AppLifecycleListener`.
+  - **`app/lib/src/settings/settings_page.dart`** — new, reached from a home `AppBar` gear
+    icon. For now just an "App lock" switch (set / change / remove the PIN) so the lock is
+    genuinely optional and reversible without reinstalling; p1.9 adds theme + pronoun here.
+  - **Test harness:** `pumpOlf` gains `onboarded` (default `true` → skips the explainer) and
+    `pinStore` (default empty `FakePinStore` → no lock) so every existing widget test is
+    unaffected; the new tests opt in.
+  - **Tests:** core — `security/pin_test.dart` (validation, hashing determinism + salt/iter
+    sensitivity, credential round-trip, verify). app — `onboarding/first_run_test.dart` (every
+    disclaimer point shown; continue-with-no-PIN → usable + flag persisted; PIN opt-in stores a
+    credential; mismatch rejected), `security/pin_gate_test.dart` (no PIN → no gate; PIN → lock
+    screen, wrong rejected, right unlocks), `settings/settings_page_test.dart` (toggle lock on
+    → credential stored; off → cleared).
+  - **Docs:** `docs/privacy-and-lock.md` (new), `app_settings` key row in
+    `docs/local-database.md`.
+- **Log:**
+  - 2026-08-29 — created.
+  - 2026-08-29 — claimed by worker: phase1; worktree `../olf-wt/p1.8`, branch
+    `feat/p1.8-pin-disclaimers` off `main` @ `9a5b292`. Building: `core/security` (PIN
+    validation + iterated-HMAC hash + `PinStore` interface, `crypto` dep), first-run privacy
+    explainer gated on an `app_settings` flag, an `AppGate` root that layers explainer → PIN
+    lock → home, an optional PIN (opt-in at first run, toggle in a new Settings screen), and
+    re-lock on background. No schema change.
+  - 2026-08-29 — built. `core/security/pin.dart` + `pin_store.dart` (UI-level gate,
+    documented as *not* a crypto boundary; `crypto` added as a direct dep — not ad/analytics).
+    App: `AppGate` (DB → first-run → PIN → home, re-lock on pause), `FirstRunScreen` with the
+    four §3/§6 disclaimer points as testable consts + optional PIN opt-in, `PinUnlockScreen`,
+    and a new `SettingsPage` (gear icon) with an App-lock switch. `pumpOlf` gained `onboarded`
+    / `pinStore` knobs; all pre-existing tests untouched. core 232 / app 52 green, analyze +
+    format clean, no schema change / no codegen change, dependency audit PASS (38 rules).
+    `docs/privacy-and-lock.md` added; §7 decision + §9 follow-ups recorded.
+  - 2026-08-29 — PR #17 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
 
 #### p1.9 — Dark mode + gender-neutral, discreet theme baseline
 - **Status:** TODO
@@ -1417,6 +1480,25 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-29 — **The p1.8 PIN is a UI-level gate, not a cryptographic boundary; no schema
+  change; a new `AppGate` root layers first-run → PIN → home.** Rationale: (1) the database is
+  already encrypted at rest with a key in the platform secure enclave, so in Phase 1 the PIN
+  only decides which screen `AppGate` shows — it does **not** derive or wrap the DB key.
+  Binding the key to the PIN with a real KDF, plus biometric unlock / decoy PIN / lockout /
+  scheduled deletion / background masking, is Phase 2 (the plan already scoped those out).
+  This is stated in `core/lib/src/security/pin.dart` and `docs/privacy-and-lock.md` so nobody
+  mistakes it for more than it is. (2) The PIN **secret** is a salted iterated-HMAC-SHA256
+  hash (`PinCredential`) in `flutter_secure_storage` — never in the DB, never plaintext;
+  **presence of that credential is the "lock is on" signal**, so there is no second flag to
+  drift. Work factor is a modest 30k iterations to keep on-device unlock snappy on the main
+  isolate — raising it / moving it off-isolate is a §9 follow-up. (3) `crypto` (Dart-team
+  package, not ad/analytics) added as a `core` direct dep. (4) The only new persisted bit —
+  `onboarding_complete` — reuses the p1.6 `app_settings` store (the §7 p1.6 note anticipated
+  this), so **p1.8 has no schema bump and no migration**. (5) Disclaimer copy is four named
+  constants in `onboarding/disclaimers.dart` (data on-device / never sold, HIPAA doesn't
+  apply, not medical advice, not a contraceptive) so a content test pins them and p1.9's
+  language sweep has one target. — worker: phase1.
+
 - 2026-08-29 — **Medications, birth control and the one daily reminder are three additive
   tables at `schemaVersion` 6; the reminder stores no free text, and the notification plugin
   sits behind a `ReminderScheduler` interface (p1.7).** New tables: `medications(id, name,
@@ -1659,6 +1741,19 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   on a device) is exercised only manually / on-device — the CI coverage is the wrapper contract
   test with a fake, per the task's "test around the notification scheduling wrapper".
   — noted by worker: phase1 during p1.7.
+- **p1.8 follow-ups (mostly Phase 2 by design):** the PIN is a screen gate only — it does not
+  wrap the SQLCipher key, so someone with the unlocked device / a file dump still gets the DB
+  via the enclave key. No **biometric** unlock, no **decoy PIN** + decoy dataset, no
+  **failed-attempt lockout / backoff** (unlimited guesses), no **scheduled auto-deletion**, no
+  **screenshot / app-switcher masking** (§3 "blur when backgrounded" — only re-lock-on-pause
+  is done). PIN hashing (iterated HMAC-SHA256, 30k) runs on the **main isolate** (~150 ms
+  desktop, more on a phone) and the work factor is deliberately low for responsiveness — Phase
+  2 should move it to a background isolate and/or use a real KDF that also derives the DB key.
+  `PinCredential` has no versioned re-hash path if the work factor changes later. The
+  re-lock-on-background timing has no grace period (instant re-lock even on a quick app
+  switch). The first-run screen has no "why does this matter" deep-dive or links, and no
+  language toggle. `SettingsPage` currently holds only the app lock; export/import (p1.10) and
+  theme/pronoun (p1.9) join it there. — noted by worker: phase1 during p1.8.
 - (add more here)
 
 ## 10. Orphaned / cut work

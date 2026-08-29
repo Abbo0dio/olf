@@ -14,6 +14,9 @@ dependencies:
   # executor and the key store are supplied by the platform layer (app) through
   # interfaces defined here. See lib/src/db/.
   drift: ^2.28.0
+  # SHA-256 / HMAC for the local PIN hash (p1.8). Pure Dart, Dart-team package —
+  # no ad/analytics surface. See lib/src/security/pin.dart.
+  crypto: ^3.0.6
 
 dev_dependencies:
   lints: ^5.0.0

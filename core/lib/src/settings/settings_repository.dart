@@ -2,6 +2,10 @@
 abstract final class SettingKeys {
   /// Preferred display unit for basal temperatures — a [TemperatureUnit] name.
   static const String temperatureUnit = 'temperature_unit';
+
+  /// `'true'` once the first-run privacy explainer has been acknowledged (p1.8).
+  /// Absent / anything else means it still needs to be shown.
+  static const String onboardingComplete = 'onboarding_complete';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).
