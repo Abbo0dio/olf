@@ -55,59 +55,58 @@ void main() {
     raw.dispose();
   }
 
-  test(
-    'opening a v2 database upgrades it to v3 and adds daily_flows',
-    () async {
-      createV2Database(DateTime(2026, 7, 10), DateTime(2026, 7, 14));
+  test('opening a v2 database upgrades through to the current version, '
+      'adding daily_flows along the way', () async {
+    createV2Database(DateTime(2026, 7, 10), DateTime(2026, 7, 14));
 
-      final db = AppDatabase(NativeDatabase(dbFile));
-      addTearDown(db.close);
+    final db = AppDatabase(NativeDatabase(dbFile));
+    addTearDown(db.close);
 
-      final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.first, 3);
-      expect(db.schemaVersion, 3);
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.data.values.first, db.schemaVersion);
+    expect(db.schemaVersion, 4);
 
-      // New table exists with the expected shape.
-      final columns = await db
-          .customSelect("PRAGMA table_info('daily_flows')")
-          .get();
-      final byName = {
-        for (final row in columns)
-          row.data['name'] as String: (
-            (row.data['type'] as String).toUpperCase(),
-            (row.data['notnull'] as int) == 1,
-            (row.data['pk'] as int) != 0,
-          ),
-      };
-      expect(
-        byName.keys,
-        containsAll(<String>{
-          'date',
-          'intensity',
-          'clot_size',
-          'created_at',
-          'updated_at',
-        }),
-      );
-      expect(byName['date'], ('INTEGER', true, true)); // primary key
-      expect(byName['intensity'], ('TEXT', true, false));
-      expect(byName['clot_size'], ('TEXT', false, false)); // nullable
+    // New table exists with the expected shape.
+    final columns = await db
+        .customSelect("PRAGMA table_info('daily_flows')")
+        .get();
+    final byName = {
+      for (final row in columns)
+        row.data['name'] as String: (
+          (row.data['type'] as String).toUpperCase(),
+          (row.data['notnull'] as int) == 1,
+          (row.data['pk'] as int) != 0,
+        ),
+    };
+    expect(
+      byName.keys,
+      containsAll(<String>{
+        'date',
+        'intensity',
+        'clot_size',
+        'created_at',
+        'updated_at',
+      }),
+    );
+    expect(byName['date'], ('INTEGER', true, true)); // primary key
+    expect(byName['intensity'], ('TEXT', true, false));
+    expect(byName['clot_size'], ('TEXT', false, false)); // nullable
 
-      // The existing period is untouched.
-      final period = (await DriftPeriodRepository(db).allPeriods()).single;
-      expect(period.startDate, DateTime(2026, 7, 10));
-      expect(period.endDate, DateTime(2026, 7, 14));
+    // The later v4 migration also ran and seeded the symptom catalogue.
+    final types = await DriftSymptomRepository(db).activeTypes();
+    expect(types.map((t) => t.name), kBuiltInSymptomNames);
 
-      // And the new table is usable.
-      final flow = DriftDailyFlowRepository(
-        db,
-        now: () => DateTime(2026, 7, 12),
-      );
-      await flow.setFlow(DateTime(2026, 7, 12), intensity: FlowIntensity.heavy);
-      expect(
-        (await flow.flowOn(DateTime(2026, 7, 12)))!.intensity,
-        FlowIntensity.heavy,
-      );
-    },
-  );
+    // The existing period is untouched.
+    final period = (await DriftPeriodRepository(db).allPeriods()).single;
+    expect(period.startDate, DateTime(2026, 7, 10));
+    expect(period.endDate, DateTime(2026, 7, 14));
+
+    // And the new table is usable.
+    final flow = DriftDailyFlowRepository(db, now: () => DateTime(2026, 7, 12));
+    await flow.setFlow(DateTime(2026, 7, 12), intensity: FlowIntensity.heavy);
+    expect(
+      (await flow.flowOn(DateTime(2026, 7, 12)))!.intensity,
+      FlowIntensity.heavy,
+    );
+  });
 }

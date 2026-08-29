@@ -72,3 +72,76 @@ class DailyFlows extends Table {
   @override
   Set<Column> get primaryKey => {date};
 }
+
+/// The symptom names seeded into a fresh database (schema v4, p1.5).
+///
+/// Deliberately plain and gender-neutral — no assumptions about anatomy beyond
+/// what the app is for. The user can rename, reorder, archive any of these and
+/// add their own; nothing here is special-cased in code beyond the `isBuiltIn`
+/// flag (which only changes wording in the manage screen).
+const List<String> kBuiltInSymptomNames = <String>[
+  'Cramps',
+  'Headache',
+  'Chest tenderness',
+  'Bloating',
+  'Fatigue',
+  'Nausea',
+  'Backache',
+  'Low mood',
+  'Anxiety',
+  'Acne',
+  'Discharge',
+];
+
+/// One entry in the user's symptom catalogue.
+///
+/// This is the *vocabulary*, not a dated log — [DailySymptomEntries] holds the
+/// per-day records. Deletion is soft (`archivedAt`): a removed symptom vanishes
+/// from the pickers but its historical entries stay meaningful and its name is
+/// never silently reused. `sortOrder` is user-controlled (drag to reorder).
+/// Introduced in schema v4 (p1.5).
+@DataClassName('SymptomType')
+class SymptomTypes extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get name => text().withLength(min: 1, max: 40)();
+
+  /// Ascending display order in the pickers and the manage screen.
+  IntColumn get sortOrder => integer()();
+
+  /// `true` for the names seeded by [kBuiltInSymptomNames]. Purely cosmetic —
+  /// built-ins can still be renamed, reordered and archived.
+  BoolColumn get isBuiltIn => boolean().withDefault(const Constant(false))();
+
+  /// Set when the user removes the symptom; `null` while it is active.
+  DateTimeColumn get archivedAt => dateTime().nullable()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// One (calendar day, symptom) pair the user marked as present.
+///
+/// Presence-only in v1 — no severity or scale (see DEVELOPMENT_PLAN.md §9).
+/// The composite primary key `{date, symptomTypeId}` makes toggling idempotent;
+/// a multi-select day is simply several rows. `ON DELETE CASCADE` means hard-
+/// deleting a [SymptomTypes] row (not something the app does — it archives)
+/// would take its entries with it. Introduced in schema v4 (p1.5).
+@DataClassName('DailySymptomEntry')
+class DailySymptomEntries extends Table {
+  /// Calendar date, time-of-day zeroed on write.
+  DateTimeColumn get date => dateTime()();
+
+  IntColumn get symptomTypeId => integer()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {date, symptomTypeId};
+
+  @override
+  List<String> get customConstraints => [
+    'FOREIGN KEY (symptom_type_id) REFERENCES symptom_types (id) ON DELETE CASCADE',
+  ];
+}

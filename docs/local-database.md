@@ -79,6 +79,41 @@ days + today).
 
 `schemaVersion = 3`.
 
+## Schema v4 (p1.5)
+
+Adds the symptom catalogue and a per-day symptom log.
+
+`symptom_types` — the user-editable **vocabulary** (not a dated log):
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | INTEGER PK AUTOINCREMENT | |
+| `name` | TEXT (1–40 chars) | Case-insensitively unique among **active** rows — enforced in `SymptomRepository`, not by DB constraint. |
+| `sort_order` | INTEGER | Ascending display order; rewritten by `reorderTypes`. |
+| `is_built_in` | INTEGER (0/1), default 0 | `true` for the names seeded from `kBuiltInSymptomNames`. Cosmetic only — built-ins can still be renamed / reordered / archived. |
+| `archived_at` | INTEGER (unix seconds), **nullable** | Set when the user removes a symptom. **Soft delete**: the row leaves the pickers but the days it was logged on stay meaningful. |
+| `created_at` / `updated_at` | INTEGER (unix seconds) | |
+
+`daily_symptom_entries` — one row per (calendar day, symptom) that is present:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `date` | INTEGER (unix seconds) | **Calendar date**, `dateOnly` on write. |
+| `symptom_type_id` | INTEGER | `FOREIGN KEY → symptom_types(id) ON DELETE CASCADE`. |
+| `created_at` | INTEGER (unix seconds) | |
+| | | **PRIMARY KEY (`date`, `symptom_type_id`)** — toggling is idempotent; a multi-select day is just several rows. |
+
+Presence-only in v1 — no severity or scale (see `DEVELOPMENT_PLAN.md` §9). `setSymptom(present: true)`
+is insert-or-ignore, `present: false` deletes the row; there is nothing to validate, so day
+logging is plain CRUD. The catalogue **is** validated (`validateSymptomName` → empty / too long /
+duplicate). Entries are not linked to `periods` — like `daily_flows`, editing a period never
+disturbs them.
+
+The built-in names are seeded by `_seedBuiltInSymptoms()`, called from **both** `onCreate` (after
+`createAll()`) and the `from < 4` upgrade branch, so a fresh DB and an upgraded DB start identical.
+
+`schemaVersion = 4`.
+
 ## Migrations
 
 `MigrationStrategy.onUpgrade` runs the steps below in order. Every schema change:
@@ -91,11 +126,12 @@ days + today).
 | Step | Does |
 |------|------|
 | `from < 2` (p1.1) | Creates `periods`; copies every `cycle_events` row of type `periodStart` into it as an open-ended period (`start_date` = `date`, `end_date` = NULL). Verified by `core/test/db/period_migration_test.dart` (real on-disk v1 file → upgrade → assert shape + row survival). |
-| `from < 3` (p1.2) | Creates `daily_flows`. Purely additive — nothing is backfilled, and existing `periods` / `cycle_events` rows are left untouched. Verified by `core/test/db/flow_migration_test.dart` (real on-disk v2 file → upgrade → assert `daily_flows` shape, period row intact, table usable). `period_migration_test.dart` also runs v1 straight through to v3. |
+| `from < 3` (p1.2) | Creates `daily_flows`. Purely additive — nothing is backfilled, and existing `periods` / `cycle_events` rows are left untouched. Verified by `core/test/db/flow_migration_test.dart` (real on-disk v2 file → upgrade → assert `daily_flows` shape, period row intact, table usable). `period_migration_test.dart` also runs v1 straight through to the current version. |
+| `from < 4` (p1.5) | Creates `symptom_types` + `daily_symptom_entries` and seeds the built-in symptom names. Purely additive — existing `periods` / `daily_flows` / `cycle_events` rows are untouched. Verified by `core/test/db/symptom_migration_test.dart` (real on-disk v3 file → upgrade → assert both table shapes, catalogue seeded, period + flow rows intact, tables usable); `flow_migration_test.dart` and `period_migration_test.dart` also run older versions straight through and check the catalogue seeded. |
 
 drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) is still **not** wired up
-— both migration tests hand-build the old schema. Adopting the snapshot tooling is a tracked
-follow-up (`DEVELOPMENT_PLAN.md` §9); a hand-rolled test has been enough for the two small
+— the migration tests hand-build the old schema. Adopting the snapshot tooling is a tracked
+follow-up (`DEVELOPMENT_PLAN.md` §9); a hand-rolled test has been enough for the three small
 additive migrations so far.
 
 ## Derived data — not stored (p1.3, p1.4)
@@ -117,10 +153,13 @@ any) default: with too little history the figures are `null` and the UI asks for
 
 | File | Covers |
 |------|--------|
-| `core/test/db/app_database_test.dart` | schemaVersion (3), `onCreate` columns/types for `cycle_events`, `periods` **and** `daily_flows`, `user_version`, `beforeOpen` FKs. |
-| `core/test/db/period_migration_test.dart` | v1 on-disk DB → open through `AppDatabase` → upgraded to v3, `periods` created, every `periodStart` carried over, `cycle_events` intact, `daily_flows` present. |
-| `core/test/db/flow_migration_test.dart` | v2 on-disk DB → open through `AppDatabase` → `daily_flows` created with the expected shape, existing period untouched, table usable. |
+| `core/test/db/app_database_test.dart` | schemaVersion (4), `onCreate` columns/types for `cycle_events`, `periods`, `daily_flows`, `symptom_types` **and** `daily_symptom_entries` (incl. composite PK), built-in seed order, `daily_symptom_entries` FK enforced, `user_version`, `beforeOpen` FKs. |
+| `core/test/db/period_migration_test.dart` | v1 on-disk DB → open through `AppDatabase` → upgraded to the current version, `periods` created, every `periodStart` carried over, `cycle_events` intact, `daily_flows` present, symptom catalogue seeded. |
+| `core/test/db/flow_migration_test.dart` | v2 on-disk DB → open through `AppDatabase` → `daily_flows` created with the expected shape, existing period untouched, later v4 migration also seeds the catalogue. |
+| `core/test/db/symptom_migration_test.dart` | v3 on-disk DB → open through `AppDatabase` → `symptom_types` + `daily_symptom_entries` created with the expected shapes, catalogue seeded in order, existing period + flow rows intact, tables usable. |
 | `core/test/flow/drift_daily_flow_repository_test.dart` | `setFlow` date-only + optional clot, upsert preserves `created_at` / bumps `updated_at`, dropping a clot, `clearFlow` + no-op, `watchAll` emissions, flow survives period delete. |
+| `core/test/symptom/symptom_validation_test.dart` | `validateSymptomName` trims, empty / too-long / case-insensitive-duplicate, rename keeps its own name, error copy. |
+| `core/test/symptom/drift_symptom_repository_test.dart` | fresh DB seeded in order; `addType` append + validation throws; `renameType` incl. case change; `reorderTypes` rewrites `sort_order`; `archiveType` hides but keeps entries; archived name reusable; `watchTypes` emissions; `setSymptom` toggle idempotent on both edges, date-only; `clearDay`; `watchAllEntries` newest-first; independent of period delete. |
 | `core/test/period/period_validation_test.dart` | impossible ranges, inclusive overlap, open-ended periods, `editingId` self-exclusion, error copy. |
 | `core/test/period/drift_period_repository_test.dart` | add / watch / update / delete, ordering, validation-throws-write-nothing, **edit touches only its own row**. |
 | `core/test/repository/cycle_event_repository_test.dart` | log / read / watch / delete, ordering, no-op delete. |
@@ -134,7 +173,10 @@ any) default: with too little history the figures are `null` and the UI asks for
 | `app/test/prediction/prediction_card_test.dart` | a regular history renders next-period + fertile-window ranges with a confidence note; a late period shows the "Period check-in" (no rolled-forward date) with a *Log period start* action; editing history updates the card on the same screen; one logged period → no card yet. |
 | `app/test/period/period_editor_test.dart` | date fields, "has ended" toggle, valid save, overlap blocked with a clear message + Save disabled. |
 | `app/test/flow/flow_quick_log_test.dart` | flow logged in two taps from the calendar (clots one more); a logged day renders on its calendar cell + the summary chip; the sheet preselects an existing entry and can remove it. |
+| `app/test/symptom/symptom_day_sheet_test.dart` | two symptoms logged in two taps from a non-period day, and they persist; reopening preselects them and unticking clears; the calendar cell + summary chip show the count; the sheet offers "Start a period" on a non-period day. |
+| `app/test/symptom/manage_symptoms_test.dart` | add a custom symptom → appears as a chip; rename; remove → gone from the sheet but the historical entry survives; drag-reorder sticks. |
 | `app/integration_test/log_period_test.dart` | add → edit → delete on a real device against the encrypted DB, across a DB close/reopen. Not in CI (no emulator). |
+| `app/integration_test/log_symptoms_test.dart` | log symptoms on two days on a real device → both surface under "Recent symptoms"; cleans up after itself. Nightly only. |
 
 ## Codegen
 

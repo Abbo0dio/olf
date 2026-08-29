@@ -10,7 +10,9 @@ part 'app_database.g.dart';
 /// **not** know how the bytes are stored: the constructor takes a
 /// [QueryExecutor] that the platform layer builds — an encrypted SQLCipher
 /// executor in the app, a plain in-memory/temp-file one in tests.
-@DriftDatabase(tables: [CycleEvents, Periods, DailyFlows])
+@DriftDatabase(
+  tables: [CycleEvents, Periods, DailyFlows, SymptomTypes, DailySymptomEntries],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
@@ -20,13 +22,16 @@ class AppDatabase extends _$AppDatabase {
   ///
   /// v2 (p1.1): added the `periods` interval table.
   /// v3 (p1.2): added the `daily_flows` per-day table.
+  /// v4 (p1.5): added the `symptom_types` catalogue + `daily_symptom_entries`,
+  ///            and seeded the built-in symptom names.
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
+      await _seedBuiltInSymptoms();
     },
     onUpgrade: (m, from, to) async {
       if (from < 2) {
@@ -44,9 +49,34 @@ class AppDatabase extends _$AppDatabase {
         // p1.2: per-day flow logging. Purely additive — nothing to backfill.
         await m.createTable(dailyFlows);
       }
+      if (from < 4) {
+        // p1.5: symptom catalogue + per-day entries. Additive; the catalogue is
+        // seeded with the built-in names so an upgraded database looks the same
+        // as a fresh one.
+        await m.createTable(symptomTypes);
+        await m.createTable(dailySymptomEntries);
+        await _seedBuiltInSymptoms();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  /// Insert [kBuiltInSymptomNames] as active, `isBuiltIn` catalogue rows with
+  /// ascending `sortOrder`. Called from both `onCreate` and the v3 → v4 upgrade.
+  Future<void> _seedBuiltInSymptoms() async {
+    await batch((b) {
+      for (var i = 0; i < kBuiltInSymptomNames.length; i++) {
+        b.insert(
+          symptomTypes,
+          SymptomTypesCompanion.insert(
+            name: kBuiltInSymptomNames[i],
+            sortOrder: i,
+            isBuiltIn: const Value(true),
+          ),
+        );
+      }
+    });
+  }
 }

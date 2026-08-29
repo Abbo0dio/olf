@@ -9,6 +9,9 @@ import '../flow/flow_providers.dart';
 import '../flow/flow_quick_log.dart';
 import '../prediction/prediction_format.dart';
 import '../prediction/prediction_providers.dart';
+import '../symptom/symptom_day_sheet.dart';
+import '../symptom/symptom_format.dart';
+import '../symptom/symptom_providers.dart';
 import 'period_editor.dart';
 import 'period_format.dart';
 import 'period_providers.dart';
@@ -16,9 +19,11 @@ import 'period_providers.dart';
 /// The home screen: a month calendar of logged periods and per-day flow, a
 /// running summary, and a history list.
 ///
-/// Tapping a **period day** opens the flow quick-log (p1.2); tapping an empty
-/// day, or the "Add a period" button, opens the period-dates editor (p1.1).
-/// Every view watches the same two streams so they stay in sync.
+/// Tapping a **period day** opens the flow quick-log (p1.2); tapping any other
+/// day opens the symptom day sheet (p1.5), which itself offers "Start a period"
+/// to reach the period-dates editor (p1.1). The "Add a period" button opens
+/// that editor directly. Every view watches the same streams so they stay in
+/// sync.
 class PeriodCalendarView extends ConsumerWidget {
   const PeriodCalendarView({super.key});
 
@@ -78,10 +83,24 @@ class _LoadedState extends ConsumerState<_Loaded> {
         context,
         date: day,
         onEditPeriodDates: () => _edit(period),
+        onAddSymptoms: () => _openSymptoms(day),
       );
       return;
     }
-    // Empty day → log a new period starting here.
+    // Any other day → the low-friction symptom sheet, which offers a shortcut
+    // to start a period here.
+    await _openSymptoms(day, onStartPeriod: () => _startPeriodOn(day));
+  }
+
+  Future<void> _openSymptoms(DateTime day, {VoidCallback? onStartPeriod}) {
+    return showSymptomDaySheet(
+      context,
+      date: day,
+      onStartPeriod: onStartPeriod,
+    );
+  }
+
+  Future<void> _startPeriodOn(DateTime day) async {
     _reportOutcome(await showPeriodEditor(context, initialStart: day));
   }
 
@@ -157,6 +176,17 @@ class _LoadedState extends ConsumerState<_Loaded> {
       for (final c in cycles) c.periodStart: c,
     };
 
+    final symptomEntries =
+        ref.watch(symptomEntriesProvider).value ?? const <DailySymptomEntry>[];
+    final symptomTypes =
+        ref.watch(symptomTypesProvider).value ?? const <SymptomType>[];
+    final symptomIdsByDay = <DateTime, List<int>>{};
+    for (final e in symptomEntries) {
+      (symptomIdsByDay[dateOnly(e.date)] ??= <int>[]).add(e.symptomTypeId);
+    }
+    int symptomCountOn(DateTime day) =>
+        symptomIdsByDay[dateOnly(day)]?.length ?? 0;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
@@ -166,7 +196,14 @@ class _LoadedState extends ConsumerState<_Loaded> {
             periods: _periods,
             today: today,
             todayFlow: flowOn(today),
+            todaySymptomCount: symptomCountOn(today),
             onLogTodayFlow: () => showFlowQuickLog(context, date: today),
+            onLogTodaySymptoms: () => _openSymptoms(
+              today,
+              onStartPeriod: _periodOn(today) == null
+                  ? () => _startPeriodOn(today)
+                  : null,
+            ),
           ),
           if (prediction != null) ...[
             const SizedBox(height: 16),
@@ -185,6 +222,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
             today: today,
             periodOn: _periodOn,
             flowOn: flowOn,
+            symptomCountOn: symptomCountOn,
             onPrev: () =>
                 setState(() => _visibleMonth = addMonths(_visibleMonth, -1)),
             onNext: _visibleMonth.isBefore(firstOfMonth(today))
@@ -211,6 +249,8 @@ class _LoadedState extends ConsumerState<_Loaded> {
             onEdit: _edit,
             onDelete: _deleteFromHistory,
           ),
+          const SizedBox(height: 24),
+          _RecentSymptoms(idsByDay: symptomIdsByDay, types: symptomTypes),
         ],
       ),
     );
@@ -222,64 +262,93 @@ class _Summary extends StatelessWidget {
     required this.periods,
     required this.today,
     required this.todayFlow,
+    required this.todaySymptomCount,
     required this.onLogTodayFlow,
+    required this.onLogTodaySymptoms,
   });
 
   final List<Period> periods;
   final DateTime today;
   final DailyFlow? todayFlow;
+  final int todaySymptomCount;
   final VoidCallback onLogTodayFlow;
+  final VoidCallback onLogTodaySymptoms;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    Widget content;
     if (periods.isEmpty) {
-      return Text('No periods logged yet.', style: theme.textTheme.bodyLarge);
-    }
-
-    final latest = periods.first;
-    final ongoing =
-        latest.endDate == null &&
-        !dateOnly(latest.startDate).isAfter(dateOnly(today));
-
-    if (ongoing) {
-      final day = dayCountSince(latest.startDate, today);
-      final flow = todayFlow;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Day $day',
-            style: theme.textTheme.displaySmall,
-            semanticsLabel: 'Day $day of your period',
-          ),
-          const SizedBox(height: 4),
-          Text('Period started ${formatDay(latest.startDate)}'),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: ActionChip(
-              avatar: const Icon(Icons.water_drop_outlined, size: 18),
-              label: Text(
-                flow == null
-                    ? "Log today's flow"
-                    : "Today's flow: ${flow.intensity.label}",
-              ),
-              onPressed: onLogTodayFlow,
-            ),
-          ),
-        ],
+      content = Text(
+        'No periods logged yet.',
+        style: theme.textTheme.bodyLarge,
       );
+    } else {
+      final latest = periods.first;
+      final ongoing =
+          latest.endDate == null &&
+          !dateOnly(latest.startDate).isAfter(dateOnly(today));
+
+      if (ongoing) {
+        final day = dayCountSince(latest.startDate, today);
+        final flow = todayFlow;
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Day $day',
+              style: theme.textTheme.displaySmall,
+              semanticsLabel: 'Day $day of your period',
+            ),
+            const SizedBox(height: 4),
+            Text('Period started ${formatDay(latest.startDate)}'),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ActionChip(
+                avatar: const Icon(Icons.water_drop_outlined, size: 18),
+                label: Text(
+                  flow == null
+                      ? "Log today's flow"
+                      : "Today's flow: ${flow.intensity.label}",
+                ),
+                onPressed: onLogTodayFlow,
+              ),
+            ),
+          ],
+        );
+      } else {
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Last period', style: theme.textTheme.labelMedium),
+            const SizedBox(height: 4),
+            Text(
+              formatRange(latest.startDate, latest.endDate),
+              style: theme.textTheme.titleMedium,
+            ),
+          ],
+        );
+      }
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Last period', style: theme.textTheme.labelMedium),
-        const SizedBox(height: 4),
-        Text(
-          formatRange(latest.startDate, latest.endDate),
-          style: theme.textTheme.titleMedium,
+        content,
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ActionChip(
+            avatar: const Icon(Icons.spa_outlined, size: 18),
+            label: Text(
+              todaySymptomCount == 0
+                  ? "Log today's symptoms"
+                  : "Today's symptoms: $todaySymptomCount",
+            ),
+            onPressed: onLogTodaySymptoms,
+          ),
         ),
       ],
     );
@@ -292,6 +361,7 @@ class _MonthCalendar extends StatelessWidget {
     required this.today,
     required this.periodOn,
     required this.flowOn,
+    required this.symptomCountOn,
     required this.onPrev,
     required this.onNext,
     required this.onDayTap,
@@ -301,6 +371,7 @@ class _MonthCalendar extends StatelessWidget {
   final DateTime today;
   final Period? Function(DateTime) periodOn;
   final DailyFlow? Function(DateTime) flowOn;
+  final int Function(DateTime) symptomCountOn;
   final VoidCallback onPrev;
   final VoidCallback? onNext;
   final ValueChanged<DateTime> onDayTap;
@@ -321,6 +392,7 @@ class _MonthCalendar extends StatelessWidget {
           today: today,
           period: periodOn(DateTime(month.year, month.month, day)),
           flow: flowOn(DateTime(month.year, month.month, day)),
+          symptomCount: symptomCountOn(DateTime(month.year, month.month, day)),
           onTap: onDayTap,
         ),
     ];
@@ -383,6 +455,7 @@ class _DayCell extends StatelessWidget {
     required this.today,
     required this.period,
     required this.flow,
+    required this.symptomCount,
     required this.onTap,
   });
 
@@ -390,6 +463,7 @@ class _DayCell extends StatelessWidget {
   final DateTime today;
   final Period? period;
   final DailyFlow? flow;
+  final int symptomCount;
   final ValueChanged<DateTime> onTap;
 
   @override
@@ -402,6 +476,7 @@ class _DayCell extends StatelessWidget {
     final parts = <String>[
       inPeriod ? 'period day' : 'no period logged',
       if (f != null) flowSemantics(f.intensity, f.clotSize),
+      if (symptomCount > 0) symptomCountLabel(symptomCount),
     ];
     final semantic = '${formatDay(date)}, ${parts.join(', ')}';
 
@@ -446,6 +521,19 @@ class _DayCell extends StatelessWidget {
                     intensity: f.intensity,
                     hasClot: f.clotSize != null,
                     color: barColor,
+                  ),
+                ],
+                if (symptomCount > 0) ...[
+                  const SizedBox(height: 2),
+                  Container(
+                    width: 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: inPeriod
+                          ? theme.colorScheme.onPrimaryContainer
+                          : theme.colorScheme.tertiary,
+                    ),
                   ),
                 ],
               ],
@@ -556,6 +644,58 @@ class _History extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+      ],
+    );
+  }
+}
+
+/// The recent days that have symptoms logged, newest first, with the symptom
+/// names for each. Names are resolved against the active catalogue; a symptom
+/// that has since been removed drops out of the list (its day still counts on
+/// the calendar).
+class _RecentSymptoms extends StatelessWidget {
+  const _RecentSymptoms({required this.idsByDay, required this.types});
+
+  final Map<DateTime, List<int>> idsByDay;
+  final List<SymptomType> types;
+
+  static const int _maxDays = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final days = idsByDay.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Recent symptoms', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (days.isEmpty)
+          Text('No symptoms logged yet.', style: theme.textTheme.bodyMedium)
+        else
+          for (final day in days.take(_maxDays))
+            Builder(
+              builder: (context) {
+                final names = symptomNames(idsByDay[day]!, types);
+                if (names.isEmpty) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(formatDay(day), style: theme.textTheme.bodyMedium),
+                      Text(
+                        symptomSummary(names),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
       ],
     );

@@ -11,26 +11,36 @@ import 'flow_providers.dart';
 /// Every choice persists immediately (upsert) — there is no Save button, so
 /// logging flow is *one* tap to open plus *one* tap to pick an intensity. When
 /// [onEditPeriodDates] is given (the day belongs to a period) the sheet offers
-/// a button that closes it and opens the period-dates editor.
+/// a button that closes it and opens the period-dates editor. [onAddSymptoms]
+/// closes the sheet and opens the symptom day sheet for the same day.
 Future<void> showFlowQuickLog(
   BuildContext context, {
   required DateTime date,
   VoidCallback? onEditPeriodDates,
+  VoidCallback? onAddSymptoms,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) =>
-        _FlowQuickLogSheet(date: date, onEditPeriodDates: onEditPeriodDates),
+    builder: (_) => _FlowQuickLogSheet(
+      date: date,
+      onEditPeriodDates: onEditPeriodDates,
+      onAddSymptoms: onAddSymptoms,
+    ),
   );
 }
 
 class _FlowQuickLogSheet extends ConsumerStatefulWidget {
-  const _FlowQuickLogSheet({required this.date, this.onEditPeriodDates});
+  const _FlowQuickLogSheet({
+    required this.date,
+    this.onEditPeriodDates,
+    this.onAddSymptoms,
+  });
 
   final DateTime date;
   final VoidCallback? onEditPeriodDates;
+  final VoidCallback? onAddSymptoms;
 
   @override
   ConsumerState<_FlowQuickLogSheet> createState() => _FlowQuickLogSheetState();
@@ -85,6 +95,11 @@ class _FlowQuickLogSheetState extends ConsumerState<_FlowQuickLogSheet> {
   void _editDates() {
     Navigator.of(context).pop();
     widget.onEditPeriodDates?.call();
+  }
+
+  void _addSymptoms() {
+    Navigator.of(context).pop();
+    widget.onAddSymptoms?.call();
   }
 
   @override
@@ -151,7 +166,11 @@ class _FlowQuickLogSheetState extends ConsumerState<_FlowQuickLogSheet> {
               ],
             ),
             const SizedBox(height: 20),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 if (_loaded && _intensity != null)
                   TextButton.icon(
@@ -163,14 +182,18 @@ class _FlowQuickLogSheetState extends ConsumerState<_FlowQuickLogSheet> {
                       minimumSize: const Size(0, 48),
                     ),
                   ),
-                const Spacer(),
+                if (widget.onAddSymptoms != null)
+                  TextButton(
+                    onPressed: _addSymptoms,
+                    style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
+                    child: const Text('Add symptoms'),
+                  ),
                 if (widget.onEditPeriodDates != null)
                   TextButton(
                     onPressed: _editDates,
                     style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
                     child: const Text('Edit period dates'),
                   ),
-                const SizedBox(width: 8),
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(),
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
