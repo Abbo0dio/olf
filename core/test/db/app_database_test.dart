@@ -8,8 +8,8 @@ void main() {
   setUp(() => db = AppDatabase(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  test('schemaVersion is 5', () {
-    expect(db.schemaVersion, 5);
+  test('schemaVersion is 6', () {
+    expect(db.schemaVersion, 6);
   });
 
   test(
@@ -250,6 +250,106 @@ void main() {
       expect(columns['value'], ('TEXT', false));
     },
   );
+
+  test('onCreate builds medications with a soft-archive column (v6)', () async {
+    final rows = await db
+        .customSelect("PRAGMA table_info('medications')")
+        .get();
+    final columns = {
+      for (final r in rows)
+        r.data['name'] as String: (
+          (r.data['type'] as String).toUpperCase(),
+          (r.data['notnull'] as int) == 1,
+        ),
+    };
+
+    expect(
+      columns.keys,
+      containsAll(<String>{
+        'id',
+        'name',
+        'dosage',
+        'notes',
+        'archived_at',
+        'created_at',
+        'updated_at',
+      }),
+    );
+    expect(columns['name'], ('TEXT', true));
+    expect(columns['dosage'], ('TEXT', false)); // nullable
+    expect(columns['archived_at'], ('INTEGER', false)); // nullable
+  });
+
+  test(
+    'onCreate builds birth_control_entries with an open-ended range (v6)',
+    () async {
+      final rows = await db
+          .customSelect("PRAGMA table_info('birth_control_entries')")
+          .get();
+      final columns = {
+        for (final r in rows)
+          r.data['name'] as String: (
+            (r.data['type'] as String).toUpperCase(),
+            (r.data['notnull'] as int) == 1,
+          ),
+      };
+
+      expect(
+        columns.keys,
+        containsAll(<String>{
+          'id',
+          'method',
+          'started_on',
+          'ended_on',
+          'notes',
+          'created_at',
+          'updated_at',
+        }),
+      );
+      expect(columns['method'], ('TEXT', true));
+      expect(columns['started_on'], ('INTEGER', true));
+      expect(columns['ended_on'], ('INTEGER', false)); // nullable = "current"
+    },
+  );
+
+  test('onCreate builds reminders with one row per kind (v6)', () async {
+    final rows = await db.customSelect("PRAGMA table_info('reminders')").get();
+    final columns = {
+      for (final r in rows)
+        r.data['name'] as String: (
+          (r.data['type'] as String).toUpperCase(),
+          (r.data['notnull'] as int) == 1,
+        ),
+    };
+
+    expect(
+      columns.keys,
+      containsAll(<String>{
+        'id',
+        'kind',
+        'hour',
+        'minute',
+        'enabled',
+        'created_at',
+        'updated_at',
+      }),
+    );
+    expect(columns['hour'], ('INTEGER', true));
+    expect(columns['minute'], ('INTEGER', true));
+
+    // UNIQUE (kind) — from the table's customConstraints.
+    await db.customStatement(
+      "INSERT INTO reminders (kind, hour, minute, enabled, created_at, "
+      "updated_at) VALUES ('medication', 9, 0, 1, 0, 0)",
+    );
+    expect(
+      () => db.customStatement(
+        "INSERT INTO reminders (kind, hour, minute, enabled, created_at, "
+        "updated_at) VALUES ('medication', 8, 0, 1, 0, 0)",
+      ),
+      throwsA(anything),
+    );
+  });
 
   test('a fresh database reports user_version == schemaVersion', () async {
     await db.customSelect('SELECT 1').get(); // force open → runs onCreate

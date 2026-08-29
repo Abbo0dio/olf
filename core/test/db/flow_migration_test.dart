@@ -64,7 +64,7 @@ void main() {
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
     expect(version.data.values.first, db.schemaVersion);
-    expect(db.schemaVersion, 5);
+    expect(db.schemaVersion, 6);
 
     // New table exists with the expected shape.
     final columns = await db

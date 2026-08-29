@@ -17,6 +17,8 @@ export 'src/db/tables.dart'
     show
         AppSettings,
         BbtEntries,
+        BirthControlEntries,
+        BirthControlMethod,
         CervicalMucusEntries,
         CervicalMucusType,
         ClotSize,
@@ -25,11 +27,20 @@ export 'src/db/tables.dart'
         DailyFlows,
         DailySymptomEntries,
         FlowIntensity,
+        Medications,
         Periods,
+        ReminderKind,
+        Reminders,
         SymptomTypes,
         kBuiltInSymptomNames;
 export 'src/flow/daily_flow_repository.dart';
 export 'src/flow/drift_daily_flow_repository.dart';
+export 'src/meds/birth_control.dart';
+export 'src/meds/birth_control_repository.dart';
+export 'src/meds/drift_birth_control_repository.dart';
+export 'src/meds/drift_medication_repository.dart';
+export 'src/meds/medication.dart';
+export 'src/meds/medication_repository.dart';
 export 'src/mucus/cervical_mucus.dart';
 export 'src/mucus/cervical_mucus_repository.dart';
 export 'src/mucus/drift_cervical_mucus_repository.dart';
@@ -40,6 +51,9 @@ export 'src/period/period_validation.dart';
 export 'src/prediction/date_range.dart';
 export 'src/prediction/predictor.dart';
 export 'src/prediction/robust_predictor.dart';
+export 'src/reminders/drift_reminder_repository.dart';
+export 'src/reminders/reminder_repository.dart';
+export 'src/reminders/reminder_schedule.dart';
 export 'src/repository/cycle_event_repository.dart';
 export 'src/repository/drift_cycle_event_repository.dart';
 export 'src/settings/drift_settings_repository.dart';
