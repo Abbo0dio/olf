@@ -63,6 +63,12 @@ dependencies:
   timezone: ^0.10.1
   flutter_timezone: ^5.1.0
 
+  # System "save as" / "open file" dialogs for the encrypted backup file
+  # (p1.10). Uses the platform document picker (SAF / UIDocumentPicker) — needs
+  # no storage permission. Confined to lib/src/backup/backup_gateway.dart behind
+  # the BackupFileGateway interface. No ad/analytics/telemetry surface.
+  file_picker: ^8.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

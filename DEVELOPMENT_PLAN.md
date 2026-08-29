@@ -1173,8 +1173,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     build). Worktree + branch cleaned up. **DONE.**
 
 #### p1.9 — Dark mode + gender-neutral, discreet theme baseline
-- **Status:** IN REVIEW
-- **PR:** [#18](https://github.com/Abbo0dio/olf/pull/18)
+- **Status:** DONE
+- **PR:** [#18](https://github.com/Abbo0dio/olf/pull/18) — merged (squash → `fccfc37`)
 - **Branch / worktree:** `feat/p1.9-theme-baseline` / `../olf-wt/p1.9`
 - **Owner:** worker: phase1
 - **Depends on:** p0.2
@@ -1245,9 +1245,13 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     verification batch green; no schema change, no lock drift. Opening PR into `main`.
   - 2026-08-29 — PR [#18](https://github.com/Abbo0dio/olf/pull/18) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-29 — merged (PR #18, squash → `fccfc37`). **DONE.**
 
 #### p1.10 — Local backup & restore (encrypted export / import)
-- **Status:** TODO
+- **Status:** IN REVIEW
+- **PR:** [#19](https://github.com/Abbo0dio/olf/pull/19)
+- **Branch / worktree:** `feat/p1.10-backup-restore` / `../olf-wt/p1.10`
+- **Owner:** worker: phase1
 - **Depends on:** p1.1–p1.7 (whatever schema exists)
 - **Requirement refs:** §4, §9(11)
 - **Goal:** Export all data to a single encrypted file the user controls; import it back on the
@@ -1255,7 +1259,69 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
 - **Acceptance criteria:** export → wipe → import reproduces all data exactly; format is
   versioned; wrong passphrase fails cleanly.
 - **Tests required:** integration (full round trip); unit (serializer versioning).
-- **Log:** — created.
+- **Notes / detail:**
+  - **No schema change.** Backup reads/writes existing tables only.
+  - **`core/lib/src/backup/`** (pure Dart):
+    - `backup_document.dart` — the versioned, still-plaintext shape:
+      `{format: 'olf.backup', formatVersion: 1, appSchemaVersion, createdAt, tables}`.
+      `BackupDocument.fromJson` validates and throws `BackupFormatException` on a wrong
+      `format`, a missing/non-int version, or a version **newer** than this build; an older
+      version falls through to a (currently empty) forward-migration path.
+      `backupFormatVersion` is separate from the DB `schemaVersion`, which travels alongside.
+    - `backup_service.dart` — `BackupService(AppDatabase)`. `export()` does `SELECT *` per
+      table into raw `{column: value}` maps (so integer `DateTime`s and string enum names
+      round-trip byte-for-byte); `import(doc)` wipes + re-inserts **every** table in one
+      transaction (all-or-nothing), parents before children for the one FK, then
+      `notifyUpdates` so open streams rebuild. Refuses a backup whose `appSchemaVersion` ≠
+      this build's. A `tableOrder` constant covers the whole schema; a test fails if a new
+      table is added without updating it.
+    - `backup_cipher.dart` — `BackupCipher.seal/open`. Container: `OLFBK1` magic, 4-byte BE
+      header length, JSON header (KDF params + salt + nonce + GCM tag, all public), then
+      AES-256-GCM ciphertext of the UTF-8 JSON. Key = PBKDF2-HMAC-SHA256(passphrase, salt),
+      210k iterations (stored in the header, so it can rise later). Wrong passphrase →
+      `SecretBoxAuthenticationError` → `BackupPassphraseException` (distinct from
+      `BackupFormatException`). `validateBackupPassphrase` (≥ 8 chars). Uses the new
+      `cryptography` package (pure Dart, no ad/analytics surface) added to `core`.
+  - **`app/lib/src/backup/`:**
+    - `backup_gateway.dart` — `BackupFileGateway` interface (`writeBackup` / `pickBackup`) +
+      `FilePickerBackupFileGateway` using `file_picker` (SAF / `UIDocumentPicker`, **no**
+      storage permission). The one platform touch, behind a seam like p1.7's scheduler.
+    - `backup_controller.dart` — `BackupController` wires service + cipher + gateway; every
+      expected failure (cancel, wrong passphrase, wrong file) is a `RestoreResult` /
+      `ExportResult` value, only bugs throw. Suggests `olf-backup-YYYY-MM-DD.olfbackup`.
+    - `backup_providers.dart` — `backupControllerProvider` (data-branch only),
+      `backupFileGatewayProvider` (overridden in tests).
+    - `backup_page.dart` — `BackupPage`: intro copy, "Create an encrypted backup" (passphrase
+      + confirm dialog), "Restore from a backup file" (replace-everything warning → file →
+      passphrase). Reached from a new **Data** row in Settings. Busy spinner; on restore,
+      pops to home.
+  - **Tests:** core — `backup_document_test.dart` (versioning: rejects newer, non-int,
+    wrong-format, malformed tables/date; round-trips), `backup_cipher_test.dart` (seal/open;
+    wrong passphrase + tampered bytes → `BackupPassphraseException`; garbage/truncated →
+    `BackupFormatException`; passphrase length), `backup_service_test.dart` (`export` → fresh
+    db → `import` reproduces every table exactly; replace-not-merge; schema-version mismatch
+    refused; failed insert rolls back; `tableOrder` == schema). app — `backup_controller_test.dart`
+    (round trip + all result branches through a fake gateway), `backup_flow_test.dart` (widget:
+    Settings → Backup page → export → wipe → restore → data back, pops home; wrong passphrase
+    reported).
+  - **Deferred:** the real `file_picker` path (SAF dialogs) is exercised only manually /
+    on-device, same as p1.7's notification plugin — CI covers the `BackupFileGateway` seam
+    with a fake. gzip of the JSON before encryption; a Phase 2 tie-in so scheduled deletion
+    also scrubs old backups; deriving the DB key from the same passphrase. See §9.
+- **Log:**
+  - 2026-08-29 — created.
+  - 2026-08-29 — claimed by worker: phase1; worktree `../olf-wt/p1.10`, branch
+    `feat/p1.10-backup-restore` off `main` @ `fccfc37`.
+  - 2026-08-29 — built. `core/lib/src/backup/` (document + service + cipher) with
+    `cryptography` added to `core`; `app/lib/src/backup/` (gateway + controller + providers +
+    page); Settings gains a **Data → Backup & restore** row. Tests: core +30
+    (`backup_document`/`backup_cipher`/`backup_service`), app +8
+    (`backup_controller`/`backup_flow`). No schema change, no new Android permission (SAF).
+    `docs/backup-and-restore.md` added; `docs/local-database.md` updated. §7 decision + §9
+    follow-ups recorded. Full local verification batch green; app + core `pubspec.lock`
+    changed for the new deps (noted in PR). Opening PR into `main`.
+  - 2026-08-29 — PR [#19](https://github.com/Abbo0dio/olf/pull/19) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 #### p1.11 — Explicit pregnancy-loss, birth, and postpartum events (minimal)
 - **Status:** TODO
@@ -1544,6 +1610,33 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 ## 7. Decisions Log
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
+
+- 2026-08-29 — **p1.10 backup is a versioned plaintext JSON document, AES-256-GCM'd under a
+  PBKDF2 passphrase, saved through the platform document picker; no schema change; the KDF
+  runs on the main isolate.** Rationale: (1) **Serializer separate from crypto.** `core`'s
+  `BackupDocument` (`{format, formatVersion, appSchemaVersion, createdAt, tables}`) is
+  independently unit-testable for "format is versioned" — `fromJson` rejects a newer version,
+  non-int version, wrong `format`; an older version falls through to a forward-migration hook
+  (empty for v1). `BackupService.export/import` copies rows **raw** (`SELECT *` → `{col:
+  value}` maps; parameterised `INSERT` back) so raw SQLite values — including the integer
+  timestamps drift stores for `DateTime` and the string names it stores for enums — round-trip
+  byte-for-byte, making "reproduces all data exactly" true by construction. `import` wipes and
+  re-inserts every table in **one transaction** (all-or-nothing) and refuses a backup whose
+  `appSchemaVersion` differs from the running build. A `tableOrder` constant + a test that
+  asserts it equals the live schema means adding a table fails loudly here. (2) **AES-256-GCM
+  under PBKDF2-HMAC-SHA256** (210k iterations, stored in the file header so it can rise later)
+  via the new `cryptography` package (pure Dart, Dart-ecosystem, **not** ad/analytics —
+  denylist is unaffected) added to `core`. A wrong passphrase fails the GCM tag →
+  `BackupPassphraseException`, kept distinct from `BackupFormatException` so the UI can say
+  "wrong passphrase" vs "not a backup file". Container: `OLFBK1` magic + BE header length +
+  public JSON header + ciphertext. (3) **`file_picker`** (added to `app`) for the save/open
+  dialogs — it uses SAF / `UIDocumentPicker`, so **no storage permission** and no manifest
+  change; confined to `backup_gateway.dart` behind a `BackupFileGateway` interface with a fake,
+  exactly like p1.7's notification scheduler, so CI never loads the plugin channel. (4) **No
+  schema change / no migration** — backup only reads and writes tables that already exist.
+  (5) The KDF runs on the main isolate for now (one-off, explicit user action); moving it to a
+  background isolate, gzip before encrypt, and deriving the DB key from the same passphrase are
+  §9 follow-ups. — worker: phase1.
 
 - 2026-08-29 — **p1.9 theme + pronoun baseline: no schema change, "golden tests" shipped as
   both-theme render tests, inclusive copy locked in by a source-scanning lint.** Rationale:
@@ -1855,6 +1948,22 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   and no true-black OLED variant. No in-app font-scale / high-contrast / reduce-motion controls
   (rely on OS settings for now). The theme is a single seed colour — no user theme/accent
   choice. — noted by worker: phase1 during p1.9.
+- **p1.10 follow-ups:** the PBKDF2 KDF (210k iterations) runs on the **main isolate** — a
+  one-off explicit action, but a large database on a slow phone could jank for a second or two;
+  move it to a background isolate (and consider Argon2id). The JSON document is **not
+  compressed** before encryption — fine at Phase 1 data volumes, add gzip when history grows.
+  Backup and the DB-at-rest key are **independent secrets** (backup passphrase vs. the enclave
+  key); a future revision could derive both from one passphrase. **No integrity of the backup
+  set** — nothing tracks how many backups exist or where, and Phase 2's scheduled auto-deletion
+  (p2.3) does **not** yet reach saved backup files (§9(11) / requirements "delete means
+  delete"). Restore is **whole-database replace only** — no merge, no selective import, no
+  "preview before restoring", and it hard-refuses a backup from a different `schemaVersion`
+  rather than migrating it (so a backup taken now cannot be restored after the next schema
+  bump until a format migration is written). The real `file_picker` SAF/UIDocumentPicker path
+  is manual/on-device only in CI (the `BackupFileGateway` fake covers the seam), like p1.7's
+  scheduler. `.olfbackup` is not registered as an app file type, so "open with olf" from a
+  file manager does nothing. No auto/periodic backup, no cloud target. — noted by worker:
+  phase1 during p1.10.
 - (add more here)
 
 ## 10. Orphaned / cut work

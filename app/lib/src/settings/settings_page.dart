@@ -3,11 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../backup/backup_page.dart';
 import '../personalization/personalization_providers.dart';
 import '../security/pin_providers.dart';
 import '../theme/theme_providers.dart';
 
-/// App settings (p1.8 lock; p1.9 appearance + pronouns).
+/// App settings (p1.8 lock; p1.9 appearance + pronouns; p1.10 backup).
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -74,6 +75,17 @@ class SettingsPage extends ConsumerWidget {
               title: const Text('Change PIN'),
               onTap: () => _setPin(context, ref),
             ),
+          const _SectionHeader('Data'),
+          ListTile(
+            leading: const Icon(Icons.save_outlined),
+            title: const Text('Backup & restore'),
+            subtitle: const Text(
+              'Save an encrypted copy of everything, or restore one.',
+            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const BackupPage())),
+          ),
         ],
       ),
     );

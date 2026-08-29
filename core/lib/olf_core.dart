@@ -4,6 +4,9 @@
 /// §3): the mobile app and the future desktop shell both consume it.
 library;
 
+export 'src/backup/backup_cipher.dart';
+export 'src/backup/backup_document.dart';
+export 'src/backup/backup_service.dart';
 export 'src/bbt/bbt_chart.dart';
 export 'src/bbt/bbt_repository.dart';
 export 'src/bbt/drift_bbt_repository.dart';

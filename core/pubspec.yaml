@@ -17,6 +17,10 @@ dependencies:
   # SHA-256 / HMAC for the local PIN hash (p1.8). Pure Dart, Dart-team package —
   # no ad/analytics surface. See lib/src/security/pin.dart.
   crypto: ^3.0.6
+  # AES-256-GCM + PBKDF2 for the encrypted local backup file (p1.10). Pure Dart,
+  # no native code path exercised, no ad/analytics surface. See
+  # lib/src/backup/backup_cipher.dart.
+  cryptography: ^2.7.0
 
 dev_dependencies:
   lints: ^5.0.0
