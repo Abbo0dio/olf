@@ -41,3 +41,8 @@ mise exec -- dart format core app
 
 CI (`.github/workflows/ci.yml`) runs format, analyze, test, dependency-audit and build on every
 PR into `main`.
+
+## License
+
+[GNU General Public License v3.0](./LICENSE). Forks and derivatives must stay open source under
+the same terms — a period tracker's privacy promise is only as good as its auditable source.
