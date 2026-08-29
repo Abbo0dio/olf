@@ -872,8 +872,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     up. **DONE.**
 
 #### p1.6 — BBT (manual) & cervical-mucus / fertility-awareness inputs
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/15
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/15 (merged)
 - **Branch / worktree:** `feat/p1.6-fertility-inputs` / `../olf-wt/p1.6`
 - **Owner:** worker: phase1
 - **Depends on:** p1.5
@@ -968,9 +968,14 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     clean, codegen regenerated + committed, v4→v5 migration test, dependency audit PASS
     (no new deps), no lock drift. `docs/local-database.md` + §7 decision + §9 follow-ups
     recorded. PR #15 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
+  - 2026-08-29 — **merged** (PR #15, squash → `6ac5c5c`). CI green. Worktree + branch
+    cleaned up. **DONE.**
 
 #### p1.7 — Medication & birth-control entries + one basic reminder
-- **Status:** TODO
+- **Status:** IN PROGRESS
+- **PR:** _(pending)_
+- **Branch / worktree:** `feat/p1.7-meds-reminder` / `../olf-wt/p1.7`
+- **Owner:** worker: phase1
 - **Depends on:** p0.4
 - **Requirement refs:** §1, §7
 - **Goal:** Record medications and birth-control method (pill/patch/ring/injection). Ship **one**
@@ -979,7 +984,97 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
 - **Acceptance criteria:** method + schedule stored; a daily reminder fires; reminder text
   contains no health details.
 - **Tests required:** unit (schedule model); a test around the notification scheduling wrapper.
-- **Log:** — created.
+- **Notes / detail:**
+  - **Schema v6** — three new tables in `core/lib/src/db/tables.dart`, all purely additive
+    (`if (from < 6) { createTable × 3 }`), `schemaVersion → 6`:
+    - **`Medications`** (`@DataClassName('Medication')`) — the user's medication list: `id`
+      (autoIncrement PK), `name` (TextColumn, 1–80 chars), `dosage` (TextColumn nullable, free
+      text e.g. "50 mg"), `notes` (TextColumn nullable), `archivedAt` (DateTimeColumn nullable —
+      soft delete, mirrors `SymptomTypes`), `createdAt` / `updatedAt`.
+    - **`BirthControlEntries`** (`@DataClassName('BirthControlEntry')`) — birth-control method
+      history: `id` (autoIncrement PK), `method` (`textEnum<BirthControlMethod>`), `startedOn`
+      (DateTimeColumn — date-only), `endedOn` (DateTimeColumn nullable — `null` = current),
+      `notes` (TextColumn nullable), `createdAt` / `updatedAt`.
+      `enum BirthControlMethod { pill, patch, ring, injection, iud, implant, condom, other }`.
+    - **`Reminders`** (`@DataClassName('Reminder')`) — generalisable reminder store (Phase 4
+      extends it); p1.7 keeps exactly one row: `id` (autoIncrement PK), `kind`
+      (`textEnum<ReminderKind>` — `{ medication }` for now), `hour` (IntColumn 0–23), `minute`
+      (IntColumn 0–59), `enabled` (BoolColumn), `createdAt` / `updatedAt`. **No free-text
+      column** — the notification body is a fixed generic string, so no health detail can leak.
+  - **`core/lib/src/meds/`** (pure Dart):
+    - `medication.dart` — `MedicationDraft` + `MedicationError { nameEmpty, nameTooLong }` +
+      `describe()` + `MedicationException` + `validateMedication(name)`.
+    - `birth_control.dart` — `BirthControlMethod` enum + `BirthControlMethodInfo` extension
+      (`label`), `BirthControlDraft`, `BirthControlError { startInFuture, endBeforeStart }` +
+      `describe()` + `BirthControlException` + `validateBirthControl({startedOn, endedOn, today})`.
+    - `medication_repository.dart` / `drift_medication_repository.dart` — `watchActive`
+      (archivedAt IS NULL, ordered by name), `add`, `update`, `archive`, `unarchive`.
+    - `birth_control_repository.dart` / `drift_birth_control_repository.dart` — `watchAll`,
+      `current` (latest row with `endedOn IS NULL`), `add`, `update`, `end`, `delete`.
+  - **`core/lib/src/reminders/`** (pure Dart — **the "schedule model"**):
+    - `reminder_schedule.dart` — `enum ReminderKind { medication }`;
+      `class ReminderSchedule { final ReminderKind kind; final int hour; final int minute;
+      final bool enabled; }` with `ReminderError { hourOutOfRange, minuteOutOfRange }` +
+      `describe()` + `ReminderException` + `validateReminderTime(hour, minute)`; and the pure
+      function `DateTime nextOccurrence(ReminderSchedule, {required DateTime from})` — the next
+      wall-clock `DateTime` at `hour:minute` at or after `from` (today if still ahead, else
+      tomorrow). This is the unit-tested schedule model.
+    - `reminder_repository.dart` / `drift_reminder_repository.dart` — `watch(kind)` /
+      `get(kind)` (the single row or `null`), `save(ReminderSchedule)` (upsert on `kind`).
+  - **`app/lib/src/reminders/`:**
+    - `reminder_scheduler.dart` — `abstract interface class ReminderScheduler {
+      Future<bool> ensurePermission(); Future<void> scheduleDaily(ReminderSchedule);
+      Future<void> cancel(ReminderKind); }`. Fixed notification copy lives here as
+      `const reminderTitle = 'olf'` / `const reminderBody = 'Time for your daily check-in.'` —
+      **no medication name, dosage, method, or the word "medication" appears in either.**
+    - `local_notification_reminder_scheduler.dart` — real impl over
+      **`flutter_local_notifications`** + **`timezone`** + **`flutter_timezone`** (new deps —
+      none denylisted; none are ad/analytics/crash SDKs). Lazy plugin init; `zonedSchedule`
+      with `DateTimeComponents.time` for daily repeat; a stable notification id per
+      `ReminderKind`. All plugin access is behind this class so `flutter test` never loads a
+      platform channel.
+    - `reminder_providers.dart` — `reminderSchedulerProvider` (overridable),
+      `reminderRepositoryProvider`, `medicationReminderProvider`
+      (`StreamProvider<ReminderSchedule?>`), and a `ReminderController` that writes the row and
+      calls the scheduler (`scheduleDaily` on enable / time change, `cancel` on disable).
+  - **`app/lib/src/meds/`:** `meds_providers.dart` (`medicationRepositoryProvider`,
+    `medicationsProvider`, `birthControlRepositoryProvider`, `currentBirthControlProvider`),
+    `meds_page.dart` — a **Medications & reminders** screen reached from a new `AppBar`
+    action on `HomePage` (`Icons.medication_outlined`, tooltip "Medications & reminders"):
+    - "Daily reminder" — `SwitchListTile` (enabled) + a time row opening `showTimePicker`;
+      both persist immediately and drive `ReminderController`; enabling first calls
+      `ensurePermission()`.
+    - "Birth control" — current method (or "None set") + an edit sheet (method
+      `DropdownButton` / chips + start-date picker).
+    - "Medications" — list of active meds; add / edit / archive via a small form sheet.
+  - **Manifest:** `flutter_local_notifications` needs Android `<uses-permission>` entries —
+    `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED`, `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`,
+    `VIBRATE` — each with an adjacent `<!-- audited: … Reviewed 2026-08-29 by worker: phase1. -->`
+    comment so the dependency-audit CI passes. iOS init requests alert/badge/sound perms.
+  - **`app/lib/main.dart`:** `main()` becomes `async` — `WidgetsFlutterBinding.ensureInitialized()`
+    then best-effort `LocalNotificationReminderScheduler` init (guarded; failure is non-fatal
+    and the app still runs offline).
+  - **Tests:** core — `meds/medication_test.dart`, `meds/birth_control_test.dart`,
+    `meds/drift_medication_repository_test.dart`,
+    `meds/drift_birth_control_repository_test.dart`,
+    `reminders/reminder_schedule_test.dart` (**schedule model** — validation +
+    `nextOccurrence` across the day boundary / exact-now), `reminders/drift_reminder_repository_test.dart`,
+    `db/meds_migration_test.dart` (v5 → v6), update `db/app_database_test.dart`
+    (schemaVersion 6 + three `onCreate` shape tests) and the other migration tests (→ 6).
+    app — `reminders/reminder_controller_test.dart` (**test around the wrapper**, with a
+    `FakeReminderScheduler`: enabling schedules a daily reminder at the chosen time; disabling
+    cancels; changing the time reschedules; the scheduled title/body are the fixed generic
+    strings and contain no medication/method text), `meds/meds_page_test.dart` (add a
+    medication → shows; set a birth-control method → shows; reminder switch state persists).
+  - **Codegen:** regenerate + commit `core/lib/src/db/app_database.g.dart`.
+- **Log:**
+  - 2026-08-29 — created.
+  - 2026-08-29 — claimed by worker: phase1; worktree `../olf-wt/p1.7`, branch
+    `feat/p1.7-meds-reminder` off `main` @ `6ac5c5c`. Building: schema v6 (`medications`,
+    `birth_control_entries`, `reminders`), `core/meds` + `core/reminders` (schedule model +
+    `nextOccurrence` + validation + repositories), an `app` `ReminderScheduler` wrapper over
+    `flutter_local_notifications` + `timezone` + `flutter_timezone` (new deps) with a fake for
+    tests, a Medications & reminders screen, and a fixed no-PHI notification body.
 
 #### p1.8 — Anonymous-by-default, local PIN lock, disclaimers, first-run privacy explainer
 - **Status:** TODO
