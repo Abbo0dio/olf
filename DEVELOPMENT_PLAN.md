@@ -972,8 +972,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     cleaned up. **DONE.**
 
 #### p1.7 — Medication & birth-control entries + one basic reminder
-- **Status:** IN PROGRESS
-- **PR:** _(pending)_
+- **Status:** IN REVIEW
+- **PR:** https://github.com/Abbo0dio/olf/pull/16
 - **Branch / worktree:** `feat/p1.7-meds-reminder` / `../olf-wt/p1.7`
 - **Owner:** worker: phase1
 - **Depends on:** p0.4
@@ -1091,6 +1091,7 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     committed (idempotent), v5→v6 migration test, dependency audit PASS (38 rules; new deps
     are not ad/analytics/crash SDKs), no core lock drift. `docs/local-database.md` +
     §7 decision + §9 follow-ups recorded.
+  - 2026-08-29 — PR #16 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
 
 #### p1.8 — Anonymous-by-default, local PIN lock, disclaimers, first-run privacy explainer
 - **Status:** TODO
