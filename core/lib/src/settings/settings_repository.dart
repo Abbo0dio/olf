@@ -6,6 +6,13 @@ abstract final class SettingKeys {
   /// `'true'` once the first-run privacy explainer has been acknowledged (p1.8).
   /// Absent / anything else means it still needs to be shown.
   static const String onboardingComplete = 'onboarding_complete';
+
+  /// Manual light/dark override (p1.9): `'system'` (default), `'light'`, `'dark'`.
+  static const String themeMode = 'theme_mode';
+
+  /// The user's pronouns for copy (p1.9) — a [Pronouns] name. Absent resolves to
+  /// they/them so default copy is correct with nothing set.
+  static const String pronouns = 'pronouns';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).

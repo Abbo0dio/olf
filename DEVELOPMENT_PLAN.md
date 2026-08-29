@@ -1096,8 +1096,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     iOS build). Worktree + branch cleaned up. **DONE.**
 
 #### p1.8 — Anonymous-by-default, local PIN lock, disclaimers, first-run privacy explainer
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/17
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/17 (merged)
 - **Branch / worktree:** `feat/p1.8-pin-disclaimers` / `../olf-wt/p1.8`
 - **Owner:** worker: phase1
 - **Depends on:** p0.4
@@ -1169,9 +1169,14 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     format clean, no schema change / no codegen change, dependency audit PASS (38 rules).
     `docs/privacy-and-lock.md` added; §7 decision + §9 follow-ups recorded.
   - 2026-08-29 — PR #17 opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
+  - 2026-08-29 — **merged** (PR #17, squash → `62e4991`). CI green (incl. Android APK + iOS
+    build). Worktree + branch cleaned up. **DONE.**
 
 #### p1.9 — Dark mode + gender-neutral, discreet theme baseline
-- **Status:** TODO
+- **Status:** IN REVIEW
+- **PR:** [#18](https://github.com/Abbo0dio/olf/pull/18)
+- **Branch / worktree:** `feat/p1.9-theme-baseline` / `../olf-wt/p1.9`
+- **Owner:** worker: phase1
 - **Depends on:** p0.2
 - **Requirement refs:** §4, §9(7)
 - **Goal:** A neutral, non-pink, non-gendered default theme with full light/dark support and an
@@ -1179,7 +1184,67 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
 - **Acceptance criteria:** every screen to date renders correctly in both themes; a copy
   lint/checklist for gendered language is added and passes.
 - **Tests required:** golden tests (light + dark) for main screens; a string-audit test.
-- **Log:** — created.
+- **Notes / detail:**
+  - **No schema change.** Two new `app_settings` keys via `SettingKeys`: `theme_mode`
+    (`system` / `light` / `dark`) and `pronouns` (a `Pronouns` name). Both reuse the p1.6
+    key/value store.
+  - **`app/lib/src/theme/`:** `olf_theme.dart` — the inline `ThemeData` from `main.dart`
+    extracted and hardened into `olfTheme(Brightness)`: the existing neutral sage seed
+    (`0xFF4C6B5A` — deliberately not pink/gendered), Material 3, a shared text/`CardTheme`
+    baseline so light and dark match. `theme_providers.dart` — `themeModeProvider`
+    (`StreamProvider<ThemeMode>` off `settingsRepository.watch(theme_mode)`, `system` until the
+    DB is open / the user chooses), plus a setter on the settings repo.
+  - **`main.dart`:** `OlfApp` becomes a `ConsumerWidget`, watches `themeModeProvider`, and
+    passes `olfTheme(light)` / `olfTheme(dark)` + the chosen `themeMode`.
+  - **`core/lib/src/personalization/pronouns.dart`** (pure Dart): `enum Pronouns
+    { unspecified, sheHer, theyThem, heHim }`; `PronounForms { subject, object,
+    possessiveDeterminer, possessivePronoun, reflexive }`; `formsFor(Pronouns)` —
+    `unspecified` resolves to they/them so default copy is correct with nothing set;
+    `describePronouns` (`'they / them'` …); `pronounsToStorage` / `fromStorage`;
+    `pronounExampleSentence(Pronouns)` — a short sentence built from the forms, the first
+    concrete consumer of the setting.
+  - **`app/lib/src/settings/settings_page.dart`** (grows): an **Appearance** section — a
+    `SegmentedButton` for System / Light / Dark — and a **Pronouns** row (`unspecified` /
+    `they/them` / `she/her` / `he/him`) with a live `pronounExampleSentence` preview. Both
+    persist immediately.
+  - **`app/lib/src/personalization/personalization_providers.dart`:** `pronounsProvider`
+    (`StreamProvider<Pronouns>` off `settings`, default `unspecified`).
+  - **Inclusive-language sweep:** existing copy is already second-person / neutral (audited —
+    no "hey girl" / "ladies" / assumed-partner language). p1.9 **locks that in**:
+    `docs/inclusive-language.md` (the checklist) + `app/test/copy/inclusive_language_test.dart`
+    — scans every string literal under `app/lib/**` and `core/lib/**` against a denied-phrase
+    list and fails on a match.
+  - **Tests:** app — `theme/theme_render_test.dart` (each main screen — empty calendar,
+    calendar with data, day-log sheet, meds, settings, first-run, PIN unlock — pumps in both
+    `olfTheme(light)` and `olfTheme(dark)` with **no exception and no `RenderFlex` overflow**,
+    and `Theme.of(context).brightness` matches); `settings/settings_page_test.dart` grows
+    (switch theme mode → persisted + `MaterialApp.themeMode` follows; pick pronouns → persisted
+    + preview updates); `copy/inclusive_language_test.dart`. core —
+    `personalization/pronouns_test.dart` (`formsFor` incl. `unspecified`→they, storage
+    round-trip, example sentence per value).
+  - **Pixel goldens** (`matchesGoldenFile`) are **deferred** — they need golden CI infra +
+    pinned fonts to not be flaky on the ubuntu runner; the render tests above cover the
+    acceptance criterion ("renders correctly in both themes"). Noted in §9.
+- **Log:**
+  - 2026-08-29 — created.
+  - 2026-08-29 — claimed by worker: phase1; worktree `../olf-wt/p1.9`, branch
+    `feat/p1.9-theme-baseline` off `main` @ `62e4991`. Building: extract + harden the light/dark
+    `ThemeData`, a persisted theme-mode override, a `core` `Pronouns` model + optional pronoun
+    setting with one live copy use, an inclusive-language checklist + enforcing test, and
+    both-theme render tests for every screen. No schema change.
+  - 2026-08-29 — built. `core/lib/src/personalization/pronouns.dart` (+ export) with
+    `pronouns_test.dart` (7 tests); `app/lib/src/theme/olf_theme.dart` +
+    `theme/theme_providers.dart` + `personalization/personalization_providers.dart`; `OlfApp`
+    now a `ConsumerWidget` on `themeModeProvider`; `settings_page.dart` grew an **Appearance**
+    (`SegmentedButton`) and **Pronouns** (`RadioGroup`) section with a live example-sentence
+    preview. Tests: `app/test/theme/theme_render_test.dart` (8 — 4 screens × 2 brightnesses),
+    `settings_page_test.dart` +2 (theme-mode persists & `MaterialApp.themeMode` follows;
+    pronoun persists & preview updates), `app/test/copy/inclusive_language_test.dart` (source
+    scan, passes — existing copy was already clean). Docs: `docs/inclusive-language.md` (new),
+    `docs/local-database.md` app_settings row. §7 decision + §9 follow-ups recorded. Full local
+    verification batch green; no schema change, no lock drift. Opening PR into `main`.
+  - 2026-08-29 — PR [#18](https://github.com/Abbo0dio/olf/pull/18) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 #### p1.10 — Local backup & restore (encrypted export / import)
 - **Status:** TODO
@@ -1480,6 +1545,29 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-29 — **p1.9 theme + pronoun baseline: no schema change, "golden tests" shipped as
+  both-theme render tests, inclusive copy locked in by a source-scanning lint.** Rationale:
+  (1) **No schema bump** — `theme_mode` (`system`/`light`/`dark`) and `pronouns` (a `Pronouns`
+  enum name; absent → `unspecified` → they/them) are two more `app_settings` keys via
+  `SettingKeys`, reusing the p1.6 store. (2) The inline `ThemeData` from `main.dart` is
+  extracted to `app/lib/src/theme/olf_theme.dart` as `olfTheme(Brightness)` — same neutral
+  sage seed `0xFF4C6B5A` (deliberately not pink), Material 3, one shared `Card`/`AppBar`/text
+  baseline so light and dark are consistent; `OlfApp` becomes a `ConsumerWidget` that watches
+  `themeModeProvider` and passes `theme` + `darkTheme` + the chosen `themeMode`. (3) The
+  acceptance criterion "every screen renders correctly in both themes" is met by
+  `app/test/theme/theme_render_test.dart` — each main screen (home, calendar with data, day-log
+  sheet, meds, settings, first-run, PIN unlock) pumps under both brightnesses asserting **no
+  exception, no `RenderFlex` overflow, and `Theme.of(context).brightness` matches**. **Pixel
+  goldens (`matchesGoldenFile`) are deferred** — they need golden CI infra + pinned fonts to
+  not be flaky on the ubuntu runner (§9). (4) The pronoun model is pure-Dart
+  `core/lib/src/personalization/pronouns.dart` (`formsFor` with `unspecified`→they/them,
+  `pronounExampleSentence` as the first live consumer, storage round-trip). (5) Existing copy
+  was already second-person / neutral; p1.9 **locks it in** with `docs/inclusive-language.md`
+  (human checklist) + `app/test/copy/inclusive_language_test.dart`, which scans every string
+  literal under `app/lib` and `core/lib` against a denied-phrase regex list and fails the
+  build on a match (bare pronouns are **not** denied — the pronoun feature needs them). —
+  worker: phase1.
+
 - 2026-08-29 — **The p1.8 PIN is a UI-level gate, not a cryptographic boundary; no schema
   change; a new `AppGate` root layers first-run → PIN → home.** Rationale: (1) the database is
   already encrypted at rest with a key in the platform secure enclave, so in Phase 1 the PIN
@@ -1754,6 +1842,19 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   switch). The first-run screen has no "why does this matter" deep-dive or links, and no
   language toggle. `SettingsPage` currently holds only the app lock; export/import (p1.10) and
   theme/pronoun (p1.9) join it there. — noted by worker: phase1 during p1.8.
+- **p1.9 follow-ups:** **pixel goldens are deferred** — the both-theme render tests assert "no
+  exception / no overflow / brightness matches" but not exact pixels; a real
+  `matchesGoldenFile` suite needs golden CI infra + a pinned font so it is not flaky on the
+  ubuntu runner (candidate for a Phase 2/5 polish slice). Only **one live consumer** of the
+  pronoun setting (`pronounExampleSentence` in Settings) — no screen copy is actually
+  personalised yet; wiring `formsFor` into real strings (prediction card, reminders, day sheet)
+  is future work, and doing so needs those strings to move off plain literals, which the
+  inclusive-language lint currently assumes. The lint is **literal-only** — it cannot see
+  copy assembled by interpolation/concatenation from non-literal parts, asset text, or store
+  listings. `themeMode` is app-wide only — no per-screen or scheduled (e.g. sunset) dark mode,
+  and no true-black OLED variant. No in-app font-scale / high-contrast / reduce-motion controls
+  (rely on OS settings for now). The theme is a single seed colour — no user theme/accent
+  choice. — noted by worker: phase1 during p1.9.
 - (add more here)
 
 ## 10. Orphaned / cut work

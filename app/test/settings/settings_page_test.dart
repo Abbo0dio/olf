@@ -68,4 +68,66 @@ void main() {
       },
     );
   });
+
+  testWidgets('pick Dark in Appearance → persisted and MaterialApp follows', (
+    tester,
+  ) async {
+    final db = memoryDb();
+    final settings = DriftSettingsRepository(db);
+
+    await pumpOlf(
+      tester,
+      overrides: [dbOverride(db)],
+      body: () async {
+        await openSettings(tester);
+        expect(
+          tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+          ThemeMode.system,
+        );
+
+        await tester.tap(find.text('Dark'));
+        await tester.pumpAndSettle();
+
+        expect(await settings.get(SettingKeys.themeMode), 'dark');
+        expect(
+          tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+          ThemeMode.dark,
+        );
+      },
+    );
+  });
+
+  testWidgets(
+    'pick she / her in Pronouns → persisted and the preview updates',
+    (tester) async {
+      final db = memoryDb();
+      final settings = DriftSettingsRepository(db);
+
+      await pumpOlf(
+        tester,
+        overrides: [dbOverride(db)],
+        body: () async {
+          await openSettings(tester);
+          expect(
+            find.text(pronounExampleSentence(Pronouns.unspecified)),
+            findsOneWidget,
+          );
+
+          await tester.tap(
+            find.widgetWithText(
+              RadioListTile<Pronouns>,
+              describePronouns(Pronouns.sheHer),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          expect(await settings.get(SettingKeys.pronouns), 'sheHer');
+          expect(
+            find.text(pronounExampleSentence(Pronouns.sheHer)),
+            findsOneWidget,
+          );
+        },
+      );
+    },
+  );
 }

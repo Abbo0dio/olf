@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/app_gate.dart';
 import 'src/reminders/local_notification_reminder_scheduler.dart';
+import 'src/theme/olf_theme.dart';
+import 'src/theme/theme_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,31 +21,20 @@ Future<void> main() async {
 
 /// Root of the olf app.
 ///
-/// Real theming (neutral, non-gendered palette + pronoun setting) is p1.9.
-class OlfApp extends StatelessWidget {
+/// Neutral, discreet, non-gendered theme (see `theme/olf_theme.dart`) with a
+/// user-selectable light/dark override (p1.9).
+class OlfApp extends ConsumerWidget {
   const OlfApp({super.key});
 
-  // Provisional neutral seed — deliberately not pink/gendered. p1.9 owns the
-  // real design-token baseline.
-  static const Color _seed = Color(0xFF4C6B5A);
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider).valueOrNull ?? ThemeMode.system;
     return MaterialApp(
       title: 'olf',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: _seed),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: _seed,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      themeMode: mode,
+      theme: olfTheme(Brightness.light),
+      darkTheme: olfTheme(Brightness.dark),
       home: const AppGate(),
     );
   }

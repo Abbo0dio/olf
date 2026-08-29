@@ -140,8 +140,8 @@ linked to a `periods` row.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `key` | TEXT, **PRIMARY KEY** | Well-known keys in `SettingKeys` — `temperature_unit` (p1.6), `onboarding_complete` (p1.8). |
-| `value` | TEXT | Opaque string; each caller owns its encoding. |
+| `key` | TEXT, **PRIMARY KEY** | Well-known keys in `SettingKeys` — `temperature_unit` (p1.6), `onboarding_complete` (p1.8), `theme_mode` and `pronouns` (p1.9). |
+| `value` | TEXT | Opaque string; each caller owns its encoding. `theme_mode` ∈ `system` \| `light` \| `dark` (absent → `system`). `pronouns` is a `Pronouns` enum name (`sheHer` \| `theyThem` \| `heHim`); absent or `''` → `unspecified`, which copy resolves to they/them. |
 | `updated_at` | INTEGER (unix seconds) | |
 
 Cervical-mucus observations feed an **observed fertile-window** line on the prediction card

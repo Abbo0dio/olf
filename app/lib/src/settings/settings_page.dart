@@ -3,25 +3,61 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../personalization/personalization_providers.dart';
 import '../security/pin_providers.dart';
+import '../theme/theme_providers.dart';
 
-/// App settings (p1.8). For now just the optional app lock; p1.9 adds theme and
-/// pronoun here.
+/// App settings (p1.8 lock; p1.9 appearance + pronouns).
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pinSet = ref.watch(pinCredentialProvider).valueOrNull != null;
+    final themeMode =
+        ref.watch(themeModeProvider).valueOrNull ?? ThemeMode.system;
+    final pronouns =
+        ref.watch(pronounsProvider).valueOrNull ?? Pronouns.unspecified;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Text('Privacy'),
+          const _SectionHeader('Appearance'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: SegmentedButton<ThemeMode>(
+              segments: [
+                for (final m in ThemeMode.values)
+                  ButtonSegment(value: m, label: Text(themeModeLabel(m))),
+              ],
+              selected: {themeMode},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => setThemeMode(ref, s.first),
+            ),
           ),
+          const _SectionHeader('Pronouns'),
+          RadioGroup<Pronouns>(
+            groupValue: pronouns,
+            onChanged: (v) => setPronouns(ref, v ?? Pronouns.unspecified),
+            child: Column(
+              children: [
+                for (final p in Pronouns.values)
+                  RadioListTile<Pronouns>(
+                    value: p,
+                    title: Text(describePronouns(p)),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Text(
+              pronounExampleSentence(pronouns),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          const _SectionHeader('Privacy'),
           SwitchListTile(
             value: pinSet,
             title: const Text('App lock (PIN)'),
@@ -155,6 +191,25 @@ class _SetPinDialogState extends State<_SetPinDialog> {
         ),
         TextButton(onPressed: _save, child: const Text('Save')),
       ],
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.title);
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(
+        title,
+        style: theme.textTheme.titleSmall?.copyWith(
+          color: theme.colorScheme.primary,
+        ),
+      ),
     );
   }
 }
