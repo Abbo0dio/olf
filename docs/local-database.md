@@ -237,6 +237,29 @@ Because nothing is stored, any period edit / delete simply recomputes — there 
 row to migrate or invalidate, and no schema change in p1.3 or p1.4**. There is no 28-day (or
 any) default: with too little history the figures are `null` and the UI asks for more logging.
 
+## Backup & restore (p1.10)
+
+`core/lib/src/backup/` reads every table into a **versioned plaintext `BackupDocument`**
+(`{format: 'olf.backup', formatVersion, appSchemaVersion, createdAt, tables}`) and restores one
+back. Rows are copied **raw** — `SELECT *` into `{column: value}` maps, parameterised `INSERT`
+back — so integer `DateTime`s, `REAL` temperatures and string enum names round-trip
+byte-for-byte. `BackupService.import` wipes and re-inserts **every** table in one transaction
+(all-or-nothing), refuses a document whose `appSchemaVersion` ≠ the running build's, then calls
+`notifyUpdates` so open streams rebuild.
+
+`BackupCipher` wraps the document as `OLFBK1` magic + a big-endian header length + a public
+JSON header (KDF params, salt, nonce, GCM tag) + **AES-256-GCM** ciphertext of the UTF-8 JSON.
+The key is **PBKDF2-HMAC-SHA256(passphrase, salt)**, 210 000 iterations (stored in the header).
+A wrong passphrase fails the GCM tag and raises `BackupPassphraseException` — distinct from the
+`BackupFormatException` raised for a non-backup / newer-format file. This is a **separate
+secret** from the at-rest SQLCipher key; backup does not touch that key.
+
+The file is written / read through the platform document picker (`file_picker`, SAF /
+`UIDocumentPicker` — **no storage permission**), behind `app/lib/src/backup/backup_gateway.dart`
+so tests never load the plugin. **No schema change** — backup only touches tables that already
+exist. Full detail and the deferred items are in
+[`backup-and-restore.md`](backup-and-restore.md).
+
 ## Tests
 
 | File | Covers |
