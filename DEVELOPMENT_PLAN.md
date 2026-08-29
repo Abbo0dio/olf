@@ -787,8 +787,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     + branch cleaned up. **DONE.**
 
 #### p1.5 — Symptom, mood & discharge logging with custom symptoms
-- **Status:** IN REVIEW
-- **PR:** https://github.com/Abbo0dio/olf/pull/14
+- **Status:** DONE
+- **PR:** https://github.com/Abbo0dio/olf/pull/14 (merged)
 - **Branch / worktree:** `feat/p1.5-symptom-logging` / `../olf-wt/p1.5`
 - **Owner:** worker: phase1
 - **Depends on:** p0.4
@@ -868,9 +868,13 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     format clean, codegen regenerated + committed, v3→v4 migration test, dependency audit PASS,
     no lock drift. `docs/local-database.md` + §7 decision + §9 follow-ups recorded. PR #14
     opened into `main`; **IN REVIEW** — awaiting orchestrator merge.
+  - 2026-08-29 — **merged** (PR #14, squash → `c0ebac2`). CI green. Worktree + branch cleaned
+    up. **DONE.**
 
 #### p1.6 — BBT (manual) & cervical-mucus / fertility-awareness inputs
-- **Status:** TODO
+- **Status:** IN PROGRESS
+- **Branch / worktree:** `feat/p1.6-fertility-inputs` / `../olf-wt/p1.6`
+- **Owner:** worker: phase1
 - **Depends on:** p1.5
 - **Requirement refs:** §1
 - **Goal:** Manual basal body temperature entry with a simple chart over the cycle; structured
@@ -878,7 +882,80 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
 - **Acceptance criteria:** temperature chart per cycle; unit handling (°C/°F); mucus entries
   feed the fertile-window display from p1.4.
 - **Tests required:** unit (unit conversion, chart data); widget (chart, entry).
-- **Log:** — created.
+- **Notes / detail:**
+  - **Schema v5** — three new tables in `core/lib/src/db/tables.dart`, all purely additive
+    (`if (from < 5) { createTable × 3 }`), `schemaVersion → 5`:
+    - **`BbtEntries`** (`@DataClassName('BbtEntry')`) — one basal temperature per day: `date`
+      (DateTimeColumn **PK**), `tempCelsius` (RealColumn — **canonical storage in °C**, all
+      conversion is display-only), `createdAt` / `updatedAt`. Upsert on `date`, preserve
+      `createdAt` (mirrors `DailyFlows`).
+    - **`CervicalMucusEntries`** (`@DataClassName('CervicalMucusEntry')`) — one observation per
+      day: `date` (**PK**), `type` (`textEnum<CervicalMucusType>`), `createdAt` / `updatedAt`.
+      `enum CervicalMucusType { dry, sticky, creamy, watery, eggWhite }` — Billings-style,
+      ordered least → most fertile.
+    - **`AppSettings`** (`@DataClassName('AppSetting')`) — tiny key/value prefs store (`key`
+      TextColumn **PK**, `value` TextColumn, `updatedAt`). First use: the temperature display
+      unit. Reusable by p1.8 / p1.9.
+  - **`core/lib/src/bbt/`** (pure Dart):
+    - `temperature.dart` — `enum TemperatureUnit { celsius, fahrenheit }` (+ `symbol`),
+      `celsiusToFahrenheit` / `fahrenheitToCelsius`, `convertFromCelsius` / `toCelsius`;
+      `BbtError { tooLow, tooHigh }` + `validateCelsius` (plausible BBT 34.0–43.0 °C) +
+      `describe()` + `BbtException`.
+    - `bbt_repository.dart` / `drift_bbt_repository.dart` — `tempOn`, `watchAll`, `setTemp`
+      (stores °C), `clearTemp`. Mirrors `DailyFlowRepository`.
+    - `bbt_chart.dart` — `BbtChartPoint { cycleDay, date, celsius }` +
+      `bbtChartForCycle(Cycle, Iterable<BbtEntry>)` mapping each in-cycle reading to its 1-based
+      cycle-day index; points outside the cycle span are dropped.
+  - **`core/lib/src/mucus/`** (pure Dart):
+    - `cervical_mucus.dart` — `CervicalMucusTypeInfo` extension: `label`, `fertilityRank`
+      (0–4), `isFertileQuality` (`creamy` and wetter).
+    - `cervical_mucus_repository.dart` / `drift_cervical_mucus_repository.dart` — `mucusOn`,
+      `watchAll`, `setMucus`, `clearMucus`.
+    - `fertile_window_signal.dart` — **the p1.4 integration.** `observedFertileWindow(
+      Iterable<CervicalMucusEntry>, {required DateTime cycleStart, required DateTime today})
+      → DateRange?`: over the current cycle's fertile-quality mucus days, returns
+      `[firstFertileQualityDay, lastFertileQualityDay + fertileDaysAfterOvulation]`, or `null`
+      when there are none. The statistical `RobustPredictor` / `Predictor` seam is **untouched**
+      (kept pristine for Phase 3); the observed window is merged in at the display layer.
+  - **`core/lib/src/settings/`** — `settings_repository.dart` /
+    `drift_settings_repository.dart` (`get(key)`, `set(key, value)`, `watch(key)`), plus a
+    `SettingKeys` holder (`temperatureUnit`).
+  - **`app/lib/src/bbt/`:** `bbt_providers.dart` (`bbtRepositoryProvider`, `bbtEntriesProvider`,
+    `temperatureUnitProvider` — `StreamProvider<TemperatureUnit>` off `settingsRepository.watch`,
+    default `celsius`), `bbt_format.dart` (`formatTemp(celsius, unit)`), `bbt_chart_widget.dart`
+    (a self-contained `CustomPaint` line chart — **no chart package**, denylist-safe; Y axis in
+    the active unit).
+  - **`app/lib/src/mucus/`:** `mucus_providers.dart` (`cervicalMucusRepositoryProvider`,
+    `cervicalMucusEntriesProvider`, `observedFertileWindowProvider` — `Provider<DateRange?>`
+    off `cervicalMucusEntriesProvider` + `cyclesProvider`), `mucus_format.dart`.
+  - **`app/lib/src/settings/settings_providers.dart`** — `settingsRepositoryProvider`.
+  - **Day sheet** (`symptom_day_sheet.dart`, kept as the one daily log sheet): below the
+    symptom chips, a **"Temperature & fluid"** section — a temperature row (shows the reading
+    in the active unit, or "Add"; opens a small decimal-`TextField` dialog with a °C/°F toggle
+    that also writes the unit pref, validated via `validateCelsius`) and a `Wrap` of
+    `ChoiceChip`s for `CervicalMucusType`. Both persist immediately.
+  - **`period_calendar_page.dart`:** new `_BbtCard` (shown when the current cycle has ≥ 2 BBT
+    points) rendering `bbt_chart_widget`; `_PredictionCard` gains an optional
+    `observedFertileWindow` — when present, the fertile-window block adds a "Fertile signs
+    (from your notes)" line with that range, and the semantic label mentions it. Existing
+    screen text unchanged when there are no mucus observations.
+  - **Tests:** core — `bbt/temperature_test.dart`, `bbt/drift_bbt_repository_test.dart`,
+    `bbt/bbt_chart_test.dart`, `mucus/cervical_mucus_test.dart`,
+    `mucus/drift_cervical_mucus_repository_test.dart`, `mucus/fertile_window_signal_test.dart`,
+    `settings/drift_settings_repository_test.dart`, `db/fertility_migration_test.dart` (v4 → v5),
+    update `db/app_database_test.dart` (schemaVersion 5 + three new `onCreate` shape tests) and
+    the other migration tests (→ 5). app — `bbt/bbt_entry_test.dart` (enter °F → stored °C →
+    shown back in °F), `bbt/bbt_chart_test.dart` (chart renders for a seeded cycle),
+    `mucus/mucus_entry_test.dart` (pick a type → persists; a fertile-quality pick surfaces in
+    the prediction card's observed-window line).
+  - **Codegen:** regenerate + commit `core/lib/src/db/app_database.g.dart`.
+- **Log:**
+  - 2026-08-29 — created.
+  - 2026-08-29 — claimed by worker: phase1; worktree `../olf-wt/p1.6`, branch
+    `feat/p1.6-fertility-inputs` off `main` @ `c0ebac2`. Building: schema v5 (`bbt_entries`,
+    `cervical_mucus_entries`, `app_settings`), `core/bbt` + `core/mucus` + `core/settings`,
+    temperature conversion + validation, per-cycle BBT chart, Billings mucus classification
+    feeding an observed fertile-window line on the prediction card, day-sheet entry controls.
 
 #### p1.7 — Medication & birth-control entries + one basic reminder
 - **Status:** TODO
