@@ -4,6 +4,10 @@
 /// §3): the mobile app and the future desktop shell both consume it.
 library;
 
+export 'src/bbt/bbt_chart.dart';
+export 'src/bbt/bbt_repository.dart';
+export 'src/bbt/drift_bbt_repository.dart';
+export 'src/bbt/temperature.dart';
 export 'src/cycle/cycle.dart';
 export 'src/cycle/cycle_derivation.dart';
 export 'src/date_math.dart';
@@ -11,6 +15,10 @@ export 'src/db/app_database.dart';
 export 'src/db/database_key_store.dart';
 export 'src/db/tables.dart'
     show
+        AppSettings,
+        BbtEntries,
+        CervicalMucusEntries,
+        CervicalMucusType,
         ClotSize,
         CycleEventType,
         CycleEvents,
@@ -22,6 +30,10 @@ export 'src/db/tables.dart'
         kBuiltInSymptomNames;
 export 'src/flow/daily_flow_repository.dart';
 export 'src/flow/drift_daily_flow_repository.dart';
+export 'src/mucus/cervical_mucus.dart';
+export 'src/mucus/cervical_mucus_repository.dart';
+export 'src/mucus/drift_cervical_mucus_repository.dart';
+export 'src/mucus/fertile_window_signal.dart';
 export 'src/period/drift_period_repository.dart';
 export 'src/period/period_repository.dart';
 export 'src/period/period_validation.dart';
@@ -30,6 +42,8 @@ export 'src/prediction/predictor.dart';
 export 'src/prediction/robust_predictor.dart';
 export 'src/repository/cycle_event_repository.dart';
 export 'src/repository/drift_cycle_event_repository.dart';
+export 'src/settings/drift_settings_repository.dart';
+export 'src/settings/settings_repository.dart';
 export 'src/symptom/drift_symptom_repository.dart';
 export 'src/symptom/symptom_repository.dart';
 export 'src/symptom/symptom_validation.dart';

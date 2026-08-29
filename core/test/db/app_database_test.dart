@@ -8,8 +8,8 @@ void main() {
   setUp(() => db = AppDatabase(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  test('schemaVersion is 4', () {
-    expect(db.schemaVersion, 4);
+  test('schemaVersion is 5', () {
+    expect(db.schemaVersion, 5);
   });
 
   test(
@@ -175,6 +175,79 @@ void main() {
         ),
         throwsA(anything),
       );
+    },
+  );
+
+  test(
+    'onCreate builds bbt_entries with the expected columns and types (v5)',
+    () async {
+      final rows = await db
+          .customSelect("PRAGMA table_info('bbt_entries')")
+          .get();
+      final columns = {
+        for (final r in rows)
+          r.data['name'] as String: (
+            (r.data['type'] as String).toUpperCase(),
+            (r.data['notnull'] as int) == 1,
+            (r.data['pk'] as int) != 0,
+          ),
+      };
+
+      expect(
+        columns.keys,
+        containsAll(<String>{
+          'date',
+          'temp_celsius',
+          'created_at',
+          'updated_at',
+        }),
+      );
+      expect(columns['date'], ('INTEGER', true, true)); // primary key
+      expect(columns['temp_celsius'], ('REAL', true, false));
+    },
+  );
+
+  test(
+    'onCreate builds cervical_mucus_entries with the expected columns (v5)',
+    () async {
+      final rows = await db
+          .customSelect("PRAGMA table_info('cervical_mucus_entries')")
+          .get();
+      final columns = {
+        for (final r in rows)
+          r.data['name'] as String: (
+            (r.data['type'] as String).toUpperCase(),
+            (r.data['notnull'] as int) == 1,
+            (r.data['pk'] as int) != 0,
+          ),
+      };
+
+      expect(
+        columns.keys,
+        containsAll(<String>{'date', 'type', 'created_at', 'updated_at'}),
+      );
+      expect(columns['date'], ('INTEGER', true, true)); // primary key
+      expect(columns['type'], ('TEXT', true, false));
+    },
+  );
+
+  test(
+    'onCreate builds app_settings as a keyed key/value store (v5)',
+    () async {
+      final rows = await db
+          .customSelect("PRAGMA table_info('app_settings')")
+          .get();
+      final columns = {
+        for (final r in rows)
+          r.data['name'] as String: (
+            (r.data['type'] as String).toUpperCase(),
+            (r.data['pk'] as int) != 0,
+          ),
+      };
+
+      expect(columns.keys, containsAll(<String>{'key', 'value', 'updated_at'}));
+      expect(columns['key'], ('TEXT', true)); // primary key
+      expect(columns['value'], ('TEXT', false));
     },
   );
 

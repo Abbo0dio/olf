@@ -58,7 +58,7 @@ void main() {
     // (symptom catalogue + entries).
     final version = await db.customSelect('PRAGMA user_version').getSingle();
     expect(version.data.values.first, db.schemaVersion);
-    expect(db.schemaVersion, 4);
+    expect(db.schemaVersion, 5);
 
     // The v3 table was created along the way too.
     final flowTable = await db

@@ -25,7 +25,7 @@ void main() {
             find.bySemanticsLabel('${formatDay(today)}, no period logged'),
           );
           await tester.pumpAndSettle();
-          expect(find.text('Symptoms — ${formatDay(today)}'), findsOneWidget);
+          expect(find.text('Day log — ${formatDay(today)}'), findsOneWidget);
 
           // tap 2 + 3: pick two symptoms — each persists immediately
           await tester.tap(chip('Cramps'));
