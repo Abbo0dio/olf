@@ -2,8 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/home_page.dart';
+import 'src/reminders/local_notification_reminder_scheduler.dart';
 
-void main() => runApp(const ProviderScope(child: OlfApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Best-effort: prime the local-notification wrapper so an already-enabled
+  // reminder keeps firing. Failure here (no plugin, denied platform) must not
+  // stop the app — everything else works fully offline.
+  try {
+    await LocalNotificationReminderScheduler.instance.ensureInitialized();
+  } catch (_) {
+    // ignored — the reminder screen still works; scheduling just no-ops.
+  }
+  runApp(const ProviderScope(child: OlfApp()));
+}
 
 /// Root of the olf app.
 ///

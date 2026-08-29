@@ -207,3 +207,100 @@ class AppSettings extends Table {
   @override
   Set<Column> get primaryKey => {key};
 }
+
+/// A medication the user takes, kept for their own reference (schema v6, p1.7).
+///
+/// This is the *list*, not a dose log — p1.7 records what you take, not each
+/// dose (per-dose logging is a later phase). Removal is a **soft archive**
+/// (`archivedAt`) so a medication can leave the active list without dropping
+/// anything a later phase attaches to it. `dosage` and `notes` are free text
+/// and live only in the encrypted database — they are **never** placed in a
+/// notification (see [Reminders]).
+@DataClassName('Medication')
+class Medications extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get name => text().withLength(min: 1, max: 80)();
+
+  /// Free text, e.g. "50 mg", "2 tablets". Optional.
+  TextColumn get dosage => text().nullable()();
+
+  TextColumn get notes => text().nullable()();
+
+  /// Set when the user removes the medication; `null` while it is active.
+  DateTimeColumn get archivedAt => dateTime().nullable()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// A hormonal or barrier birth-control method. `other` is a catch-all so the
+/// list never blocks logging. Order is roughly by how the method is used
+/// day-to-day; nothing in code depends on it.
+enum BirthControlMethod {
+  pill,
+  patch,
+  ring,
+  injection,
+  iud,
+  implant,
+  condom,
+  other,
+}
+
+/// One stretch of time on a given birth-control method (schema v6, p1.7).
+///
+/// `startedOn` / `endedOn` are **calendar dates** (local, time-of-day zeroed on
+/// write). A `null` `endedOn` means "currently using". History is kept —
+/// switching methods ends the current row and inserts a new one — so a later
+/// phase can line a method change up against symptoms or cycle changes.
+@DataClassName('BirthControlEntry')
+class BirthControlEntries extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get method => textEnum<BirthControlMethod>()();
+
+  DateTimeColumn get startedOn => dateTime()();
+
+  DateTimeColumn get endedOn => dateTime().nullable()();
+
+  TextColumn get notes => text().nullable()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// What a stored [Reminders] row is about. p1.7 ships exactly one kind; Phase 4
+/// generalises the table (per-medication, several times a day, snooze, …).
+enum ReminderKind { medication }
+
+/// A single recurring local reminder (schema v6, p1.7).
+///
+/// p1.7 keeps **one** row (`kind = medication`): a daily notification at
+/// `hour`:`minute` local time, on or off. There is deliberately **no free-text
+/// column** — the notification body is a fixed, generic string chosen in the
+/// app layer, so no medication name, dosage or method can ever reach the lock
+/// screen. `UNIQUE (kind)` keeps it to one row per kind.
+@DataClassName('Reminder')
+class Reminders extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get kind => textEnum<ReminderKind>()();
+
+  /// 0–23. Range is enforced in the repository (`validateReminderTime`).
+  IntColumn get hour => integer()();
+
+  /// 0–59. Range is enforced in the repository (`validateReminderTime`).
+  IntColumn get minute => integer()();
+
+  BoolColumn get enabled => boolean().withDefault(const Constant(false))();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  List<String> get customConstraints => ['UNIQUE (kind)'];
+}

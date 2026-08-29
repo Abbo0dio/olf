@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import 'meds/meds_page.dart';
 import 'period/period_calendar_page.dart';
 import 'providers.dart';
 
@@ -14,7 +15,19 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final database = ref.watch(appDatabaseProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('olf')),
+      appBar: AppBar(
+        title: const Text('olf'),
+        actions: [
+          if (database case AsyncData())
+            IconButton(
+              icon: const Icon(Icons.medication_outlined),
+              tooltip: 'Medications & reminders',
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute<void>(builder: (_) => const MedsPage())),
+            ),
+        ],
+      ),
       body: switch (database) {
         AsyncData() => const PeriodCalendarView(),
         AsyncError(:final error) => Center(

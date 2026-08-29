@@ -1075,6 +1075,22 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     `nextOccurrence` + validation + repositories), an `app` `ReminderScheduler` wrapper over
     `flutter_local_notifications` + `timezone` + `flutter_timezone` (new deps) with a fake for
     tests, a Medications & reminders screen, and a fixed no-PHI notification body.
+  - 2026-08-29 — built. Schema v6: `medications` (soft-archived list, name-validated),
+    `birth_control_entries` (method history, `ended_on IS NULL` = current), `reminders`
+    (`UNIQUE (kind)`, one row, no free-text column). `core/meds` (validation + two drift
+    repos), `core/reminders` (`ReminderSchedule` + `validateReminderTime` + `nextOccurrence`
+    pure model, drift repo). App: `ReminderScheduler` interface + `flutter_local_notifications`
+    impl (inexact daily `zonedSchedule`, `timezone` + `flutter_timezone`, all behind the one
+    file) + fake; `ReminderController` keeps the row and the OS notification in step; fixed
+    generic notification copy (`'olf'` / `'Time for your daily check-in.'`). Medications &
+    reminders screen off a home AppBar icon (reminder switch + time, birth-control method
+    picker + history, medication add/edit/archive). `main()` now async, best-effort plugin
+    init. Android: core-library desugaring in `build.gradle.kts`; two `audited:` manifest
+    permissions (`POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED`). iOS: `UNUserNotificationCenter`
+    delegate line. core 221 / app 44 green, analyze + format clean, codegen regenerated +
+    committed (idempotent), v5→v6 migration test, dependency audit PASS (38 rules; new deps
+    are not ad/analytics/crash SDKs), no core lock drift. `docs/local-database.md` +
+    §7 decision + §9 follow-ups recorded.
 
 #### p1.8 — Anonymous-by-default, local PIN lock, disclaimers, first-run privacy explainer
 - **Status:** TODO
@@ -1400,6 +1416,30 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-08-29 — **Medications, birth control and the one daily reminder are three additive
+  tables at `schemaVersion` 6; the reminder stores no free text, and the notification plugin
+  sits behind a `ReminderScheduler` interface (p1.7).** New tables: `medications(id, name,
+  dosage?, notes?, archived_at?, created_at, updated_at)` — a soft-archived list, name
+  validated, mirroring `symptom_types`; `birth_control_entries(id, method, started_on,
+  ended_on?, notes?, created_at, updated_at)` — a *history*, `ended_on IS NULL` = current, and
+  `switchTo` closes the previous open row so a method change can later be lined up against
+  symptoms; `reminders(id, kind UNIQUE, hour, minute, enabled, created_at, updated_at)` — a
+  table (not an `app_settings` key) so Phase 4's granular system extends it, but p1.7 keeps
+  exactly one row. Rationale: (1) **no free-text column on `reminders`** — the notification
+  title/body are fixed generic constants in `app/lib/src/reminders/reminder_scheduler.dart`
+  (`'olf'` / `'Time for your daily check-in.'`), so no medication name, dosage or method can
+  reach a lock screen; the acceptance criterion "reminder text contains no health details" is a
+  compile-time fact, asserted in `reminder_controller_test.dart`. (2) The **pure schedule
+  model** (`ReminderSchedule` + `nextOccurrence` + `validateReminderTime`) lives in `core`;
+  the OS wrapper (`flutter_local_notifications`) is confined to one app file behind an
+  interface with a fake, so widget tests never load a platform channel and Phase 4 can widen
+  the wrapper without touching `core`. (3) New app deps `flutter_local_notifications` +
+  `timezone` + `flutter_timezone` — none are ad/analytics/crash SDKs, none are denylisted; the
+  reminder is *inexact* (`AndroidScheduleMode.inexactAllowWhileIdle`) so it needs **no
+  exact-alarm permission**; the two app-manifest permissions (`POST_NOTIFICATIONS`,
+  `RECEIVE_BOOT_COMPLETED`) each carry an `audited:` comment. (4) Birth control is a history,
+  not a single value, for the same reason symptoms are dated — a later phase correlates.
+  — worker: phase1.
 - 2026-08-29 — **BBT is stored in Celsius; mucus is a Billings enum; both are day-keyed tables,
   and mucus feeds the fertile window only at the display layer (p1.6).** `schemaVersion` bumped
   to **5**: `bbt_entries(date PK, temp_celsius REAL, created_at, updated_at)`,
@@ -1601,6 +1641,23 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   dialog's toggle; a real settings surface is p1.8/p1.9. Mucus is a single daily observation
   (no sensation vs. appearance split, no "checked, saw nothing" vs. "didn't check").
   — noted by worker: phase1 during p1.6.
+- **p1.7 follow-ups:** the daily reminder is **inexact** (`inexactAllowWhileIdle`) — the OS may
+  fire it minutes late and it deliberately does not request `SCHEDULE_EXACT_ALARM`; a
+  minute-accurate option is Phase 4. Only **one** reminder, one time a day, one `ReminderKind`
+  — no per-medication reminders, no "twice daily", no snooze, no day-of-week filter (all Phase
+  4, which the `reminders` table is shaped for). Local-timezone resolution falls back to **UTC**
+  if `flutter_timezone` fails, so a reminder could be off by the UTC offset on an
+  unusual device; there is no re-anchor on a travel/DST change beyond what
+  `matchDateTimeComponents: DateTimeComponents.time` gives. Tapping the notification just opens
+  the app — no deep link to the meds screen. `hour`/`minute` have no DB `CHECK` (repository-only
+  validation, like `temp_celsius`). Birth control: no reminder tie-in (e.g. "pill at 9pm"), no
+  pack/placebo tracking, no injection-due-date maths; the method history is recorded but nothing
+  reads it yet. Medications: a plain list — no schedule, no per-dose log, no interaction/refill
+  data, no reminder per medication. The meds screen is reachable only from a home AppBar icon;
+  a real Settings hub is p1.8/p1.9. The `ReminderScheduler` real path (`zonedSchedule` firing
+  on a device) is exercised only manually / on-device — the CI coverage is the wrapper contract
+  test with a fake, per the task's "test around the notification scheduling wrapper".
+  — noted by worker: phase1 during p1.7.
 - (add more here)
 
 ## 10. Orphaned / cut work

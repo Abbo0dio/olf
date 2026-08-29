@@ -55,6 +55,14 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # One daily on-device reminder (p1.7). No ad/analytics/telemetry surface —
+  # scheduling and firing are fully local. `timezone` + `flutter_timezone` give
+  # zonedSchedule a real local zone; all three are used only from
+  # lib/src/reminders/local_notification_reminder_scheduler.dart.
+  flutter_local_notifications: ^20.1.0
+  timezone: ^0.10.1
+  flutter_timezone: ^5.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

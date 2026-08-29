@@ -153,6 +153,53 @@ only, so Phase 3's engine swap stays a drop-in.
 
 `schemaVersion = 5`.
 
+## Schema v6 (p1.7)
+
+Adds a medication list, a birth-control method history, and one recurring reminder. None of
+the three is linked to a `periods` row.
+
+`medications` — the user's medication list (not a dose log):
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | INTEGER, **PRIMARY KEY AUTOINCREMENT** | |
+| `name` | TEXT (1–80) | Validated in `MedicationRepository` (`validateMedicationName`). |
+| `dosage` | TEXT, nullable | Free text, e.g. "50 mg". Blank is stored as NULL. |
+| `notes` | TEXT, nullable | Free text. Blank is stored as NULL. |
+| `archived_at` | INTEGER (unix seconds), nullable | Set on removal — a **soft archive** (mirrors `symptom_types`). `NULL` = active. |
+| `created_at` / `updated_at` | INTEGER (unix seconds) | `updated_at` bumped on every edit. |
+
+`birth_control_entries` — one row per stretch of time on a method:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | INTEGER, **PRIMARY KEY AUTOINCREMENT** | |
+| `method` | TEXT | `BirthControlMethod` name — `pill` / `patch` / `ring` / `injection` / `iud` / `implant` / `condom` / `other`. |
+| `started_on` | INTEGER (unix seconds) | **Calendar date**, `dateOnly` on write. |
+| `ended_on` | INTEGER (unix seconds), nullable | `NULL` = the current method. `switchTo` closes the previous open row the day before the new start. |
+| `notes` | TEXT, nullable | |
+| `created_at` / `updated_at` | INTEGER (unix seconds) | |
+
+`reminders` — the single daily local reminder (Phase 4 generalises this table):
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | INTEGER, **PRIMARY KEY AUTOINCREMENT** | |
+| `kind` | TEXT, **UNIQUE** | `ReminderKind` name — only `medication` in p1.7. `UNIQUE (kind)` keeps it to one row per kind. |
+| `hour` / `minute` | INTEGER | Local wall-clock time. Range enforced in `ReminderRepository.save` (`validateReminderTime`). |
+| `enabled` | INTEGER (0/1) | Default `0`. |
+| `created_at` / `updated_at` | INTEGER (unix seconds) | |
+
+There is **no free-text column on `reminders`**: the notification wording is a fixed generic
+string in the app layer (`reminder_scheduler.dart`), so no medication name, dosage or method
+can reach a lock screen. The pure schedule model + `nextOccurrence(...)` live in
+`core/lib/src/reminders/reminder_schedule.dart`; the OS-notification wrapper
+(`flutter_local_notifications`) is confined to
+`app/lib/src/reminders/local_notification_reminder_scheduler.dart` behind a `ReminderScheduler`
+interface, with a fake in tests.
+
+`schemaVersion = 6`.
+
 ## Migrations
 
 `MigrationStrategy.onUpgrade` runs the steps below in order. Every schema change:
@@ -168,6 +215,7 @@ only, so Phase 3's engine swap stays a drop-in.
 | `from < 3` (p1.2) | Creates `daily_flows`. Purely additive — nothing is backfilled, and existing `periods` / `cycle_events` rows are left untouched. Verified by `core/test/db/flow_migration_test.dart` (real on-disk v2 file → upgrade → assert `daily_flows` shape, period row intact, table usable). `period_migration_test.dart` also runs v1 straight through to the current version. |
 | `from < 4` (p1.5) | Creates `symptom_types` + `daily_symptom_entries` and seeds the built-in symptom names. Purely additive — existing `periods` / `daily_flows` / `cycle_events` rows are untouched. Verified by `core/test/db/symptom_migration_test.dart` (real on-disk v3 file → upgrade → assert both table shapes, catalogue seeded, period + flow rows intact, tables usable); `flow_migration_test.dart` and `period_migration_test.dart` also run older versions straight through and check the catalogue seeded. |
 | `from < 5` (p1.6) | Creates `bbt_entries`, `cervical_mucus_entries` and `app_settings`. Purely additive — nothing is backfilled, existing rows are untouched. Verified by `core/test/db/fertility_migration_test.dart` (real on-disk v4 file with period + flow + symptom rows → upgrade → assert the three new tables exist, old rows intact, all three new repos usable). |
+| `from < 6` (p1.7) | Creates `medications`, `birth_control_entries` and `reminders`. Purely additive — nothing is backfilled, existing rows are untouched. Verified by `core/test/db/meds_migration_test.dart` (real on-disk v5 file with period + settings rows → upgrade → assert the three new tables exist, old rows intact, all three new repos usable, and `reminders` rejects a second row for the same `kind`). |
 
 drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) is still **not** wired up
 — the migration tests hand-build the old schema. Adopting the snapshot tooling is a tracked
@@ -193,11 +241,12 @@ any) default: with too little history the figures are `null` and the UI asks for
 
 | File | Covers |
 |------|--------|
-| `core/test/db/app_database_test.dart` | schemaVersion (5), `onCreate` columns/types for `cycle_events`, `periods`, `daily_flows`, `symptom_types`, `daily_symptom_entries` (composite PK), `bbt_entries`, `cervical_mucus_entries` **and** `app_settings`, built-in seed order, `daily_symptom_entries` FK enforced, `user_version`, `beforeOpen` FKs. |
+| `core/test/db/app_database_test.dart` | schemaVersion (6), `onCreate` columns/types for `cycle_events`, `periods`, `daily_flows`, `symptom_types`, `daily_symptom_entries` (composite PK), `bbt_entries`, `cervical_mucus_entries`, `app_settings`, `medications`, `birth_control_entries` **and** `reminders` (incl. `UNIQUE (kind)`), built-in seed order, `daily_symptom_entries` FK enforced, `user_version`, `beforeOpen` FKs. |
 | `core/test/db/period_migration_test.dart` | v1 on-disk DB → open through `AppDatabase` → upgraded to the current version, `periods` created, every `periodStart` carried over, `cycle_events` intact, `daily_flows` present, symptom catalogue seeded. |
 | `core/test/db/flow_migration_test.dart` | v2 on-disk DB → open through `AppDatabase` → `daily_flows` created with the expected shape, existing period untouched, later v4 migration also seeds the catalogue. |
 | `core/test/db/symptom_migration_test.dart` | v3 on-disk DB → open through `AppDatabase` → `symptom_types` + `daily_symptom_entries` created with the expected shapes, catalogue seeded in order, existing period + flow rows intact, tables usable. |
 | `core/test/db/fertility_migration_test.dart` | v4 on-disk DB (period + flow + symptom rows) → open through `AppDatabase` → `bbt_entries` / `cervical_mucus_entries` / `app_settings` created, old rows intact, all three new repos usable. |
+| `core/test/db/meds_migration_test.dart` | v5 on-disk DB (period + settings rows) → open through `AppDatabase` → `medications` / `birth_control_entries` / `reminders` created, old rows intact, all three new repos usable, and `reminders` rejects a second row for the same `kind`. |
 | `core/test/flow/drift_daily_flow_repository_test.dart` | `setFlow` date-only + optional clot, upsert preserves `created_at` / bumps `updated_at`, dropping a clot, `clearFlow` + no-op, `watchAll` emissions, flow survives period delete. |
 | `core/test/symptom/symptom_validation_test.dart` | `validateSymptomName` trims, empty / too-long / case-insensitive-duplicate, rename keeps its own name, error copy. |
 | `core/test/symptom/drift_symptom_repository_test.dart` | fresh DB seeded in order; `addType` append + validation throws; `renameType` incl. case change; `reorderTypes` rewrites `sort_order`; `archiveType` hides but keeps entries; archived name reusable; `watchTypes` emissions; `setSymptom` toggle idempotent on both edges, date-only; `clearDay`; `watchAllEntries` newest-first; independent of period delete. |
@@ -226,6 +275,13 @@ any) default: with too little history the figures are `null` and the UI asks for
 | `app/test/bbt/bbt_entry_test.dart` | enter a basal temperature in °F from the day sheet → stored canonically in °C, shown back in °F; an implausible reading is blocked with a message and Save disabled. |
 | `app/test/bbt/bbt_chart_test.dart` | the home screen shows a per-cycle BBT chart once there are two in-cycle readings (with a summarising semantics label); no chart with only one. |
 | `app/test/mucus/mucus_entry_test.dart` | pick a cervical-fluid quality → persists, tapping again clears; a fertile-quality observation surfaces a "Fertile signs (from your notes)" line on the prediction card. |
+| `core/test/meds/medication_test.dart` / `core/test/meds/birth_control_test.dart` | `validateMedicationName` trim / empty / too-long; `BirthControlMethod` labels; `validateBirthControlDates` future-start + end-before-start by calendar day; error copy. |
+| `core/test/meds/drift_medication_repository_test.dart` | `add` trims blanks to NULL + validates; name-ordered case-insensitive `watchActive` excludes archived; `edit` bumps `updated_at`; archive / unarchive; stream emissions. |
+| `core/test/meds/drift_birth_control_repository_test.dart` | `switchTo` sets a current entry and closes the previous the day before (same-day → on its own start); future-start rejected; `stop` + no-op; `edit` range validation; `watchCurrent` emissions. |
+| `core/test/reminders/reminder_schedule_test.dart` | `validateReminderTime` edges + hour-before-minute; `ReminderSchedule` equality / `copyWith`; `nextOccurrence` today-ahead / rolled-to-tomorrow / exact-now / month boundary / ignores `enabled`. |
+| `core/test/reminders/drift_reminder_repository_test.dart` | `get` null before save; `save` insert-then-update keeps one row (`UNIQUE (kind)`); out-of-range time rejected and nothing written; `watch` emits null then each value. |
+| `app/test/reminders/reminder_controller_test.dart` | enabling asks permission, stores an enabled row, schedules once; disabling stores + cancels; time change reschedules only when enabled; **the notification title/body contain no health words**. |
+| `app/test/meds/meds_page_test.dart` | reach the screen from the home AppBar; add a medication → shows + stored; set a birth-control method → shows as current; the reminder switch schedules via the fake and persists. |
 | `app/integration_test/log_period_test.dart` | add → edit → delete on a real device against the encrypted DB, across a DB close/reopen. Not in CI (no emulator). |
 | `app/integration_test/log_symptoms_test.dart` | log symptoms on two days on a real device → both surface under "Recent symptoms"; cleans up after itself. Nightly only. |
 

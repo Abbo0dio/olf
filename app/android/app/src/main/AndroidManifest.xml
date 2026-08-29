@@ -1,4 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- audited: p1.7 medication reminder. Shows the single daily local
+         notification the user explicitly turns on in Medications & reminders.
+         No network, no data leaves the device. Reviewed 2026-08-29 by
+         worker: phase1. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- audited: p1.7 medication reminder. Lets flutter_local_notifications
+         re-register the pending daily reminder after a device restart so it
+         keeps firing. No network. Reviewed 2026-08-29 by worker: phase1. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
         android:label="olf_app"
         android:name="${applicationName}"

@@ -20,6 +20,9 @@ part 'app_database.g.dart';
     BbtEntries,
     CervicalMucusEntries,
     AppSettings,
+    Medications,
+    BirthControlEntries,
+    Reminders,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -35,8 +38,10 @@ class AppDatabase extends _$AppDatabase {
   ///            and seeded the built-in symptom names.
   /// v5 (p1.6): added `bbt_entries`, `cervical_mucus_entries` and the
   ///            `app_settings` key/value store.
+  /// v6 (p1.7): added `medications`, `birth_control_entries` and the
+  ///            `reminders` table (one daily local reminder).
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -74,6 +79,13 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(bbtEntries);
         await m.createTable(cervicalMucusEntries);
         await m.createTable(appSettings);
+      }
+      if (from < 6) {
+        // p1.7: medication list, birth-control method history, and the single
+        // daily reminder. Purely additive — nothing to backfill.
+        await m.createTable(medications);
+        await m.createTable(birthControlEntries);
+        await m.createTable(reminders);
       }
     },
     beforeOpen: (details) async {
