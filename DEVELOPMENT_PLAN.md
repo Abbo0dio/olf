@@ -148,7 +148,7 @@ A task is not `DONE` until **all** of these hold:
 | Phase | Theme | Status | Gate to move on |
 |-------|-------|--------|-----------------|
 | **0** | Repo, workflow, CI, app-runs-and-does-one-real-thing | `DONE` | CI green; a build installs; one real slice merged |
-| **1** | MVP core tracking — free, un-paywalled | `IN PROGRESS` | Core tracking usable end-to-end; correction loop works; backup/restore works |
+| **1** | MVP core tracking — free, un-paywalled | `DONE` | Core tracking usable end-to-end; correction loop works; backup/restore works |
 | **2** | Privacy & security hardening | `TODO` | Lock + decoy + auto-delete + standalone policy shipped; audit gate enforced |
 | **3** | Correctable adaptive prediction engine v2 | `TODO` | Handles irregular cycles; backtesting harness + accuracy metrics; corrections visibly improve output |
 | **4** | Notifications & reminders | `TODO` | Per-category controls; humane copy; quiet hours; "stop asking" control |
@@ -528,7 +528,7 @@ starting Phase 1.
 
 ### Phase 1 — MVP core tracking (free, un-paywalled)
 
-**Status:** `IN PROGRESS` · **Goal:** everything in `requirements.md` §1 plus the MUST-HAVE privacy
+**Status:** `DONE` (2026-08-30) · **Goal:** everything in `requirements.md` §1 plus the MUST-HAVE privacy
 and inclusivity basics, all free. After this phase the app is a genuinely useful daily tracker.
 
 #### p1.1 — Period logging: start/end, edit, delete, calendar view
@@ -1325,8 +1325,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   - 2026-08-29 — merged (PR #19, squash → `b53e6da`). **DONE.**
 
 #### p1.11 — Explicit pregnancy-loss, birth, and postpartum events (minimal)
-- **Status:** IN REVIEW
-- **PR:** [#20](https://github.com/Abbo0dio/olf/pull/20)
+- **Status:** DONE
+- **PR:** [#20](https://github.com/Abbo0dio/olf/pull/20) (merged)
 - **Branch / worktree:** `feat/p1.11-loss-birth-events` / `../olf-wt/p1.11`
 - **Owner:** worker: phase1
 - **Depends on:** p1.3
@@ -1386,11 +1386,21 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     §7 decision + §9 follow-ups recorded. Full local verification batch green. Opening PR.
   - 2026-08-29 — PR [#20](https://github.com/Abbo0dio/olf/pull/20) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-30 — PR #20 squash-merged to `main`; CI green on `main`. Set **DONE**.
 
 **Phase 1 exit gate:** a new user can log periods/symptoms/BBT/meds, gets correctable range
 predictions, can lock the app, can back up and restore, and can log a loss/birth — all offline,
 free, in dark mode, with inclusive copy. Retention + a working correction loop are the product
 threshold (`requirements.md` Recommendations, Stage 1).
+
+**Exit-gate status — MET (2026-08-30).** All eleven slices p1.1–p1.11 merged to `main`
+(PRs #9, #10, #12–#20) with CI green; each slice's acceptance criteria were verified in its PR. The app now covers: period start/end + calendar/history, flow/spotting/clots,
+derived cycles + variability, correctable range predictions with an explicit late-period state,
+symptoms/mood/discharge + custom symptoms, manual BBT + cervical-mucus, medication/BC + one
+reminder, anonymous-by-default + optional PIN + first-run privacy explainer, neutral theme with
+dark mode + inclusive copy, encrypted backup/restore, and pregnancy-loss/birth/postpartum
+events that break the cycle chain — all on-device and free. Outstanding non-blockers carried
+forward: the p0.5 manual physical-device smoke table, and the per-slice §9 follow-ups.
 
 ---
 
