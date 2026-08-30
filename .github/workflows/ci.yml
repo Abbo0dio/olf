@@ -158,13 +158,15 @@ jobs:
         run: |
           git diff --exit-code core/pubspec.lock app/pubspec.lock \
             || { echo "::error::pubspec.lock changed after 'pub get' — commit the updated lock so the audit sees the real graph."; exit 1; }
-      - name: Audit locked dependency graph + Android permissions
+      - name: Audit dependency graph + Android permissions + transport security
         run: |
           dart .github/scripts/dependency_audit.dart \
             --denylist .github/dependency-denylist.txt \
             --lock core/pubspec.lock \
             --lock app/pubspec.lock \
-            --manifest app/android/app/src/main/AndroidManifest.xml
+            --manifest app/android/app/src/main/AndroidManifest.xml \
+            --net-config app/android/app/src/main/res/xml/network_security_config.xml \
+            --plist app/ios/Runner/Info.plist
 
   build:
     name: Build

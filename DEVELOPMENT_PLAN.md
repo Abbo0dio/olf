@@ -1406,7 +1406,7 @@ forward: the p0.5 manual physical-device smoke table, and the per-slice §9 foll
 
 ### Phase 2 — Privacy & security hardening
 
-**Status:** `IN PROGRESS` (p2.1–p2.4 DONE; p2.5 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
+**Status:** `IN PROGRESS` (p2.1–p2.5 DONE; p2.6 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
 
 The Phase 1 slice-list has been expanded into task rows below (p2.1–p2.9). Rows
 p2.2–p2.9 carry the intended scope; the agent starting each one fills in the
@@ -1757,11 +1757,13 @@ threat model committed.
     p2.5/p2.7 boundary noted above.
   - 2026-08-31 — PR [#29](https://github.com/Abbo0dio/olf/pull/29) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-31 — merged as PR #29 (squash `b24ca49`). **DONE.**
 
 #### p2.6 — Transport security baseline (for any future network use)
-- **Status:** TODO
-- **Branch / worktree:** —
-- **Owner:** —
+- **Status:** IN REVIEW
+- **PR:** [#30](https://github.com/Abbo0dio/olf/pull/30)
+- **Branch / worktree:** `feat/p2.6-transport-security` / `../olf-wt/p2.6`
+- **Owner:** worker: phase2
 - **Depends on:** none
 - **Requirement refs:** §3, §8
 - **Goal:** Establish a TLS-only + certificate-pinning HTTP client wrapper and platform ATS /
@@ -1771,9 +1773,52 @@ threat model committed.
   `network_security_config` and iOS ATS reviewed and documented; a test proves cleartext /
   bad-cert requests fail closed.
 - **Tests required:** unit (client rejects http:// and a mismatched pin); doc of the config.
-- **Notes / detail:** (agent fills this in.)
+- **Notes / detail:**
+  - **No new runtime dependency** (ponytail preference kept — see §9 for the cert-pinning
+    package note). **No schema change.** The Dart seam uses `dart:io`'s `HttpClient`.
+  - **Android — `app/android/app/src/main/res/xml/network_security_config.xml`**, wired from
+    `<application>` with `android:networkSecurityConfig="@xml/network_security_config"` +
+    `android:usesCleartextTraffic="false"`. `<base-config cleartextTrafficPermitted="false">`
+    with **system trust anchors only** (no `<certificates src="user">`), no
+    `<debug-overrides>`. Refuses plain `http://` on every API level. Debug/profile manifests
+    are unchanged (they only add `INTERNET` for Flutter tooling; they do not re-enable
+    cleartext).
+  - **iOS — `app/ios/Runner/Info.plist`**: an explicit strict `NSAppTransportSecurity` dict —
+    `NSAllowsArbitraryLoads` / `…InWebContent` / `…ForMedia` / `NSAllowsLocalNetworking` all
+    `<false/>`, **no `NSExceptionDomains`**. Makes the OS default explicit and gate-able.
+  - **Dart chokepoint — `app/lib/src/net/olf_http_client.dart`**: `OlfHttpClient` is the only
+    sanctioned network path. `requireHttpsUrl(url)` throws `ArgumentError` on any non-`https`
+    scheme *before a socket opens*; `rejectBadCertificate` is wired to
+    `HttpClient.badCertificateCallback` and always returns `false` (fail closed, no feature
+    handle to flip it); `certificatePins` (`Map<String, List<String>>`, SPKI-SHA256) is
+    **empty today** and `_checkPins` throws for any listed-but-unenforced host so a
+    "pinned but unverified" connection can never happen.
+  - **Cert-pinning approach (designed, not wired).** When a backend host first exists: add its
+    SPKI-SHA256 pins to `certificatePins` **and** a `<domain-config><pin-set>` in the Android
+    config (keep them in step), then implement enforcement in `OlfHttpClient` (a
+    `SecurityContext` trusting only the pinned chain, or a leaf-SPKI check in a
+    `connectionFactory` / post-connect) replacing the `throw` in `_checkPins`. Full write-up
+    in `docs/transport-security.md`.
+  - **The gate.** `.github/scripts/dependency_audit.dart` gained `--net-config` and `--plist`
+    (CI `dependency-audit` job updated). It **fails the build** on
+    `usesCleartextTraffic="true"`, `cleartextTrafficPermitted="true"` / missing explicit
+    `"false"` / `<debug-overrides>`, and any `NSAllowsArbitraryLoads*` / `NSExceptionDomains`
+    in the plist. XML/plist comments are stripped before scanning so a warning comment
+    naming a token does not self-trip.
 - **Log:**
   - 2026-08-30 — created.
+  - 2026-08-31 — claimed by worker: phase2; worktree `../olf-wt/p2.6`, branch
+    `feat/p2.6-transport-security` off `main` @ `b24ca49`. Built: Android
+    `network_security_config.xml` (+ manifest wiring), explicit strict iOS ATS,
+    `OlfHttpClient` seam (`dart:io`, no new dep), dependency-audit `--net-config` /
+    `--plist` checks + fixtures, `app/test/net/transport_security_test.dart` (seam unit +
+    source-bypass scan). No schema change, no new runtime dependency, no new permission.
+  - 2026-08-31 — built. core 306 / app 107 green; analyze `--fatal-infos --fatal-warnings`
+    clean (core + app + the audit script); `dart format` clean; drift codegen unchanged;
+    dependency audit PASS (incl. the two new transport checks); no `pubspec.lock` drift.
+    §9 follow-up recorded (pinning-enforcement + possible package).
+  - 2026-08-31 — PR [#30](https://github.com/Abbo0dio/olf/pull/30) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 #### p2.7 — In-app privacy education explainers
 - **Status:** TODO
@@ -2572,6 +2617,25 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   good-faith reading, **not a lawyer review**. (e) Educational explainers (HIPAA gap,
   law-enforcement reality, delete walkthrough) are deliberately **out of scope → p2.7**.
   — noted by worker: phase2 during p2.5.
+- **p2.6 follow-ups:** (a) **Certificate pinning is designed, not enforced.** `OlfHttpClient
+  .certificatePins` is an empty map and `_checkPins` *throws* for any host added to it — so
+  the first slice that adds a real backend host must implement enforcement (a `SecurityContext`
+  trusting only the pinned chain, or a leaf-SPKI check in a `connectionFactory` /
+  post-connect) and add the matching `<pin-set>` to the Android config. `dart:io` has no
+  built-in SPKI-pinning helper; if a small audited package is cleaner at that point, add it
+  **then** — it is not pulled in speculatively now (ponytail). (b) The `OlfHttpClient` seam
+  lives in `app/` because all near-term network features are app-side; if a **core**-side
+  feature (e.g. a sync engine) needs it, the ~1-file seam moves to `core/lib/src/net/`
+  (it is pure `dart:io`, no Flutter). (c) The source-bypass scan
+  (`app/test/net/transport_security_test.dart`) is **substring/regex based** — it catches
+  `HttpClient` / `package:http` / raw `Socket`, but a determined bypass via reflection or a
+  transitively-added client isn't caught; the denylist gate is the backstop for the latter.
+  (d) No **runtime** proof that cleartext is blocked on-device — the checks are static
+  (config scan + seam unit test); a nightly `integration_test` that asserts an `http://`
+  request throws could be added. (e) `usesCleartextTraffic="false"` in the main manifest is
+  assumed not to break `flutter run` hot-reload on current Flutter (it does not — the VM
+  service uses `adb forward` / localhost, not the cleartext-guarded APIs); revisit if a dev
+  reports otherwise. — noted by worker: phase2 during p2.6.
 - (add more here)
 
 ## 10. Orphaned / cut work

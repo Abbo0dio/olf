@@ -14,6 +14,24 @@
 	<string>6.0</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Unlock olf with Face ID instead of typing your PIN.</string>
+	<!-- Transport security baseline (p2.6). App Transport Security is left fully
+	     strict: arbitrary loads off, no per-domain exceptions, no web/media/
+	     local-networking relaxations. Nothing in olf calls the network yet; this
+	     makes the hardened default explicit so a future feature inherits it.
+	     Adding NSExceptionDomains or flipping any of these to <true/> fails the
+	     dependency-audit gate. Certificate pinning plugs in via OlfHttpClient in
+	     Dart (see docs/transport-security.md), not here. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<false/>
+	</dict>
 	<key>CFBundleName</key>
 	<string>olf_app</string>
 	<key>CFBundlePackageType</key>

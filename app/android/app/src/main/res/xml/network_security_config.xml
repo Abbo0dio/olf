@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Transport security baseline (p2.6). Nothing in olf calls the network yet;
+  this pins the platform default so any future feature inherits TLS-only.
+
+  cleartextTrafficPermitted="false" — plain http:// is refused app-wide, on
+  every API level, regardless of the minSdk default.
+
+  Certificate pinning: when the first backend host exists, add a
+  <domain-config> here with a <pin-set> (SPKI-SHA256), mirroring
+  OlfHttpClient.certificatePins in Dart. See docs/transport-security.md.
+  Do NOT add a <domain-config cleartextTrafficPermitted="true"> or a
+  <debug-overrides> block — the dependency-audit gate fails the build if
+  cleartext is re-enabled anywhere in this file.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
