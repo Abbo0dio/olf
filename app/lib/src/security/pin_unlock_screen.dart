@@ -3,11 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import 'biometric_gateway.dart';
+import 'biometric_providers.dart';
 import 'pin_providers.dart';
 
 /// The lock screen shown when a PIN is set and the session is not unlocked
-/// (p1.8). No lockout / backoff yet — that, plus biometric unlock and a decoy
-/// PIN, is Phase 2.
+/// (p1.8). p2.1 adds an optional biometric shortcut: when the user has turned it
+/// on and the device supports it, the biometric prompt fires automatically on
+/// open and can be retried from a button. The PIN entry always stays available
+/// as the fallback. Lockout / backoff and a decoy PIN are still Phase 2.
 class PinUnlockScreen extends ConsumerStatefulWidget {
   const PinUnlockScreen({super.key});
 
@@ -19,11 +23,51 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
   final _controller = TextEditingController();
   bool _busy = false;
   bool _wrong = false;
+  bool _biometricRunning = false;
+  bool _autoPrompted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoPrompt());
+  }
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Fire the biometric prompt once, on open, if the user opted in and the
+  /// device can do it.
+  Future<void> _maybeAutoPrompt() async {
+    if (_autoPrompted) return;
+    _autoPrompted = true;
+    bool enabled;
+    bool capable;
+    try {
+      enabled = await ref.read(biometricUnlockEnabledProvider.future);
+      capable = await ref.read(biometricCapableProvider.future);
+    } catch (_) {
+      return; // no biometric available — just show the PIN
+    }
+    if (!mounted || !enabled || !capable) return;
+    await _authenticateWithBiometrics();
+  }
+
+  Future<void> _authenticateWithBiometrics() async {
+    if (_biometricRunning || _busy) return;
+    setState(() => _biometricRunning = true);
+    final result = await ref
+        .read(biometricGatewayProvider)
+        .authenticate(reason: 'Unlock olf');
+    if (!mounted) return;
+    if (result == BiometricAuthResult.success) {
+      ref.read(sessionUnlockedProvider.notifier).state = true;
+      return;
+    }
+    // failed / unavailable: quietly fall back to the PIN — no nagging.
+    setState(() => _biometricRunning = false);
   }
 
   Future<void> _submit() async {
@@ -48,6 +92,9 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final showBiometrics =
+        (ref.watch(biometricUnlockEnabledProvider).valueOrNull ?? false) &&
+        (ref.watch(biometricCapableProvider).valueOrNull ?? false);
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -95,6 +142,16 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
                           )
                         : const Text('Unlock'),
                   ),
+                  if (showBiometrics) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _biometricRunning || _busy
+                          ? null
+                          : _authenticateWithBiometrics,
+                      icon: const Icon(Icons.fingerprint),
+                      label: const Text('Use biometrics'),
+                    ),
+                  ],
                 ],
               ),
             ),
