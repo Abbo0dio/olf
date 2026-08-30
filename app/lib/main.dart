@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/app_gate.dart';
 import 'src/reminders/local_notification_reminder_scheduler.dart';
+import 'src/security/privacy_shield.dart';
 import 'src/theme/olf_theme.dart';
 import 'src/theme/theme_providers.dart';
 
@@ -35,6 +36,11 @@ class OlfApp extends ConsumerWidget {
       themeMode: mode,
       theme: olfTheme(Brightness.light),
       darkTheme: olfTheme(Brightness.dark),
+      // p2.4: mask the app-switcher snapshot when backgrounded and hold the
+      // Android screen-capture block. Wrapped here (not at `home`) so it also
+      // covers dialogs and pushed routes.
+      builder: (context, child) =>
+          PrivacyShield(child: child ?? const SizedBox.shrink()),
       home: const AppGate(),
     );
   }

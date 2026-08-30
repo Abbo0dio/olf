@@ -102,6 +102,9 @@ class LocalNotificationReminderScheduler implements ReminderScheduler {
           channelDescription: _channelDescription,
           importance: Importance.defaultImportance,
           priority: Priority.defaultPriority,
+          // p2.4: the wording is already generic, but redact it on a secure
+          // lock screen anyway — the OS then shows only the app name.
+          visibility: NotificationVisibility.private,
         ),
         iOS: DarwinNotificationDetails(),
       ),

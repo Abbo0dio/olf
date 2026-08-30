@@ -1406,7 +1406,7 @@ forward: the p0.5 manual physical-device smoke table, and the per-slice §9 foll
 
 ### Phase 2 — Privacy & security hardening
 
-**Status:** `IN PROGRESS` (p2.1–p2.2 DONE; p2.3 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
+**Status:** `IN PROGRESS` (p2.1–p2.3 DONE; p2.4 IN PROGRESS) · **Requirement refs:** §3, §6, §7, §8.
 
 The Phase 1 slice-list has been expanded into task rows below (p2.1–p2.9). Rows
 p2.2–p2.9 carry the intended scope; the agent starting each one fills in the
@@ -1551,8 +1551,8 @@ threat model committed.
   - 2026-08-31 — merged as PR #26 (squash `ee69420`). **DONE.**
 
 #### p2.3 — Scheduled auto-deletion (retention window)
-- **Status:** IN REVIEW
-- **PR:** [#27](https://github.com/Abbo0dio/olf/pull/27)
+- **Status:** DONE
+- **PR:** [#27](https://github.com/Abbo0dio/olf/pull/27) — merged (squash `c55bac8`)
 - **Branch / worktree:** `feat/p2.3-auto-deletion` / `../olf-wt/p2.3`
 - **Owner:** worker: phase2
 - **Depends on:** p1.1–p1.11 (whatever data exists), p1.10
@@ -1628,11 +1628,13 @@ threat model committed.
     recorded (incl. the §9(11) "scrub already-saved backup files" follow-up).
   - 2026-08-31 — PR [#27](https://github.com/Abbo0dio/olf/pull/27) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-31 — merged as PR #27 (squash `c55bac8`). **DONE.**
 
 #### p2.4 — Background privacy (app-switcher mask, screenshot block, lock-screen hygiene)
-- **Status:** TODO
-- **Branch / worktree:** —
-- **Owner:** —
+- **Status:** IN PROGRESS
+- **PR:** —
+- **Branch / worktree:** `feat/p2.4-background-privacy` / `../olf-wt/p2.4`
+- **Owner:** worker: phase2
 - **Depends on:** p1.8
 - **Requirement refs:** §3, §7
 - **Goal:** When the app is backgrounded, the OS app-switcher shows a neutral mask, not the
@@ -1644,9 +1646,50 @@ threat model committed.
   text carries no health detail.
 - **Tests required:** widget/integration for the mask on lifecycle change; a content test for
   notification text (extends the p1.7 one).
-- **Notes / detail:** (agent fills this in.)
+- **Notes / detail:**
+  - **No schema change. No new dependencies. No new `<uses-permission>`** — `FLAG_SECURE`
+    needs none.
+  - **App-switcher mask — `PrivacyShield`** (`app/lib/src/security/privacy_shield.dart`),
+    mounted from `MaterialApp.builder` so it sits above every route and dialog. An
+    `AppLifecycleListener` flips an opaque, content-free cover (keyed
+    `privacyShieldCoverKey`; lock icon + "olf" on `colorScheme.surface`) over the whole app
+    **whenever the state is not `resumed`** (`inactive` / `hidden` / `paused`). That covers
+    both the task-switcher snapshot and transient interruptions (Control Centre, the
+    notification shade). The masked subtree stays mounted, so nav stack / scroll / form
+    state survive backgrounding. `Stack(fit: StackFit.expand)` keeps the app's full-screen
+    constraints intact.
+  - **Screen-capture block — `ScreenSecurity` seam** (`app/lib/src/security/screen_security
+    .dart`): `abstract interface ScreenSecurity { Future<void> setSecure(bool); }`. Prod
+    impl `MethodChannelScreenSecurity` talks to the `olf/screen_security` `MethodChannel`,
+    handled in `MainActivity.kt` (`window.addFlags/clearFlags(FLAG_SECURE)`) —
+    keeps the window out of screenshots, screen recordings **and** the Recents thumbnail on
+    Android. `PrivacyShield` holds `setSecure(true)` for its whole lifetime (grabbed in
+    `initState`, released in `dispose` without touching `ref`). Same fake-in-tests pattern
+    as `ReminderScheduler` / `BiometricGateway`; `MissingPluginException` (iOS, desktop,
+    tests) is swallowed. `screenSecurityProvider` is overridden in `pumpOlf` so no test
+    ever hits the channel.
+  - **iOS.** No `FLAG_SECURE` equivalent exists. `AppDelegate.swift` adds a native
+    `privacyCover` `UIView` (system-background + SF `lock.fill`) on
+    `applicationWillResignActive`, removed on `applicationDidBecomeActive` — the reliable
+    app-switcher mask on iOS (the Flutter `PrivacyShield` is the cross-platform secondary).
+    No scene manifest in `Info.plist`, so the app-delegate lifecycle hooks fire.
+  - **Lock-screen hygiene.** The reminder wording is already fixed generic copy
+    (`reminderNotificationTitle` / `Body`, p1.7). p2.4 adds
+    `visibility: NotificationVisibility.private` to the Android notification (redacts on a
+    secure lock screen) and **broadens** the "no health details" content test to ~25 banned
+    terms (period, cycle, ovulation, fertility, flow, BBT, mucus, pregnancy, mood, every
+    birth-control method, …).
+  - **Not gated on a setting.** The whole app is health data, so the mask and the capture
+    block are always on. A per-screen `FLAG_SECURE` scope or a user opt-out is a follow-up
+    (see §9).
 - **Log:**
   - 2026-08-30 — created.
+  - 2026-08-31 — claimed by worker: phase2; worktree `../olf-wt/p2.4`, branch
+    `feat/p2.4-background-privacy` off `main` @ `c55bac8`. Built: `PrivacyShield`
+    (lifecycle mask, mounted via `MaterialApp.builder`), `ScreenSecurity` seam +
+    `olf/screen_security` MethodChannel + `MainActivity.kt` `FLAG_SECURE` handler, iOS
+    `AppDelegate` native cover, Android notification `visibility: private`, broadened
+    notification-content test. No schema change, no new deps, no new permission.
 
 #### p2.5 — Standalone consumer-health privacy policy screen
 - **Status:** TODO
@@ -2451,6 +2494,21 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   (f) `RetentionService.sweep` takes `now` from the caller (`DateTime.now()` in
   `RetentionController`); a `clockProvider` would make the widget test fully time-independent
   (shared with the p1.4 follow-up). — noted by worker: phase2 during p2.3.
+- **p2.4 follow-ups:** (a) **All-or-nothing.** `FLAG_SECURE` and the app-switcher mask are
+  held for the whole app lifetime — there is no per-screen scoping (e.g. allow a screenshot
+  of an empty calendar but not the day sheet) and no user opt-out for someone who wants to
+  screenshot a chart for a clinician. A `SecureScreen` marker widget + a ref-counted
+  controller is the shape if this is wanted. (b) **iOS screenshots/recordings are not
+  blocked** — there is no OS API; only the app-switcher snapshot is covered (natively in
+  `AppDelegate` + the Flutter shield). iOS `UIScreen.isCaptured` screen-recording *detection*
+  (show the mask while recording) is a possible add. (c) The native pieces
+  (`MainActivity.kt` FLAG_SECURE handler, `AppDelegate` cover) are **compile-checked by the
+  `build` CI job only** — no device/integration test, matching the p1.7 / p2.1 precedent for
+  channel glue; the nightly `integration_test` job could gain a lifecycle-mask check. (d) The
+  mask shows on *every* non-`resumed` transition including a brief Control-Centre pull-down —
+  intentional (fail-safe) but a short debounce could reduce the flicker; not worth it yet. (e) The
+  cover is a plain themed panel; a deliberate branded splash would look less like a glitch.
+  — noted by worker: phase2 during p2.4.
 - (add more here)
 
 ## 10. Orphaned / cut work
