@@ -1,4 +1,4 @@
-# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1 · p2.2 · p2.3 · p2.4 · p2.5)
+# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1 · p2.2 · p2.3 · p2.4 · p2.5 · p2.7)
 
 This documents the privacy posture the app ships with and the optional PIN lock.
 Requirement refs: `requirements.md` §3 (privacy & data security), §6 (regulatory /
@@ -6,8 +6,9 @@ disclaimers), §7 (duress / coercion), §9(8) (privacy distrust), §9(11) (delet
 means delete). p2.1 adds an optional biometric unlock shortcut, p2.2 adds an
 optional decoy / duress PIN, p2.3 adds an optional scheduled auto-deletion
 window, p2.4 adds always-on background privacy (app-switcher mask +
-screen-capture block), and p2.5 adds the standalone privacy-policy screen and
-its two consent switches — all below.
+screen-capture block), p2.5 adds the standalone privacy-policy screen and
+its two consent switches, and p2.7 adds three in-app privacy-education
+explainers — all below.
 
 ## Anonymous by default
 
@@ -79,9 +80,40 @@ Both are **independent** and **default off**, backed by `app_settings` keys and
 
 Nothing in the app reads these yet — they exist so any future change is the
 user's decision. The **educational explainers** (HIPAA gap, law-enforcement
-reality, a step-by-step delete walkthrough) are **p2.7**, not here.
+reality, a step-by-step delete walkthrough) are **p2.7**, below.
 
 Covered by `app/test/privacy/privacy_policy_test.dart`.
+
+## In-app privacy education (p2.7)
+
+Three short, plain-language explainers, kept **separate** from the policy: the
+policy (p2.5) states the commitments and holds the consent switches; these
+explain the landscape and — the point of the slice — how to remove your data.
+`PrivacyEducationScreen` (`app/lib/src/privacy/privacy_education_screen.dart`)
+is an index reachable from **Settings → Privacy basics** and from a link at the
+bottom of `PrivacyPolicyScreen`. Each row opens `PrivacyExplainerScreen`.
+Requirement refs: §3, §9(8); tone §4 / §9(12).
+
+Copy is named constants in `privacy/privacy_education_content.dart` (same
+pattern as `privacy_policy_content.dart` / `disclaimers.dart` — a content test
+asserts every point is on screen; the p1.9 copy-lint scans it). The three:
+
+| Explainer | Substance |
+|---|---|
+| Why HIPAA doesn't cover olf | HIPAA binds "covered entities" (providers, plans, their contractors); a self-installed app is none, and no federal law fills the gap. olf's privacy doesn't depend on HIPAA — no account, nothing on a server. Washington's MHMDA and Nevada SB370 *do* reach apps like this and olf is built to meet them. |
+| If your data were ever requested | Cycle data has been sought, including after abortion bans. From the maker of olf, essentially nothing could be compelled — no account, no server-side log, no cloud copy; a request is answered that valid legal process is required and that no such data is held. The real exposure is a seized/borrowed **device**, not a server subpoena. User-controlled mitigations: PIN + biometric lock, decoy PIN, auto-delete window. Ends "This is context, not legal advice." |
+| How to delete everything | Everything is one encrypted DB on the device. Numbered steps: (1) optional encrypted export via **Backup & restore**, (2) set an auto-delete window, (3) uninstall — removes the encrypted DB and its key, nothing recoverable, the decoy space goes too. |
+
+The delete explainer renders its steps as a numbered list and shows an **"Open
+Backup & restore"** button that pushes the real `BackupPage` — the actionable
+hand-off, aimed at the finding that only a small fraction of users ever take a
+protective action.
+
+Tone is second-person and calm; a content test asserts the copy contains no
+alarmist vocabulary (panic / terrifying / nightmare / disaster / catastroph /
+doom / scary), and the p1.9 inclusive-language lint covers gendered phrasing.
+
+Covered by `app/test/privacy/privacy_education_test.dart`.
 
 ## The app lock (PIN)
 

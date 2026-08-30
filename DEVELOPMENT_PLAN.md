@@ -1406,7 +1406,7 @@ forward: the p0.5 manual physical-device smoke table, and the per-slice §9 foll
 
 ### Phase 2 — Privacy & security hardening
 
-**Status:** `IN PROGRESS` (p2.1–p2.5 DONE; p2.6 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
+**Status:** `IN PROGRESS` (p2.1–p2.6 DONE; p2.7 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
 
 The Phase 1 slice-list has been expanded into task rows below (p2.1–p2.9). Rows
 p2.2–p2.9 carry the intended scope; the agent starting each one fills in the
@@ -1760,8 +1760,8 @@ threat model committed.
   - 2026-08-31 — merged as PR #29 (squash `b24ca49`). **DONE.**
 
 #### p2.6 — Transport security baseline (for any future network use)
-- **Status:** IN REVIEW
-- **PR:** [#30](https://github.com/Abbo0dio/olf/pull/30)
+- **Status:** DONE
+- **PR:** [#30](https://github.com/Abbo0dio/olf/pull/30) — merged (squash `9370943`)
 - **Branch / worktree:** `feat/p2.6-transport-security` / `../olf-wt/p2.6`
 - **Owner:** worker: phase2
 - **Depends on:** none
@@ -1819,11 +1819,13 @@ threat model committed.
     §9 follow-up recorded (pinning-enforcement + possible package).
   - 2026-08-31 — PR [#30](https://github.com/Abbo0dio/olf/pull/30) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-31 — merged (squash `9370943`). **DONE.**
 
 #### p2.7 — In-app privacy education explainers
-- **Status:** TODO
-- **Branch / worktree:** —
-- **Owner:** —
+- **Status:** IN REVIEW
+- **PR:** [#31](https://github.com/Abbo0dio/olf/pull/31)
+- **Branch / worktree:** `feat/p2.7-privacy-education` / `../olf-wt/p2.7`
+- **Owner:** worker: phase2
 - **Depends on:** p2.5
 - **Requirement refs:** §3, §9(8)
 - **Goal:** Short, honest, non-alarming explainers accessible from Settings: the HIPAA gap,
@@ -1832,9 +1834,66 @@ threat model committed.
 - **Acceptance criteria:** explainers reachable from Settings; each is a testable string set;
   tone reviewed (no fear-mongering, §4/§9(12)); "delete everything" links to the real action.
 - **Tests required:** content test; widget test for navigation + the delete-everything hand-off.
-- **Notes / detail:** (agent fills this in.)
+- **Notes / detail:**
+  - **No schema change. No new runtime dependency** (ponytail preference kept) — pure Flutter
+    widgets + named-constant copy.
+  - **Scope boundary with p2.5.** p2.5's `PrivacyPolicyScreen` is the **policy** — the
+    plain-language commitments plus the two consent switches. p2.7 is **education**: it
+    explains the consumer-health-privacy landscape and gives the concrete delete steps. The
+    two are separate screens; p2.7 is linked *from* the policy (and from Settings) but never
+    restates it.
+  - **Copy — `app/lib/src/privacy/privacy_education_content.dart`** (same named-constant +
+    content-test pattern as `privacy_policy_content.dart` / `onboarding/disclaimers.dart`).
+    A `PrivacyExplainer` record (`id`, `title`, `summary`, `body` paragraphs) × 3:
+    - **`hipaa-gap` — "Why HIPAA doesn't cover olf":** HIPAA binds "covered entities"
+      (providers, plans, their contractors), which a self-installed app is not; no federal
+      health-privacy law forces a period app to protect entries and some have exploited that;
+      olf's privacy does not depend on HIPAA because there is no account and nothing on a
+      server; Washington's My Health My Data Act and Nevada SB370 *do* reach apps like this
+      and olf is built to meet them (→ policy for specifics).
+    - **`law-enforcement` — "If your data were ever requested":** cycle data has been sought,
+      including after abortion bans — worth thinking about calmly; from the maker of olf
+      essentially nothing could be compelled (no account, no server-side log, no cloud copy —
+      a request is answered that valid legal process is required and that no such data is
+      held); the real exposure is a seized/borrowed **device**, not a subpoena to a server;
+      user-controlled mitigations — PIN + biometric lock, the decoy PIN, the auto-delete
+      window. Ends "This is context, not legal advice."
+    - **`delete-everything` — "How to delete everything":** everything is one encrypted DB on
+      the device, no cloud copy / account. Renders `deleteEverythingSteps` as a **numbered
+      list** — (1) optional encrypted export via Backup & restore, (2) set an auto-delete
+      window, (3) uninstall removes the encrypted DB + its key, nothing recoverable, decoy
+      space goes too. A `FilledButton.tonalIcon` **"Open Backup & restore"** pushes the real
+      `BackupPage` — the actionable hand-off that answers the "~9% take a protective action"
+      finding.
+  - **Screens — `app/lib/src/privacy/privacy_education_screen.dart`:** `PrivacyEducationScreen`
+    (index: intro + one `ListTile` per explainer) → `PrivacyExplainerScreen` (body paragraphs;
+    for the delete one, the numbered steps + the Backup & restore button). Plain
+    `Navigator.push`, `MaterialPageRoute` — no router change, no new provider.
+  - **Entry points:** a "Privacy basics" `ListTile` (`Icons.school_outlined`) in
+    `settings_page.dart` right under "Privacy policy", and a divider + the same link at the
+    bottom of `PrivacyPolicyScreen`.
+  - **Tone (§4 / §9(12)):** second person, calm, no fear vocabulary — a content test asserts
+    the copy contains none of panic / terrifying / nightmare / disaster / catastroph / doom /
+    scary. Gender-neutral — the p1.9 inclusive-language lint scans the new constants
+    automatically (the abortion-ban paragraph avoids "women" etc.).
+  - **Tests — `app/test/privacy/privacy_education_test.dart`:** content group (exactly three
+    explainers, distinct non-empty title/summary/body; per-explainer key-phrase assertions;
+    the numbered delete steps end in "uninstall" / "nothing recoverable"; the tone check) +
+    widget tests (Settings → "Privacy basics" lists all three; reachable from the policy
+    screen; the delete explainer's button lands on the real `BackupPage`; each explainer
+    opens with its title + first paragraph). 10 new tests; app suite 116 green.
 - **Log:**
   - 2026-08-30 — created.
+  - 2026-08-31 — claimed by worker: phase2; worktree `../olf-wt/p2.7`, branch
+    `feat/p2.7-privacy-education` off `main` @ `9370943`. Built the three explainers as
+    named-constant copy + index/detail screens, wired entry points from Settings and the
+    privacy policy screen, delete explainer hands off to `BackupPage`. p2.5/p2.7 boundary
+    noted above.
+  - 2026-08-31 — built. core 306 / app 116 green; analyze `--fatal-infos --fatal-warnings`
+    clean (core + app + the audit script); `dart format` clean; drift codegen unchanged;
+    dependency audit PASS; no `pubspec.lock` drift; inclusive-language lint green.
+  - 2026-08-31 — PR [#31](https://github.com/Abbo0dio/olf/pull/31) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 #### p2.8 — Threat model + data-flow diagram committed to the repo
 - **Status:** TODO
@@ -2636,6 +2695,18 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   assumed not to break `flutter run` hot-reload on current Flutter (it does not — the VM
   service uses `adb forward` / localhost, not the cleartext-guarded APIs); revisit if a dev
   reports otherwise. — noted by worker: phase2 during p2.6.
+- **p2.7 follow-ups:** (a) The explainers are **English only** and are static `const` copy —
+  no "last reviewed" marker, so a legal-landscape change (e.g. a new state consumer-health
+  law, or an actual federal one) has to be caught by hand. (b) The content is **not a lawyer
+  review** — same good-faith-reading caveat as the p2.5 policy; the HIPAA and
+  law-enforcement explainers make legal-adjacent claims. (c) The delete explainer **describes**
+  uninstall but can't perform it — there is no in-app "wipe everything now" button (uninstall
+  is the OS's job); a `core`-side "delete all data" action that clears the vault + secure
+  storage without uninstalling is a possible add for people who want to stay installed. (d)
+  The "~9% take a protective action" framing is addressed only by the Backup & restore
+  hand-off; there is no measurement (and won't be — no analytics) of whether users reach or
+  act on these screens. (e) The tone check is a **fixed denylist** of alarmist words, not a
+  readability or reading-level check. — noted by worker: phase2 during p2.7.
 - (add more here)
 
 ## 10. Orphaned / cut work
