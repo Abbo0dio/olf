@@ -8,6 +8,11 @@
          re-register the pending daily reminder after a device restart so it
          keeps firing. No network. Reviewed 2026-08-29 by worker: phase1. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- audited: p2.1 biometric unlock. Lets local_auth show the system
+         fingerprint / face prompt as an opt-in shortcut past the app PIN. No
+         biometric data is read by the app and none leaves the device; the OS
+         only returns pass/fail. Reviewed 2026-08-30 by worker: phase2. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <application
         android:label="olf_app"
         android:name="${applicationName}"

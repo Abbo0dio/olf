@@ -13,6 +13,10 @@ void main() {
     expect(find.text('Settings'), findsOneWidget);
   }
 
+  // The Privacy section can hold two SwitchListTiles (p2.1 adds the biometric
+  // one when a PIN is set), so target the app-lock one by its label.
+  final appLockSwitch = find.widgetWithText(SwitchListTile, 'App lock (PIN)');
+
   testWidgets('turn the app lock on from settings → a PIN is stored', (
     tester,
   ) async {
@@ -25,7 +29,7 @@ void main() {
       body: () async {
         await openSettings(tester);
 
-        await tester.tap(find.byType(SwitchListTile));
+        await tester.tap(appLockSwitch);
         await tester.pumpAndSettle();
 
         await tester.enterText(find.widgetWithText(TextField, 'PIN'), '4682');
@@ -59,7 +63,7 @@ void main() {
         await flush(tester, 20);
 
         await openSettings(tester);
-        await tester.tap(find.byType(SwitchListTile));
+        await tester.tap(appLockSwitch);
         await tester.pumpAndSettle();
         await tester.tap(find.widgetWithText(TextButton, 'Turn off'));
         await flush(tester, 20);
@@ -130,4 +134,72 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'turn on biometric unlock from settings → the preference persists',
+    (tester) async {
+      final db = memoryDb();
+      final settings = DriftSettingsRepository(db);
+      final pinStore = FakePinStore(
+        derivePinCredential('4682', iterations: 400, random: Random(1)),
+      );
+
+      await pumpOlf(
+        tester,
+        pinStore: pinStore,
+        biometricGateway: FakeBiometricGateway(capable: true),
+        overrides: [dbOverride(db)],
+        body: () async {
+          // Past the lock screen (biometric is still off, so type the PIN).
+          await tester.enterText(find.byType(TextField), '4682');
+          await tester.tap(find.widgetWithText(FilledButton, 'Unlock'));
+          await flush(tester, 20);
+
+          await openSettings(tester);
+          final biometricSwitch = find.widgetWithText(
+            SwitchListTile,
+            'Unlock with biometrics',
+          );
+          expect(biometricSwitch, findsOneWidget);
+          expect(tester.widget<SwitchListTile>(biometricSwitch).value, isFalse);
+
+          await tester.tap(biometricSwitch);
+          await flush(tester, 20);
+
+          expect(await settings.get(SettingKeys.biometricUnlock), 'true');
+          expect(tester.widget<SwitchListTile>(biometricSwitch).value, isTrue);
+        },
+      );
+    },
+  );
+
+  testWidgets('no biometric hardware → the switch is present but disabled', (
+    tester,
+  ) async {
+    final db = memoryDb();
+    final pinStore = FakePinStore(
+      derivePinCredential('4682', iterations: 400, random: Random(1)),
+    );
+
+    await pumpOlf(
+      tester,
+      pinStore: pinStore,
+      overrides: [dbOverride(db)],
+      body: () async {
+        await tester.enterText(find.byType(TextField), '4682');
+        await tester.tap(find.widgetWithText(FilledButton, 'Unlock'));
+        await flush(tester, 20);
+
+        await openSettings(tester);
+        final biometricSwitch = find.widgetWithText(
+          SwitchListTile,
+          'Unlock with biometrics',
+        );
+        expect(
+          tester.widget<SwitchListTile>(biometricSwitch).onChanged,
+          isNull,
+        );
+      },
+    );
+  });
 }

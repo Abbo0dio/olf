@@ -13,6 +13,11 @@ abstract final class SettingKeys {
   /// The user's pronouns for copy (p1.9) — a [Pronouns] name. Absent resolves to
   /// they/them so default copy is correct with nothing set.
   static const String pronouns = 'pronouns';
+
+  /// `'true'` when the user has opted in to unlocking with device biometrics
+  /// (p2.1). Only meaningful while a PIN is set — biometric unlock is a shortcut
+  /// past the PIN, never a lock on its own. Absent / anything else means off.
+  static const String biometricUnlock = 'biometric_unlock';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).

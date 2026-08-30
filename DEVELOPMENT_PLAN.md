@@ -149,7 +149,7 @@ A task is not `DONE` until **all** of these hold:
 |-------|-------|--------|-----------------|
 | **0** | Repo, workflow, CI, app-runs-and-does-one-real-thing | `DONE` | CI green; a build installs; one real slice merged |
 | **1** | MVP core tracking — free, un-paywalled | `DONE` | Core tracking usable end-to-end; correction loop works; backup/restore works |
-| **2** | Privacy & security hardening | `TODO` | Lock + decoy + auto-delete + standalone policy shipped; audit gate enforced |
+| **2** | Privacy & security hardening | `IN PROGRESS` | Lock + decoy + auto-delete + standalone policy shipped; audit gate enforced |
 | **3** | Correctable adaptive prediction engine v2 | `TODO` | Handles irregular cycles; backtesting harness + accuracy metrics; corrections visibly improve output |
 | **4** | Notifications & reminders | `TODO` | Per-category controls; humane copy; quiet hours; "stop asking" control |
 | **5** | Accessibility & design polish | `TODO` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
@@ -1406,26 +1406,221 @@ forward: the p0.5 manual physical-device smoke table, and the per-slice §9 foll
 
 ### Phase 2 — Privacy & security hardening
 
-**Status:** `TODO` · **Requirement refs:** §3, §6, §7, §8. Slices (agent to expand into rows):
+**Status:** `IN PROGRESS` (p2.1) · **Requirement refs:** §3, §6, §7, §8.
 
-- **p2.1** Biometric unlock (Face ID / Touch ID / Android biometrics) on top of the PIN.
-- **p2.2** Decoy / duress screen — an alternate PIN (e.g. `0000`) opens a plausible empty app.
-- **p2.3** Scheduled auto-deletion — user sets a retention window; data past it is purged
-  (including from any future backups/sync targets).
-- **p2.4** Background privacy — blur/mask on app switch; no screenshots of sensitive screens;
-  no PHI on the lock screen.
-- **p2.5** Standalone **consumer-health privacy policy** screen, linked from first run and
-  settings; separate opt-in for collection and (future) sharing; "we never sell data; we
-  require valid legal process" commitments (MHMDA / Nevada alignment).
-- **p2.6** Transport security baseline for *any* future network use (cert pinning, TLS-only)
-  even though nothing calls out yet — so Phase 6/9/10 inherit it.
-- **p2.7** In-app privacy education — short, honest explainers (HIPAA gap, law-enforcement
-  access, how to delete everything), addressing the "only ~9% take protective action" finding.
-- **p2.8** Threat model document + data-flow diagram committed to the repo; reviewed each phase.
-- **p2.9** Make the dependency-audit gate strict and documented as a release blocker.
+The Phase 1 slice-list has been expanded into task rows below (p2.1–p2.9). Rows
+p2.2–p2.9 carry the intended scope; the agent starting each one fills in the
+detail (files, libs, schema, edge cases) in its row as work proceeds, per §1.
 
 **Exit gate:** lock + decoy + auto-delete + masking shipped and tested; standalone policy live;
 threat model committed.
+
+#### p2.1 — Biometric unlock on top of the PIN
+- **Status:** IN REVIEW
+- **PR:** [#25](https://github.com/Abbo0dio/olf/pull/25)
+- **Branch / worktree:** `feat/p2.1-biometric-unlock` / `../olf-wt/p2.1`
+- **Owner:** worker: phase2
+- **Depends on:** p1.8
+- **Requirement refs:** §3, §7
+- **Goal:** Once a PIN is set, the user can opt in to unlocking with Face ID / Touch ID /
+  Android biometrics instead of typing it. The PIN always stays available as the fallback;
+  biometric unlock is never a lock on its own.
+- **Acceptance criteria:**
+  - A "Unlock with biometrics" switch appears in Settings → Privacy only when a PIN is set;
+    it is disabled with an explanatory subtitle on a device with no enrolled biometric.
+  - With it on, the lock screen prompts for biometrics automatically on open and offers a
+    "Use biometrics" retry button; a pass unlocks exactly like a correct PIN.
+  - A failed / cancelled / unavailable biometric result silently falls back to PIN entry —
+    no error nag, no lock-out.
+  - No biometric data is read by the app or leaves the device; nothing new is stored
+    unencrypted; the OS returns only pass/fail.
+- **Tests required:** widget tests for the lock-screen auto-prompt, retry button, and PIN
+  fallback; widget tests for the Settings toggle (persists; disabled when incapable); the
+  seam is faked so CI never loads the platform channel.
+- **Notes / detail:**
+  - **No schema change.** One new `app_settings` key — `SettingKeys.biometricUnlock`
+    (`'true'` / absent) — reusing the p1.6 key/value store. The PIN credential is untouched.
+  - **`core`:** only the `SettingKeys.biometricUnlock` constant (biometric APIs are
+    Flutter-only, so nothing else moves into `core`).
+  - **`app/lib/src/security/`:** `biometric_gateway.dart` — `BiometricGateway`
+    (`canAuthenticate()`, `authenticate({reason})` → `BiometricAuthResult
+    { success, failed, unavailable }`); `local_auth_biometric_gateway.dart` — the production
+    wrapper over the `local_auth` plugin (added to `app`; Flutter-team package, biometric
+    auth only, not on the denylist); `biometric_providers.dart` —
+    `biometricGatewayProvider`, `biometricCapableProvider` (`FutureProvider<bool>`),
+    `biometricUnlockEnabledProvider` (`StreamProvider<bool>` off `app_settings`),
+    `setBiometricUnlockEnabled`. Same seam pattern as `ReminderScheduler` (p1.7) and
+    `BackupFileGateway` (p1.10): the app talks to the interface, tests inject
+    `FakeBiometricGateway`.
+  - `local_auth` is configured `biometricOnly: true` — the *device* passcode is **not**
+    accepted for the app PIN. Biometric answers "is it me?"; the app PIN stays the only
+    knowledge factor (keeps the model clean for the p2.2 decoy PIN).
+  - **`PinUnlockScreen`** grows an auto-prompt (once, on open, guarded on
+    enabled && capable) and a "Use biometrics" `TextButton.icon`; a success sets
+    `sessionUnlockedProvider` like a correct PIN. **`settings_page.dart`** gains the switch
+    under Privacy.
+  - **Native config:** Android `MainActivity` now extends `FlutterFragmentActivity` (a
+    `local_auth` requirement); `USE_BIOMETRIC` added to the manifest with an `audited:`
+    comment (dependency-audit still PASS, 38 rules); iOS `Info.plist` gains
+    `NSFaceIDUsageDescription`.
+  - **Test harness:** `pumpOlf` gains a `biometricGateway` knob (defaults to an incapable
+    `FakeBiometricGateway`, so every pre-p2.1 widget test is unaffected).
+  - **Still a UI-level gate** — biometric unlock does not wrap the DB key either; that stays a
+    §9 follow-up.
+  - **Docs:** `docs/privacy-and-lock.md` (new "Biometric unlock (p2.1)" section),
+    `docs/local-database.md` `app_settings` key row.
+- **Log:**
+  - 2026-08-30 — created; Phase 2 slice-list expanded into rows p2.1–p2.9.
+  - 2026-08-30 — claimed by worker: phase2; worktree `../olf-wt/p2.1`, branch
+    `feat/p2.1-biometric-unlock` off `main` @ `749f190`. Built: `BiometricGateway` seam +
+    `local_auth` wrapper + providers, opt-in `SettingKeys.biometricUnlock`, lock-screen
+    auto-prompt + retry button with PIN fallback, Settings switch, `FlutterFragmentActivity`
+    + audited `USE_BIOMETRIC` + `NSFaceIDUsageDescription`. No schema change, no codegen
+    change. core 281 / app 80 green; analyze `--fatal-infos --fatal-warnings` clean (core +
+    app); `dart format` clean; dependency audit PASS (38 rules).
+  - 2026-08-30 — PR [#25](https://github.com/Abbo0dio/olf/pull/25) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+
+#### p2.2 — Decoy / duress PIN
+- **Status:** TODO
+- **Branch / worktree:** —
+- **Owner:** —
+- **Depends on:** p1.8, p2.1
+- **Requirement refs:** §7
+- **Goal:** A second, user-set PIN that opens a plausible, empty-looking instance of the app
+  instead of the real data — for a coerced-unlock situation. Entering it never reveals that a
+  decoy exists.
+- **Acceptance criteria:** decoy PIN opens a clean app with its own (throwaway) store; the
+  real data is not reachable or detectable from the decoy session; switching back requires the
+  real PIN; no UI anywhere hints that a decoy is configured.
+- **Tests required:** unit (PIN routing: real vs decoy vs wrong); widget/integration (decoy
+  session sees no real data and cannot reach it).
+- **Notes / detail:** (agent fills this in.)
+- **Log:**
+  - 2026-08-30 — created.
+
+#### p2.3 — Scheduled auto-deletion (retention window)
+- **Status:** TODO
+- **Branch / worktree:** —
+- **Owner:** —
+- **Depends on:** p1.1–p1.11 (whatever data exists), p1.10
+- **Requirement refs:** §3, §7
+- **Goal:** The user picks a retention window (e.g. "keep 12 months"); anything older is purged
+  automatically, and the purge also applies to backups/exports the app produces afterwards.
+- **Acceptance criteria:** setting a window purges existing older rows and keeps purging on a
+  schedule; "off" is the default and is honoured; a purge is logged (count only, no PHI);
+  exports created after a window is set exclude purged data.
+- **Tests required:** unit (cutoff maths across all tables, DST-safe); integration (set window
+  → old rows gone, recent rows intact, survives restart).
+- **Notes / detail:** (agent fills this in.)
+- **Log:**
+  - 2026-08-30 — created.
+
+#### p2.4 — Background privacy (app-switcher mask, screenshot block, lock-screen hygiene)
+- **Status:** TODO
+- **Branch / worktree:** —
+- **Owner:** —
+- **Depends on:** p1.8
+- **Requirement refs:** §3, §7
+- **Goal:** When the app is backgrounded, the OS app-switcher shows a neutral mask, not the
+  last screen; sensitive screens cannot be screenshotted/recorded on Android; no PHI ever
+  appears in a notification on the lock screen (already true for p1.7 — lock it in with a
+  test).
+- **Acceptance criteria:** app-switcher preview is masked on both platforms; `FLAG_SECURE`
+  (or equivalent) set on sensitive routes on Android; a test asserts reminder/notification
+  text carries no health detail.
+- **Tests required:** widget/integration for the mask on lifecycle change; a content test for
+  notification text (extends the p1.7 one).
+- **Notes / detail:** (agent fills this in.)
+- **Log:**
+  - 2026-08-30 — created.
+
+#### p2.5 — Standalone consumer-health privacy policy screen
+- **Status:** TODO
+- **Branch / worktree:** —
+- **Owner:** —
+- **Depends on:** p1.8
+- **Requirement refs:** §3, §6
+- **Goal:** A dedicated, plain-language privacy policy screen (not a web link), reachable from
+  first run and Settings, with separate opt-ins for any collection and (future) sharing, and
+  explicit "we never sell your data / we require valid legal process" commitments aligned to
+  MHMDA / Nevada SB370.
+- **Acceptance criteria:** screen reachable from both entry points; opt-ins are independent
+  and default to off; commitments text reviewed against §3/§6; content is testable strings.
+- **Tests required:** content test (each commitment/opt-in present); widget test (navigation
+  from first run and Settings; opt-in state persists).
+- **Notes / detail:** (agent fills this in.)
+- **Log:**
+  - 2026-08-30 — created.
+
+#### p2.6 — Transport security baseline (for any future network use)
+- **Status:** TODO
+- **Branch / worktree:** —
+- **Owner:** —
+- **Depends on:** none
+- **Requirement refs:** §3, §8
+- **Goal:** Establish a TLS-only + certificate-pinning HTTP client wrapper and platform ATS /
+  network-security-config so that when Phase 6/9/10 first make a network call, they inherit a
+  hardened default. Nothing calls out yet.
+- **Acceptance criteria:** a shared client refuses cleartext and unpinned TLS; Android
+  `network_security_config` and iOS ATS reviewed and documented; a test proves cleartext /
+  bad-cert requests fail closed.
+- **Tests required:** unit (client rejects http:// and a mismatched pin); doc of the config.
+- **Notes / detail:** (agent fills this in.)
+- **Log:**
+  - 2026-08-30 — created.
+
+#### p2.7 — In-app privacy education explainers
+- **Status:** TODO
+- **Branch / worktree:** —
+- **Owner:** —
+- **Depends on:** p2.5
+- **Requirement refs:** §3, §9(8)
+- **Goal:** Short, honest, non-alarming explainers accessible from Settings: the HIPAA gap,
+  law-enforcement access reality, and exactly how to delete everything — aimed at the finding
+  that only ~9% of users take any protective action.
+- **Acceptance criteria:** explainers reachable from Settings; each is a testable string set;
+  tone reviewed (no fear-mongering, §4/§9(12)); "delete everything" links to the real action.
+- **Tests required:** content test; widget test for navigation + the delete-everything hand-off.
+- **Notes / detail:** (agent fills this in.)
+- **Log:**
+  - 2026-08-30 — created.
+
+#### p2.8 — Threat model + data-flow diagram committed to the repo
+- **Status:** TODO
+- **Branch / worktree:** —
+- **Owner:** —
+- **Depends on:** none
+- **Requirement refs:** §3, §7, §8
+- **Goal:** A `docs/threat-model.md` (assets, adversaries, trust boundaries, mitigations,
+  residual risks) plus a data-flow diagram, established as a living document reviewed at each
+  phase gate.
+- **Acceptance criteria:** doc covers the current architecture (on-device store, key storage,
+  PIN/biometric gate, backup file, no backend); each Phase 0–2 mitigation is cross-referenced;
+  a "review log" section is started.
+- **Tests required:** n/a (documentation) — but a CI check that the file exists and the review
+  log has an entry for the current phase.
+- **Notes / detail:** (agent fills this in.)
+- **Log:**
+  - 2026-08-30 — created.
+
+#### p2.9 — Dependency-audit gate: strict + documented release blocker
+- **Status:** TODO
+- **Branch / worktree:** —
+- **Owner:** —
+- **Depends on:** p0.3
+- **Requirement refs:** §3
+- **Goal:** Promote the p0.3 dependency-audit from "green by convention" to an explicit,
+  documented release blocker: no waivers, failure text points at the process, and the release
+  checklist names it.
+- **Acceptance criteria:** audit failure is unambiguous and un-waivable in CI; `docs/
+  dependency-audit.md` states it is a release blocker with the escalation path; a release
+  checklist doc references it.
+- **Tests required:** extend `core/test/dependency_audit_test.dart` for any new rule classes;
+  doc review.
+- **Notes / detail:** (agent fills this in.)
+- **Log:**
+  - 2026-08-30 — created.
 
 ---
 
@@ -1671,6 +1866,28 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 ## 7. Decisions Log
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
+
+- 2026-08-30 — **p2.1 biometric unlock is an opt-in shortcut *past* the PIN, behind a
+  `BiometricGateway` seam, with `local_auth` set `biometricOnly: true`; no schema change.**
+  Rationale: (1) **Seam, not a direct plugin call.** `local_auth` is a platform-channel plugin
+  that throws in `flutter test`, so — exactly like `ReminderScheduler` (p1.7) and
+  `BackupFileGateway` (p1.10) — the app depends on an `app`-side `BiometricGateway` interface
+  (`canAuthenticate` / `authenticate → success|failed|unavailable`), the production
+  `LocalAuthBiometricGateway` wraps the plugin, and `pumpOlf` injects `FakeBiometricGateway`
+  (default: incapable, so every pre-p2.1 widget test is untouched). CI never loads the
+  channel. (2) **Never a lock on its own.** The switch only shows once a PIN is set; the lock
+  screen keeps full PIN entry; a failed/cancelled/unavailable result falls back silently. So
+  biometric is purely "is it me?" and the app PIN stays the sole knowledge factor —
+  `biometricOnly: true` deliberately refuses the *device* passcode as a stand-in, which keeps
+  the model clean for the p2.2 decoy PIN. (3) **No schema change.** One `app_settings` key
+  (`SettingKeys.biometricUnlock`, `'true'`/absent) via the p1.6 store; the PIN credential in
+  the secure enclave is untouched; drift codegen is byte-identical. (4) **Native config is
+  minimal and audited.** Android `MainActivity` → `FlutterFragmentActivity` (a `local_auth`
+  requirement); `USE_BIOMETRIC` added to the manifest *with* an `audited:` comment so the
+  dependency-audit still passes (38 rules); iOS gets `NSFaceIDUsageDescription`. `local_auth`
+  is a Flutter-team, biometric-only package — not on the denylist. (5) **Still a UI-level
+  gate** — like the PIN, biometric unlock does not wrap the DB key; binding the key to
+  PIN/biometric with a real KDF stays a §9 follow-up. — worker: phase2.
 
 - 2026-08-29 — **p1.11 loss / birth are two `CycleEventType` values on the dormant
   `cycle_events` table (no schema change); the cycle engine marks the interval they fall in as
@@ -2056,6 +2273,17 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   to no interval (documented + tested), so a same-day "loss, then period resumes" needs the
   period dated at least a day later for the stats to reset. — noted by worker: phase1 during
   p1.11.
+- **p2.1 follow-ups:** biometric unlock is still a **UI-level gate** — it does not derive or
+  wrap the SQLCipher key (same limitation as the PIN); binding the DB key to the PIN/biometric
+  with a real KDF, and moving the PIN hash off the main isolate + raising its work factor,
+  stay open (carried from p1.8). No **failed-attempt lockout / backoff** on either the PIN or
+  the biometric retry button — that is p2.4-adjacent hardening. The auto-prompt fires once per
+  lock-screen mount; it does **not** re-fire if the user backgrounds and returns while still on
+  the lock screen (they use the "Use biometrics" button). `biometricOnly: true` means devices
+  with only a passcode (no enrolled fingerprint/face) can't use the shortcut by design —
+  revisit if users ask for device-credential fallback. The real `LocalAuthBiometricGateway` is
+  not unit-tested (glue over a channel), matching the p1.7 precedent; a device/integration
+  test could be added to the nightly. — noted by worker: phase2 during p2.1.
 - (add more here)
 
 ## 10. Orphaned / cut work

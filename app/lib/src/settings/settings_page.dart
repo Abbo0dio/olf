@@ -6,11 +6,12 @@ import 'package:olf_core/olf_core.dart';
 import '../backup/backup_page.dart';
 import '../personalization/personalization_providers.dart';
 import '../pregnancy/pregnancy_events_page.dart';
+import '../security/biometric_providers.dart';
 import '../security/pin_providers.dart';
 import '../theme/theme_providers.dart';
 
 /// App settings (p1.8 lock; p1.9 appearance + pronouns; p1.10 backup;
-/// p1.11 pregnancy loss & birth).
+/// p1.11 pregnancy loss & birth; p2.1 biometric unlock).
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -21,6 +22,10 @@ class SettingsPage extends ConsumerWidget {
         ref.watch(themeModeProvider).valueOrNull ?? ThemeMode.system;
     final pronouns =
         ref.watch(pronounsProvider).valueOrNull ?? Pronouns.unspecified;
+    final biometricCapable =
+        ref.watch(biometricCapableProvider).valueOrNull ?? false;
+    final biometricEnabled =
+        ref.watch(biometricUnlockEnabledProvider).valueOrNull ?? false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -76,6 +81,22 @@ class SettingsPage extends ConsumerWidget {
               leading: const Icon(Icons.password_outlined),
               title: const Text('Change PIN'),
               onTap: () => _setPin(context, ref),
+            ),
+          if (pinSet)
+            SwitchListTile(
+              secondary: const Icon(Icons.fingerprint),
+              value: biometricEnabled && biometricCapable,
+              title: const Text('Unlock with biometrics'),
+              subtitle: Text(
+                biometricCapable
+                    ? 'Use your fingerprint or face instead of typing the '
+                          'PIN. The PIN still works as a fallback.'
+                    : 'Add a fingerprint or face unlock in your device '
+                          'settings to use this.',
+              ),
+              onChanged: biometricCapable
+                  ? (want) => setBiometricUnlockEnabled(ref, enabled: want)
+                  : null,
             ),
           const _SectionHeader('Cycle'),
           ListTile(

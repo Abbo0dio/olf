@@ -69,6 +69,12 @@ dependencies:
   # the BackupFileGateway interface. No ad/analytics/telemetry surface.
   file_picker: ^8.1.0
 
+  # Face ID / Touch ID / Android biometric prompt for the optional unlock
+  # shortcut (p2.1). Flutter-team plugin, biometric auth only — no ad/analytics/
+  # telemetry surface. Confined to lib/src/security/local_auth_biometric_gateway
+  # .dart behind the BiometricGateway interface, so CI never loads the channel.
+  local_auth: ^3.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

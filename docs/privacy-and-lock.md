@@ -1,9 +1,10 @@
-# Anonymous-by-default, first-run explainer, and the app lock (p1.8)
+# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1)
 
 This documents the privacy posture the app ships with and the optional PIN lock.
 Requirement refs: `requirements.md` §3 (privacy & data security), §6 (regulatory /
-disclaimers), §9(8) (privacy distrust). Biometric unlock, a decoy PIN, scheduled
-auto-deletion, and screenshot/background masking are **Phase 2**.
+disclaimers), §9(8) (privacy distrust). p2.1 adds an optional biometric unlock
+shortcut (below). A decoy PIN, scheduled auto-deletion, and screenshot/background
+masking are still **Phase 2**.
 
 ## Anonymous by default
 
@@ -80,13 +81,47 @@ A database error falls through to `HomePage`, which owns the fail-safe screen.
   switch to set / change / remove the PIN afterwards — so it's genuinely
   optional and reversible without reinstalling.
 
+## Biometric unlock (p2.1)
+
+An **opt-in shortcut past the PIN**, never a lock on its own. It is only offered
+once a PIN is set, and PIN entry always stays on screen as the fallback.
+
+- `app/lib/src/security/biometric_gateway.dart` — the `BiometricGateway`
+  interface (`canAuthenticate()`, `authenticate({reason})` →
+  `BiometricAuthResult { success, failed, unavailable }`). Same seam pattern as
+  `ReminderScheduler` (p1.7) and `BackupFileGateway` (p1.10): the app talks to
+  the interface, `LocalAuthBiometricGateway` wraps the `local_auth` plugin, and
+  tests inject `FakeBiometricGateway`, so CI never loads the platform channel.
+- `local_auth` is configured with `biometricOnly: true` — the *device* passcode
+  is **not** accepted in place of the app PIN. Biometric answers "is it me?";
+  the app PIN is the only knowledge factor. This keeps the model clean for the
+  p2.2 decoy PIN.
+- `SettingKeys.biometricUnlock` (`'true'` / absent) in `app_settings` holds the
+  opt-in. `biometric_providers.dart` exposes `biometricCapableProvider`
+  (hardware + enrolment check) and `biometricUnlockEnabledProvider` (the
+  setting), plus `setBiometricUnlockEnabled`.
+- `PinUnlockScreen`: when enabled **and** the device is capable, the biometric
+  prompt fires once automatically on open, and a "Use biometrics" button retries
+  it. A failed/cancelled/unavailable result just falls back to the PIN with no
+  nag. Success sets `sessionUnlockedProvider`, exactly like a correct PIN.
+- Settings → Privacy → "Unlock with biometrics" switch (shown only when a PIN is
+  set; disabled with an explanatory subtitle when the device has no enrolled
+  biometric).
+- Native config: Android `MainActivity` extends `FlutterFragmentActivity` (a
+  `local_auth` requirement); `USE_BIOMETRIC` is declared in the manifest with an
+  `audited:` comment; iOS carries `NSFaceIDUsageDescription`. No biometric data
+  is read by the app and none leaves the device — the OS returns only pass/fail.
+- **Still a UI-level gate.** Biometric unlock does not wrap the database key
+  either; that remains a Phase 2 follow-up (§9).
+
 ### Not yet (Phase 2)
 
-Biometric unlock; a decoy PIN + decoy data; failed-attempt lockout / backoff;
-scheduled auto-deletion; screenshot / app-switcher masking; moving the hash off
-the main isolate and raising the work factor, or binding the DB key to the PIN
-with a real KDF.
+A decoy PIN + decoy data; failed-attempt lockout / backoff; scheduled
+auto-deletion; screenshot / app-switcher masking; moving the PIN hash off the
+main isolate and raising the work factor, or binding the DB key to the PIN /
+biometric with a real KDF.
 
 Covered by `app/test/security/pin_gate_test.dart`,
+`app/test/security/biometric_unlock_test.dart`,
 `app/test/settings/settings_page_test.dart`, and
 `core/test/security/pin_test.dart`.
