@@ -1406,7 +1406,7 @@ forward: the p0.5 manual physical-device smoke table, and the per-slice §9 foll
 
 ### Phase 2 — Privacy & security hardening
 
-**Status:** `IN PROGRESS` (p2.1–p2.6 DONE; p2.7 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
+**Status:** `IN PROGRESS` (p2.1–p2.7 DONE; p2.8 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
 
 The Phase 1 slice-list has been expanded into task rows below (p2.1–p2.9). Rows
 p2.2–p2.9 carry the intended scope; the agent starting each one fills in the
@@ -1822,8 +1822,8 @@ threat model committed.
   - 2026-08-31 — merged (squash `9370943`). **DONE.**
 
 #### p2.7 — In-app privacy education explainers
-- **Status:** IN REVIEW
-- **PR:** [#31](https://github.com/Abbo0dio/olf/pull/31)
+- **Status:** DONE
+- **PR:** [#31](https://github.com/Abbo0dio/olf/pull/31) — merged (squash `a7585fe`)
 - **Branch / worktree:** `feat/p2.7-privacy-education` / `../olf-wt/p2.7`
 - **Owner:** worker: phase2
 - **Depends on:** p2.5
@@ -1894,11 +1894,13 @@ threat model committed.
     dependency audit PASS; no `pubspec.lock` drift; inclusive-language lint green.
   - 2026-08-31 — PR [#31](https://github.com/Abbo0dio/olf/pull/31) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-31 — merged (squash `a7585fe`). **DONE.**
 
 #### p2.8 — Threat model + data-flow diagram committed to the repo
-- **Status:** TODO
-- **Branch / worktree:** —
-- **Owner:** —
+- **Status:** IN REVIEW
+- **PR:** [#32](https://github.com/Abbo0dio/olf/pull/32)
+- **Branch / worktree:** `feat/p2.8-threat-model` / `../olf-wt/p2.8`
+- **Owner:** worker: phase2
 - **Depends on:** none
 - **Requirement refs:** §3, §7, §8
 - **Goal:** A `docs/threat-model.md` (assets, adversaries, trust boundaries, mitigations,
@@ -1909,9 +1911,61 @@ threat model committed.
   a "review log" section is started.
 - **Tests required:** n/a (documentation) — but a CI check that the file exists and the review
   log has an entry for the current phase.
-- **Notes / detail:** (agent fills this in.)
+- **Notes / detail:**
+  - **No schema change. No new runtime dependency. No new permission. No new workflow.**
+    Documentation + one pure-Dart guard test in the existing `test` job.
+  - **`docs/threat-model.md`** — the living security-design doc. Sections: purpose &
+    review cadence; **assets** (cycle/health entries, the SQLCipher key, the PIN/decoy-PIN
+    hashes, preferences, `.olfbackup` files, derived predictions); **adversaries** (a person
+    with brief physical access to an unlocked phone; a person who can seize the device and
+    compel unlock; a co-owner / abuser sharing the device; a thief; malware / another app on
+    the device; a network attacker (future); a supply-chain attacker via a dependency; law
+    enforcement / civil subpoena; **not** in scope: a nation-state with a device 0-day, a
+    hardware forensic lab); **trust boundaries** (the OS keystore ↔ app; the app process ↔
+    the encrypted DB file; the app ↔ the OS share sheet / file picker; the app ↔ the
+    screen/recents buffer; the app ↔ the network (no traffic today); the repo ↔ its
+    dependency graph); **data-flow** as a committed **Mermaid** diagram (renders on GitHub,
+    no tooling, no binary) plus a short ASCII fallback, covering: entry → drift → SQLCipher
+    file; key create/read via `flutter_secure_storage`; PIN/biometric gate before the DB
+    opens; decoy PIN → separate empty vault; retention sweep deleting rows on launch/export;
+    export → encrypt → OS save dialog; lifecycle → screen mask; the `OlfHttpClient` seam with
+    **no** backend on the other side; **mitigations table** cross-referencing every Phase 0–2
+    control to its slice (see below); **residual risks** (pulled from the §9 follow-up
+    bullets — key not bound to PIN, no lockout/backoff, iOS screenshot gap, decoy DB left on
+    disk when disabled, saved backups not retro-scrubbed, cert-pinning designed-not-wired,
+    etc.); and a **`## Review log`** started with a **Phase 2** entry (date, reviewer =
+    worker: phase2, what was checked, no changes required).
+  - **Mitigation cross-reference (each Phase 0–2 control → slice):** no-account / local-only
+    store + SQLCipher at rest → **p0.4**; CI dependency-audit denylist (no ad/analytics SDK)
+    + branch protection → **p0.3**; PIN gate + anonymous-by-default + disclaimers + first-run
+    explainer → **p1.8**; encrypted backup/restore (`.olfbackup`, AES-GCM, gzip) → **p1.10**;
+    discreet dark theme → **p1.9**; biometric unlock over the PIN → **p2.1**; decoy / duress
+    PIN → **p2.2**; scheduled auto-deletion (retention window + purge-before-export) →
+    **p2.3**; background app-switcher mask + `FLAG_SECURE` + no-PHI recents → **p2.4**;
+    standalone consumer-health privacy policy + consent switches → **p2.5**; TLS-only /
+    no-cleartext platform config + `OlfHttpClient` chokepoint + transport gate → **p2.6**;
+    in-app privacy education (HIPAA gap, law-enforcement reality, delete steps) → **p2.7**;
+    this threat model + its guard → **p2.8**.
+  - **CI guard — `core/test/threat_model_doc_test.dart`** (pure `dart:io`, picked up by the
+    existing `core — unit tests` step in the `test` job — same mechanism as
+    `dependency_audit_test.dart` reading real repo files; **no `ci.yml` change**). Asserts:
+    (1) `../docs/threat-model.md` exists and is non-trivial; (2) it has the required section
+    headings (`## Assets`, `## Adversaries`, `## Trust boundaries`, `## Data flow`,
+    `## Mitigations`, `## Review log`); (3) it contains a fenced ```mermaid``` block;
+    (4) the `## Review log` section names the **current phase**, where the current phase is
+    derived from `../DEVELOPMENT_PLAN.md` as the highest-numbered `### Phase N` whose
+    `**Status:**` line is not `TODO`. So when Phase 3 opens the build fails until the review
+    log gains a `Phase 3` entry — enforcing the phase-gate review cadence.
+  - **Copy:** neutral, non-alarming, gender-neutral; the p1.9 inclusive-language lint already
+    scans `app/lib` + `core/lib` string literals, not `docs/`, so the doc's tone is guarded
+    by review, not lint (noted as acceptable — it is design documentation, not user copy).
 - **Log:**
   - 2026-08-30 — created.
+  - 2026-08-31 — claimed by worker: phase2; worktree `../olf-wt/p2.8`, branch
+    `feat/p2.8-threat-model` off `main` @ `a7585fe`. Wrote `docs/threat-model.md` (assets /
+    adversaries / trust boundaries / Mermaid + ASCII data-flow / mitigation cross-reference
+    to every Phase 0–2 slice / residual risks / Review log with a Phase 2 entry) and the
+    `core/test/threat_model_doc_test.dart` guard wired via the existing `test` job.
 
 #### p2.9 — Dependency-audit gate: strict + documented release blocker
 - **Status:** TODO
