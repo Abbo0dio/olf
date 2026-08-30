@@ -1,10 +1,11 @@
-# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1)
+# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1 · p2.2)
 
 This documents the privacy posture the app ships with and the optional PIN lock.
 Requirement refs: `requirements.md` §3 (privacy & data security), §6 (regulatory /
-disclaimers), §9(8) (privacy distrust). p2.1 adds an optional biometric unlock
-shortcut (below). A decoy PIN, scheduled auto-deletion, and screenshot/background
-masking are still **Phase 2**.
+disclaimers), §7 (duress / coercion), §9(8) (privacy distrust). p2.1 adds an
+optional biometric unlock shortcut and p2.2 adds an optional decoy / duress PIN
+(both below). Scheduled auto-deletion and screenshot/background masking are still
+**Phase 2**.
 
 ## Anonymous by default
 
@@ -114,14 +115,47 @@ once a PIN is set, and PIN entry always stays on screen as the fallback.
 - **Still a UI-level gate.** Biometric unlock does not wrap the database key
   either; that remains a Phase 2 follow-up (§9).
 
+## Decoy / duress PIN (p2.2)
+
+An **optional second PIN** that opens a *separate, empty* copy of the app. For a
+coerced-unlock situation: hand over the decoy PIN and nothing of the real data is
+visible or reachable, with no on-screen sign that a decoy exists.
+
+- **Two vaults, two keys.** `AppVault { real, decoy }` (`data/vault_database_opener
+  .dart`). The real vault is `olf.db` under `olf.db.key.v1`; the decoy vault is
+  `olf-decoy.db` under a *separate* secure-storage key `olf.db.key.decoy.v1`,
+  created lazily on first decoy unlock. `appDatabaseProvider` watches
+  `appVaultProvider` and opens exactly one — switching vaults closes the other.
+- **Routing.** `routePin(pin, {real, decoy})` in `core/lib/src/security/pin.dart`
+  returns `PinRoute { real, decoy, none }` (real checked first; both `verifyPin`
+  runs). `PinController.route` reads both credentials; `PinUnlockScreen._submit`
+  flips `appVaultProvider` to `decoy` and awaits the decoy database *before*
+  dropping the lock, so the real vault is never briefly shown.
+- **Decoy credential** lives in secure storage under `olf.pin.decoy.credential.v1`
+  (`decoyPinStoreProvider`), independent of the real credential.
+- **No hint in a decoy session.** `AppGate` skips the first-run explainer when
+  `vault == decoy` (a "lived-in" app), and Settings hides the "Decoy PIN" setup
+  rows unless `vault == real`. Inside a decoy session the ordinary "App lock
+  (PIN)" / "Change PIN" rows operate on the *decoy* credential, and preferences
+  (theme, pronouns, biometric flag) come from the decoy database.
+- **Setup.** Settings → Privacy → "Decoy PIN" switch (only when a real PIN is
+  set). A candidate equal to the real PIN is rejected (`matchesRealPin`).
+- **Reset on background.** The `AppLifecycleListener` in `AppGate` sets
+  `appVaultProvider` back to `real` (and locks) on `paused` / `hidden`, so a
+  decoy session never survives an app switch — the next unlock re-chooses.
+- **Biometric always → real.** A biometric unlock never opens the decoy vault.
+- Turning the real lock off also clears the decoy PIN. Turning the decoy PIN off
+  leaves the decoy database file in place (see §9 follow-ups).
+
 ### Not yet (Phase 2)
 
-A decoy PIN + decoy data; failed-attempt lockout / backoff; scheduled
-auto-deletion; screenshot / app-switcher masking; moving the PIN hash off the
-main isolate and raising the work factor, or binding the DB key to the PIN /
-biometric with a real KDF.
+Failed-attempt lockout / backoff; scheduled auto-deletion; screenshot /
+app-switcher masking; wiping the decoy database when the decoy PIN is removed;
+moving the PIN hash off the main isolate and raising the work factor, or binding
+each vault's DB key to its PIN / biometric with a real KDF.
 
 Covered by `app/test/security/pin_gate_test.dart`,
 `app/test/security/biometric_unlock_test.dart`,
+`app/test/security/decoy_pin_test.dart`,
 `app/test/settings/settings_page_test.dart`, and
 `core/test/security/pin_test.dart`.

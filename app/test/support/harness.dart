@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olf_app/main.dart';
+import 'package:olf_app/src/data/vault_database_opener.dart';
 import 'package:olf_app/src/onboarding/onboarding_providers.dart';
 import 'package:olf_app/src/providers.dart';
 import 'package:olf_app/src/security/biometric_gateway.dart';
@@ -62,6 +63,33 @@ class FakeBiometricGateway implements BiometricGateway {
   }
 }
 
+/// A [VaultDatabaseOpener] for tests (p2.2). Maps each [AppVault] to a database
+/// factory and records every database it opens so the test can close them all.
+/// Use via `vaultDatabaseOpenerProvider.overrideWithValue(...)` instead of
+/// [dbOverride] when a test needs the real/decoy split.
+class FakeVaultOpener implements VaultDatabaseOpener {
+  FakeVaultOpener({required this.real, required this.decoy});
+
+  final Future<AppDatabase> Function() real;
+  final Future<AppDatabase> Function() decoy;
+  final List<AppDatabase> opened = <AppDatabase>[];
+
+  @override
+  Future<AppDatabase> open(AppVault vault) async {
+    final db = await (vault == AppVault.real ? real : decoy)();
+    opened.add(db);
+    return db;
+  }
+
+  Future<void> closeAll() async {
+    for (final db in opened) {
+      try {
+        await db.close();
+      } catch (_) {}
+    }
+  }
+}
+
 /// Resolve Future/Stream microtasks and short animations. **Not**
 /// `pumpAndSettle` — the loading state animates a spinner forever.
 Future<void> flush(WidgetTester tester, [int frames = 12]) async {
@@ -87,12 +115,15 @@ Future<void> useTallSurface(WidgetTester tester) async {
 /// no lock screen). Pass `onboarded: false` to land on the first-run screen, or
 /// a seeded [FakePinStore] to land on the lock screen. [biometricGateway]
 /// defaults to an incapable [FakeBiometricGateway] (no biometric hardware).
+/// [decoyPinStore] defaults to an empty store (no decoy PIN); seed it to
+/// exercise decoy routing (p2.2).
 Future<void> pumpOlf(
   WidgetTester tester, {
   required List<Override> overrides,
   required Future<void> Function() body,
   bool onboarded = true,
   PinStore? pinStore,
+  PinStore? decoyPinStore,
   BiometricGateway? biometricGateway,
 }) async {
   await useTallSurface(tester);
@@ -101,6 +132,9 @@ Future<void> pumpOlf(
       overrides: [
         ...overrides,
         pinStoreProvider.overrideWithValue(pinStore ?? FakePinStore()),
+        decoyPinStoreProvider.overrideWithValue(
+          decoyPinStore ?? FakePinStore(),
+        ),
         biometricGatewayProvider.overrideWithValue(
           biometricGateway ?? FakeBiometricGateway(),
         ),

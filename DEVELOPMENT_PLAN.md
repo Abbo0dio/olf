@@ -1416,8 +1416,8 @@ detail (files, libs, schema, edge cases) in its row as work proceeds, per §1.
 threat model committed.
 
 #### p2.1 — Biometric unlock on top of the PIN
-- **Status:** IN REVIEW
-- **PR:** [#25](https://github.com/Abbo0dio/olf/pull/25)
+- **Status:** DONE
+- **PR:** [#25](https://github.com/Abbo0dio/olf/pull/25) — merged (squash → `0afdd48`)
 - **Branch / worktree:** `feat/p2.1-biometric-unlock` / `../olf-wt/p2.1`
 - **Owner:** worker: phase2
 - **Depends on:** p1.8
@@ -1480,24 +1480,74 @@ threat model committed.
     app); `dart format` clean; dependency audit PASS (38 rules).
   - 2026-08-30 — PR [#25](https://github.com/Abbo0dio/olf/pull/25) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-31 — merged (PR #25, squash → `0afdd48`). CI green (incl. Android APK + iOS
+    build). Worktree + branch cleaned up. **DONE.**
 
 #### p2.2 — Decoy / duress PIN
-- **Status:** TODO
-- **Branch / worktree:** —
-- **Owner:** —
+- **Status:** IN REVIEW
+- **PR:** [#26](https://github.com/Abbo0dio/olf/pull/26)
+- **Branch / worktree:** `feat/p2.2-decoy-pin` / `../olf-wt/p2.2`
+- **Owner:** worker: phase2
 - **Depends on:** p1.8, p2.1
-- **Requirement refs:** §7
+- **Requirement refs:** §3, §7
 - **Goal:** A second, user-set PIN that opens a plausible, empty-looking instance of the app
   instead of the real data — for a coerced-unlock situation. Entering it never reveals that a
   decoy exists.
-- **Acceptance criteria:** decoy PIN opens a clean app with its own (throwaway) store; the
-  real data is not reachable or detectable from the decoy session; switching back requires the
-  real PIN; no UI anywhere hints that a decoy is configured.
-- **Tests required:** unit (PIN routing: real vs decoy vs wrong); widget/integration (decoy
-  session sees no real data and cannot reach it).
-- **Notes / detail:** (agent fills this in.)
+- **Acceptance criteria:**
+  - Decoy PIN opens a clean app with its own (throwaway) store; the real data is not reachable
+    or detectable from the decoy session.
+  - Switching back to the real data requires the real PIN; backgrounding the app ends the
+    decoy session.
+  - No UI anywhere hints that a decoy is configured while a decoy session is active.
+- **Tests required:** unit (PIN routing: real vs decoy vs wrong, precedence, nulls);
+  widget (decoy session shows no real data + no "decoy" text; real PIN still works;
+  background → real PIN required; decoy PIN can't equal the real PIN).
+- **Notes / detail:**
+  - **No schema change.** No new dependencies — decoy reuses the existing SQLCipher +
+    secure-storage infrastructure.
+  - **Two vaults, two keys.** `AppVault { real, decoy }` in
+    `app/lib/src/data/vault_database_opener.dart`. Real = `olf.db` under secure-storage key
+    `olf.db.key.v1`; decoy = a physically separate `olf-decoy.db` under a **separate** key
+    `olf.db.key.decoy.v1`, created lazily on first decoy unlock (same schema + migrations,
+    starts empty). `EncryptedDatabase.open` gained an optional `fileName`;
+    `SecureStorageKeyStore` / `SecureStoragePinStore` gained a `keyName` param.
+  - **`appVaultProvider`** (`StateProvider<AppVault>`, default `real`) drives
+    `appDatabaseProvider` through the new `vaultDatabaseOpenerProvider` seam (fake in tests).
+    Switching vault closes the previous database and opens the other — only one is ever open.
+  - **Routing (`core`):** `routePin(pin, {real, decoy}) → PinRoute { real, decoy, none }` in
+    `pin.dart` — real checked first, both `verifyPin` runs, `null` credential never matches.
+    `PinController` gained a decoy `PinStore` + `route` / `setDecoyPin` / `clearDecoyPin` /
+    `matchesRealPin`. `PinUnlockScreen._submit` flips `appVaultProvider` to `decoy` and
+    **awaits the decoy database** before dropping the lock, so the real vault never flashes.
+  - **No hint in a decoy session.** `AppGate` skips the first-run explainer when
+    `vault == decoy`; Settings hides the "Decoy PIN" setup rows unless `vault == real`, and
+    inside a decoy session the ordinary "App lock (PIN)" / "Change PIN" rows operate on the
+    *decoy* credential. Preferences (theme, pronouns, biometric flag) naturally come from the
+    decoy database.
+  - **Setup:** Settings → Privacy → "Decoy PIN" switch (only when a real PIN is set) +
+    "Change decoy PIN". A candidate equal to the real PIN is rejected. Turning the real lock
+    off also clears the decoy PIN.
+  - **Reset on background.** `AppGate`'s `AppLifecycleListener` sets `appVaultProvider` back to
+    `real` (and locks) on `paused` / `hidden`. A biometric unlock is always → real.
+  - **Test harness:** `pumpOlf` gains `decoyPinStore` (default empty). `FakeVaultOpener` maps
+    each vault to a database factory and records what it opened; `driftRuntimeOptions
+    .dontWarnAboutMultipleDatabases` is set in the decoy test (the real+decoy pair around a
+    switch is intended).
+  - **Docs:** `docs/privacy-and-lock.md` ("Decoy / duress PIN (p2.2)" section),
+    `docs/local-database.md` (decoy vault note).
 - **Log:**
   - 2026-08-30 — created.
+  - 2026-08-31 — claimed by worker: phase2; worktree `../olf-wt/p2.2`, branch
+    `feat/p2.2-decoy-pin` off `main` @ `0afdd48`. Built: `routePin` (core), `AppVault` +
+    `VaultDatabaseOpener` seam, separate decoy database + key, decoy `PinStore` + controller
+    methods, lock-screen routing, first-run + Settings hiding in a decoy session, vault reset
+    on background. No schema change, no new deps.
+  - 2026-08-31 — built. core 287 / app 84 green; analyze `--fatal-infos --fatal-warnings`
+    clean (core + app); `dart format` clean; drift codegen unchanged; dependency audit PASS
+    (38 rules); no `pubspec.lock` drift; no `app/android/` change. §7 decision + §9 follow-ups
+    recorded.
+  - 2026-08-31 — PR [#26](https://github.com/Abbo0dio/olf/pull/26) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 #### p2.3 — Scheduled auto-deletion (retention window)
 - **Status:** TODO
@@ -1866,6 +1916,29 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 ## 7. Decisions Log
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
+
+- 2026-08-31 — **p2.2 decoy PIN routes to a physically separate, separately-keyed database;
+  no schema change, no new deps.** Rationale: (1) **Two vaults, not a filtered view.** A decoy
+  session must be unable to *reach or detect* the real data even by a determined coerced user,
+  so the decoy is its own `olf-decoy.db` under its own secure-storage key
+  (`olf.db.key.decoy.v1`), created lazily on first decoy unlock. `AppVault { real, decoy }`
+  selects the (file, key) pair via a new `VaultDatabaseOpener` seam; `appDatabaseProvider`
+  watches `appVaultProvider` and keeps exactly one database open — switching closes the other.
+  "Its own throwaway store" is then true by construction. (2) **Routing is pure and in `core`.**
+  `routePin(pin, {real, decoy}) → PinRoute` (real first, both `verifyPin` run, `null` never
+  matches) is unit-tested independently; `PinUnlockScreen._submit` flips the vault and *awaits
+  the decoy database* before dropping the lock so the real vault never flashes. (3)
+  **Non-detectability is UI-level, per-session.** `AppGate` skips first-run when `vault ==
+  decoy`; Settings hides the "Decoy PIN" rows unless `vault == real`; inside a decoy session
+  the ordinary lock rows manage the *decoy* credential, and theme/pronoun/biometric prefs come
+  from the decoy DB. There is no separate "decoy mode" flag surfaced anywhere. (4) **Bounded by
+  a background reset.** The lifecycle listener sets `appVaultProvider` back to `real` on
+  pause/hide, so a decoy session can't outlive an app switch and re-entry always re-chooses the
+  vault via the PIN. Biometric unlock is always → real. (5) **No schema change / no new deps**
+  — reuses SQLCipher + `flutter_secure_storage`; `EncryptedDatabase.open` gained an optional
+  `fileName`, the two secure stores gained a `keyName`. Known gaps (→ §9): removing the decoy
+  PIN leaves the decoy DB file; no lockout/backoff; DB key still not bound to the PIN. —
+  worker: phase2.
 
 - 2026-08-30 — **p2.1 biometric unlock is an opt-in shortcut *past* the PIN, behind a
   `BiometricGateway` seam, with `local_auth` set `biometricOnly: true`; no schema change.**
@@ -2284,6 +2357,20 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   revisit if users ask for device-credential fallback. The real `LocalAuthBiometricGateway` is
   not unit-tested (glue over a channel), matching the p1.7 precedent; a device/integration
   test could be added to the nightly. — noted by worker: phase2 during p2.1.
+- **p2.2 follow-ups:** (a) turning the decoy PIN **off** leaves `olf-decoy.db` on disk — it is
+  just unreachable; a real "delete the decoy space" action (and wiping it) is open. (b) The
+  decoy vault opens with **default preferences** (system theme, they/them, biometric off) —
+  an owner who runs a heavily-customised real app might notice the difference; seeding the
+  decoy DB with a copy of a few innocuous prefs on creation would close that. (c) No
+  **failed-attempt lockout / backoff** still (shared with p2.1). (d) The DB key is still not
+  bound to the PIN — each vault's SQLCipher key sits in secure storage independent of its PIN,
+  so an attacker with a secure-store dump + the decoy PIN still can't read the real DB, but an
+  attacker with the real key doesn't need any PIN. Binding each vault's key to its PIN with a
+  real KDF is the p1.8/p2.1 carry-over. (e) `_submit` awaits `appDatabaseProvider.future`
+  after switching vault; if the decoy DB fails to open the user lands on the fail-safe screen
+  rather than the lock screen — acceptable but not graceful. (f) The decoy DB is created on
+  first decoy unlock, so the very first duress use has a brief "opening database" spinner the
+  real vault wouldn't show on a warm start. — noted by worker: phase2 during p2.2.
 - (add more here)
 
 ## 10. Orphaned / cut work

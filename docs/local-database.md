@@ -31,6 +31,12 @@ is orthogonal to schema and query logic).
 No health data is ever written outside this encrypted file. No PHI goes to logs or (later)
 notification text — that rule is enforced in review and revisited in Phase 2's threat model.
 
+**Decoy vault (p2.2).** The real database is `olf.db` under secure-storage key `olf.db.key.v1`.
+The optional decoy / duress PIN opens a physically separate `olf-decoy.db` under its own key
+`olf.db.key.decoy.v1` — same schema and migrations, starts empty, created lazily on first decoy
+unlock. `VaultDatabaseOpener` picks the file+key from the active `AppVault`; `appDatabaseProvider`
+holds only one open at a time. See `docs/privacy-and-lock.md`.
+
 ## Schema v1
 
 `cycle_events` — one dated event on the cycle timeline:

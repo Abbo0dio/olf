@@ -6,18 +6,27 @@ import 'package:olf_core/olf_core.dart';
 import '../backup/backup_page.dart';
 import '../personalization/personalization_providers.dart';
 import '../pregnancy/pregnancy_events_page.dart';
+import '../providers.dart';
 import '../security/biometric_providers.dart';
 import '../security/pin_providers.dart';
 import '../theme/theme_providers.dart';
 
 /// App settings (p1.8 lock; p1.9 appearance + pronouns; p1.10 backup;
-/// p1.11 pregnancy loss & birth; p2.1 biometric unlock).
+/// p1.11 pregnancy loss & birth; p2.1 biometric unlock; p2.2 decoy PIN).
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pinSet = ref.watch(pinCredentialProvider).valueOrNull != null;
+    // p2.2: inside a decoy session the "App lock" rows manage the *decoy*
+    // credential, and the "Decoy PIN" setup rows are hidden entirely, so nothing
+    // hints that a decoy exists.
+    final vault = ref.watch(appVaultProvider);
+    final realPinSet = ref.watch(pinCredentialProvider).valueOrNull != null;
+    final decoyPinSet =
+        ref.watch(decoyPinCredentialProvider).valueOrNull != null;
+    final pinSet = vault == AppVault.decoy ? decoyPinSet : realPinSet;
+    final showDecoySetup = vault == AppVault.real && realPinSet;
     final themeMode =
         ref.watch(themeModeProvider).valueOrNull ?? ThemeMode.system;
     final pronouns =
@@ -73,14 +82,34 @@ class SettingsPage extends ConsumerWidget {
               'Ask for a numeric code each time olf opens. This is a screen '
               'lock, not extra encryption.',
             ),
-            onChanged: (want) =>
-                want ? _setPin(context, ref) : _confirmRemove(context, ref),
+            onChanged: (want) => want
+                ? _setPin(context, ref, vault)
+                : _confirmRemove(context, ref, vault),
           ),
           if (pinSet)
             ListTile(
               leading: const Icon(Icons.password_outlined),
               title: const Text('Change PIN'),
-              onTap: () => _setPin(context, ref),
+              onTap: () => _setPin(context, ref, vault),
+            ),
+          if (showDecoySetup)
+            SwitchListTile(
+              secondary: const Icon(Icons.shield_outlined),
+              value: decoyPinSet,
+              title: const Text('Decoy PIN'),
+              subtitle: const Text(
+                'A second PIN that opens a separate, empty olf. Use it if you '
+                'are ever forced to unlock the app.',
+              ),
+              onChanged: (want) => want
+                  ? _setDecoyPin(context, ref)
+                  : _confirmRemoveDecoy(context, ref),
+            ),
+          if (showDecoySetup && decoyPinSet)
+            ListTile(
+              leading: const Icon(Icons.password_outlined),
+              title: const Text('Change decoy PIN'),
+              onTap: () => _setDecoyPin(context, ref),
             ),
           if (pinSet)
             SwitchListTile(
@@ -127,18 +156,32 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _setPin(BuildContext context, WidgetRef ref) async {
+  Future<void> _setPin(
+    BuildContext context,
+    WidgetRef ref,
+    AppVault vault,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     final pin = await showDialog<String>(
       context: context,
       builder: (_) => const _SetPinDialog(),
     );
     if (pin == null) return;
-    await ref.read(pinControllerProvider).setPin(pin);
-    messenger.showSnackBar(const SnackBar(content: Text('App lock is on.')));
+    final controller = ref.read(pinControllerProvider);
+    if (vault == AppVault.decoy) {
+      await controller.setDecoyPin(pin);
+      messenger.showSnackBar(const SnackBar(content: Text('PIN updated.')));
+    } else {
+      await controller.setPin(pin);
+      messenger.showSnackBar(const SnackBar(content: Text('App lock is on.')));
+    }
   }
 
-  Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmRemove(
+    BuildContext context,
+    WidgetRef ref,
+    AppVault vault,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     final yes = await showDialog<bool>(
       context: context,
@@ -158,8 +201,60 @@ class SettingsPage extends ConsumerWidget {
       ),
     );
     if (yes != true) return;
-    await ref.read(pinControllerProvider).clearPin();
+    final controller = ref.read(pinControllerProvider);
+    if (vault == AppVault.decoy) {
+      await controller.clearDecoyPin();
+    } else {
+      await controller.clearPin();
+    }
     messenger.showSnackBar(const SnackBar(content: Text('App lock is off.')));
+  }
+
+  Future<void> _setDecoyPin(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final pin = await showDialog<String>(
+      context: context,
+      builder: (_) => const _SetPinDialog(),
+    );
+    if (pin == null) return;
+    final controller = ref.read(pinControllerProvider);
+    if (await controller.matchesRealPin(pin)) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Choose a code different from your main PIN.'),
+        ),
+      );
+      return;
+    }
+    await controller.setDecoyPin(pin);
+    messenger.showSnackBar(const SnackBar(content: Text('Decoy PIN is on.')));
+  }
+
+  Future<void> _confirmRemoveDecoy(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Turn off the decoy PIN?'),
+        content: const Text(
+          'The separate decoy space stays on the device but can no longer be '
+          'opened.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Turn off'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    await ref.read(pinControllerProvider).clearDecoyPin();
+    messenger.showSnackBar(const SnackBar(content: Text('Decoy PIN is off.')));
   }
 }
 
