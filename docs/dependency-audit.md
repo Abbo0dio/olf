@@ -15,7 +15,7 @@ CI gate enforces this mechanically. It is a **release blocker** (`DEVELOPMENT_PL
 - **Regression test:** [`core/test/dependency_audit_test.dart`](../core/test/dependency_audit_test.dart)
   runs the script against deliberately-failing fixtures and asserts it exits non-zero.
 
-## The two rules
+## The rules
 
 ### 1. No denylisted package in the locked graph
 
@@ -24,7 +24,7 @@ stale (so the audit always sees the real graph), then scans **every** package in
 files — `direct main`, `direct dev`, and `transitive` alike — against the denylist. Any match
 fails the build.
 
-### 2. No un-audited Android permission
+### 2. No un-audited Android permission (and no manifest cleartext)
 
 The app's **main** manifest (`app/android/app/src/main/AndroidManifest.xml`) is scanned for
 `<uses-permission>` entries. Each must be immediately preceded (within a few lines) by an
@@ -36,11 +36,24 @@ The app's **main** manifest (`app/android/app/src/main/AndroidManifest.xml`) is 
 <uses-permission android:name="android.permission.INTERNET"/>
 ```
 
+The same scan fails on `android:usesCleartextTraffic="true"` anywhere in that manifest (p2.6).
+
 Flutter's generated `src/debug` and `src/profile` manifests (which add `INTERNET` for hot
 reload / DevTools) are **not** scanned — they are tooling-managed and never ship in a release
 build. Review them by eye if they ever change.
 
-iOS App Transport Security / URL-scheme review is manual for now; it becomes a gate in **p2.6**.
+### 3. Transport security baseline (p2.6)
+
+`--net-config app/android/app/src/main/res/xml/network_security_config.xml` and
+`--plist app/ios/Runner/Info.plist` are scanned (XML/plist comments stripped first, so a
+warning comment naming a token does not trip it). The build fails if:
+
+- the network-security config says `cleartextTrafficPermitted="true"`, is missing the explicit
+  `"false"`, or contains a `<debug-overrides>` block;
+- the Info.plist sets any `NSAllowsArbitraryLoads*` / `NSAllowsLocalNetworking` to `<true/>`,
+  or declares `NSExceptionDomains`.
+
+Full rationale and the Dart `OlfHttpClient` seam: [`transport-security.md`](transport-security.md).
 
 ## Denylist file format
 

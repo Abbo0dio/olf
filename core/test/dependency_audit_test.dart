@@ -72,7 +72,53 @@ void main() {
     expect(r.exitCode, 0, reason: r.stderr.toString());
   });
 
-  test('the real repo denylist + committed locks pass', () {
+  test('BLOCKS an Android net-security config that re-enables cleartext', () {
+    final r = run([
+      '--denylist',
+      '$fixtures/denylist.txt',
+      '--net-config',
+      '$fixtures/net_config_cleartext.xml',
+    ]);
+
+    expect(r.exitCode, 1, reason: r.stderr.toString());
+    expect(r.stderr, contains('cleartextTrafficPermitted="true"'));
+  });
+
+  test('PASSES the hardened Android net-security config', () {
+    final r = run([
+      '--denylist',
+      '$fixtures/denylist.txt',
+      '--net-config',
+      '$fixtures/net_config_strict.xml',
+    ]);
+
+    expect(r.exitCode, 0, reason: r.stderr.toString());
+  });
+
+  test('BLOCKS an iOS plist that allows arbitrary loads', () {
+    final r = run([
+      '--denylist',
+      '$fixtures/denylist.txt',
+      '--plist',
+      '$fixtures/plist_ats_weak.plist',
+    ]);
+
+    expect(r.exitCode, 1, reason: r.stderr.toString());
+    expect(r.stderr, contains('NSAllowsArbitraryLoads'));
+  });
+
+  test('PASSES an iOS plist with strict App Transport Security', () {
+    final r = run([
+      '--denylist',
+      '$fixtures/denylist.txt',
+      '--plist',
+      '$fixtures/plist_ats_strict.plist',
+    ]);
+
+    expect(r.exitCode, 0, reason: r.stderr.toString());
+  });
+
+  test('the real repo denylist + committed locks + transport config pass', () {
     final r = run([
       '--denylist',
       '../.github/dependency-denylist.txt',
@@ -82,6 +128,10 @@ void main() {
       '../app/pubspec.lock',
       '--manifest',
       '../app/android/app/src/main/AndroidManifest.xml',
+      '--net-config',
+      '../app/android/app/src/main/res/xml/network_security_config.xml',
+      '--plist',
+      '../app/ios/Runner/Info.plist',
     ]);
 
     expect(
