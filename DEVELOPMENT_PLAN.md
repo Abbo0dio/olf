@@ -1631,8 +1631,8 @@ threat model committed.
   - 2026-08-31 — merged as PR #27 (squash `c55bac8`). **DONE.**
 
 #### p2.4 — Background privacy (app-switcher mask, screenshot block, lock-screen hygiene)
-- **Status:** IN PROGRESS
-- **PR:** —
+- **Status:** IN REVIEW
+- **PR:** [#28](https://github.com/Abbo0dio/olf/pull/28)
 - **Branch / worktree:** `feat/p2.4-background-privacy` / `../olf-wt/p2.4`
 - **Owner:** worker: phase2
 - **Depends on:** p1.8
@@ -1690,6 +1690,11 @@ threat model committed.
     `olf/screen_security` MethodChannel + `MainActivity.kt` `FLAG_SECURE` handler, iOS
     `AppDelegate` native cover, Android notification `visibility: private`, broadened
     notification-content test. No schema change, no new deps, no new permission.
+  - 2026-08-31 — built. core 302 / app 95 green; analyze `--fatal-infos --fatal-warnings`
+    clean (core + app); `dart format` clean; dependency audit PASS (38 rules); no
+    `pubspec.lock` drift; no `AndroidManifest.xml` change. §9 follow-ups recorded.
+  - 2026-08-31 — PR [#28](https://github.com/Abbo0dio/olf/pull/28) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 #### p2.5 — Standalone consumer-health privacy policy screen
 - **Status:** TODO
