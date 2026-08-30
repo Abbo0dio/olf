@@ -1406,7 +1406,7 @@ forward: the p0.5 manual physical-device smoke table, and the per-slice §9 foll
 
 ### Phase 2 — Privacy & security hardening
 
-**Status:** `IN PROGRESS` (p2.1–p2.3 DONE; p2.4 IN PROGRESS) · **Requirement refs:** §3, §6, §7, §8.
+**Status:** `IN PROGRESS` (p2.1–p2.4 DONE; p2.5 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
 
 The Phase 1 slice-list has been expanded into task rows below (p2.1–p2.9). Rows
 p2.2–p2.9 carry the intended scope; the agent starting each one fills in the
@@ -1695,11 +1695,13 @@ threat model committed.
     `pubspec.lock` drift; no `AndroidManifest.xml` change. §9 follow-ups recorded.
   - 2026-08-31 — PR [#28](https://github.com/Abbo0dio/olf/pull/28) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-31 — merged as PR #28 (squash `5198074`). **DONE.**
 
 #### p2.5 — Standalone consumer-health privacy policy screen
-- **Status:** TODO
-- **Branch / worktree:** —
-- **Owner:** —
+- **Status:** IN REVIEW
+- **PR:** [#29](https://github.com/Abbo0dio/olf/pull/29)
+- **Branch / worktree:** `feat/p2.5-privacy-policy` / `../olf-wt/p2.5`
+- **Owner:** worker: phase2
 - **Depends on:** p1.8
 - **Requirement refs:** §3, §6
 - **Goal:** A dedicated, plain-language privacy policy screen (not a web link), reachable from
@@ -1710,9 +1712,51 @@ threat model committed.
   and default to off; commitments text reviewed against §3/§6; content is testable strings.
 - **Tests required:** content test (each commitment/opt-in present); widget test (navigation
   from first run and Settings; opt-in state persists).
-- **Notes / detail:** (agent fills this in.)
+- **Notes / detail:**
+  - **No schema change. No new dependencies.** Two new `SettingKeys`
+    (`analytics_opt_in`, `data_sharing_opt_in`) in the existing `app_settings` store.
+  - **Content — `app/lib/src/privacy/privacy_policy_content.dart`**, named constants like
+    `onboarding/disclaimers.dart` so a content test asserts every commitment is on screen and
+    the p1.9 copy-lint has one place to look. Eight commitment sections (heading + body):
+    *stays on your device* · *we never sell your data* (no "anonymous data set" / "change of
+    ownership" exception) · *we do not share it either* (no ad networks / analytics / brokers;
+    the dependency-audit gate enforces it) · *if someone asks us for your data* ("we require
+    valid legal process", and "nothing for us to hand over" since data never leaves the
+    device) · *your consumer-health-data rights* (Washington My Health My Data Act + Nevada
+    SB370: no collection/sharing without specific opt-in consent, off by default; access =
+    all data is in the app + encrypted export; delete = auto-delete window or uninstall) ·
+    *what we would ever collect* (nothing now; any future practice listed here, opt-in) ·
+    *children* · *changes to this policy*.
+  - **Screen — `PrivacyPolicyScreen`** (`app/lib/src/privacy/privacy_policy_screen.dart`), a
+    plain `ConsumerWidget` + `ListView`. Renders the commitments, then a **"Your choices"**
+    block with two independent `SwitchListTile`s bound to
+    `analyticsOptInProvider` / `dataSharingOptInProvider` (both `StreamProvider<bool>`,
+    `false` until the DB is open or the user opts in). `setAnalyticsOptIn` /
+    `setDataSharingOptIn` write `'true'` / `'false'`; toggling one never touches the other.
+  - **Reachable from both entry points:** a `TextButton` ("Read the full privacy policy")
+    under the disclaimer points on `FirstRunScreen`, and a `ListTile` in Settings → Privacy
+    (after "Auto-delete old entries"). Both `Navigator.push` the same screen.
+  - **Copy** is plain, honest, second person, non-alarming; gender-neutral (the p1.9
+    `inclusive_language_test` scans it automatically). Reviewed against §3 (no selling /
+    legal-process posture) and §6.
+- **Scope boundary with p2.7.** p2.5 is the **policy itself + the two consent switches**.
+  The educational explainers — the HIPAA-gap deep-dive, the law-enforcement-access reality,
+  and a step-by-step "how to delete everything" walkthrough — are **p2.7** (in-app privacy
+  education). p2.5's policy states the rights and where the controls are; p2.7 will add the
+  teaching pages that link to them.
 - **Log:**
   - 2026-08-30 — created.
+  - 2026-08-31 — claimed by worker: phase2; worktree `../olf-wt/p2.5`, branch
+    `feat/p2.5-privacy-policy` off `main` @ `5198074`. Built: `privacy_policy_content.dart`
+    (8 commitments + choices copy), `PrivacyPolicyScreen`, `analytics_opt_in` /
+    `data_sharing_opt_in` keys + providers + setters, first-run link + Settings row. No
+    schema change, no new deps.
+  - 2026-08-31 — built. core 302 / app 103 green; analyze `--fatal-infos --fatal-warnings`
+    clean (core + app); `dart format` clean; drift codegen unchanged; dependency audit PASS
+    (38 rules); no `pubspec.lock` drift; no `app/android/` change. §9 follow-ups recorded;
+    p2.5/p2.7 boundary noted above.
+  - 2026-08-31 — PR [#29](https://github.com/Abbo0dio/olf/pull/29) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 #### p2.6 — Transport security baseline (for any future network use)
 - **Status:** TODO
@@ -2514,6 +2558,20 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   intentional (fail-safe) but a short debounce could reduce the flicker; not worth it yet. (e) The
   cover is a plain themed panel; a deliberate branded splash would look less like a glitch.
   — noted by worker: phase2 during p2.4.
+- **p2.5 follow-ups:** (a) The two consent switches (`analytics_opt_in`, `data_sharing_opt_in`)
+  are **forward-looking gates with no consumer yet** — nothing in the app reads them, because
+  the app collects and shares nothing. Whichever future slice adds a metric or a share must
+  check the relevant provider *and* add its specifics to the "What we would ever collect"
+  policy section (there is no test binding the two together yet). (b) The policy is **English
+  only** and the "last reviewed" date is a hand-maintained constant
+  (`privacyPolicyLastUpdated`) — a copy change that forgets to bump it only trips the
+  "four-digit year" check, not staleness. (c) No **acceptance/version tracking** — the user
+  is never asked to acknowledge a policy change (by design: "continued use never counts as
+  agreement", and any new practice is opt-in), but if a jurisdiction ever requires explicit
+  re-consent this needs a stored policy-version key. (d) The MHMDA/SB370 alignment is a
+  good-faith reading, **not a lawyer review**. (e) Educational explainers (HIPAA gap,
+  law-enforcement reality, delete walkthrough) are deliberately **out of scope → p2.7**.
+  — noted by worker: phase2 during p2.5.
 - (add more here)
 
 ## 10. Orphaned / cut work

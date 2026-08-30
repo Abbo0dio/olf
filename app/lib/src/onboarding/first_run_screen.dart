@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../privacy/privacy_policy_content.dart';
+import '../privacy/privacy_policy_screen.dart';
 import '../security/pin_providers.dart';
 import '../settings/settings_providers.dart';
 import 'disclaimers.dart';
@@ -90,6 +92,19 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                       ],
                     ),
                   ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const PrivacyPolicyScreen(),
+                            ),
+                          ),
+                    child: const Text(privacyPolicyFirstRunLink),
+                  ),
+                ),
                 const Divider(height: 32),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,

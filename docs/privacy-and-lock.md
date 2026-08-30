@@ -1,12 +1,13 @@
-# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1 · p2.2 · p2.3 · p2.4)
+# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1 · p2.2 · p2.3 · p2.4 · p2.5)
 
 This documents the privacy posture the app ships with and the optional PIN lock.
 Requirement refs: `requirements.md` §3 (privacy & data security), §6 (regulatory /
 disclaimers), §7 (duress / coercion), §9(8) (privacy distrust), §9(11) (delete
 means delete). p2.1 adds an optional biometric unlock shortcut, p2.2 adds an
 optional decoy / duress PIN, p2.3 adds an optional scheduled auto-deletion
-window, and p2.4 adds always-on background privacy (app-switcher mask +
-screen-capture block) — all below.
+window, p2.4 adds always-on background privacy (app-switcher mask +
+screen-capture block), and p2.5 adds the standalone privacy-policy screen and
+its two consent switches — all below.
 
 ## Anonymous by default
 
@@ -38,9 +39,49 @@ has one place to look. Four points, reviewed against §3 / §6:
 Tone is deliberately plain and non-alarming (§4 / §9(12) — no fear-mongering).
 
 "Got it — continue" writes `onboarding_complete = 'true'` and enters the app. The
-screen also offers an **optional** PIN (opt-in, unchecked by default).
+screen also offers an **optional** PIN (opt-in, unchecked by default), and a
+link to the full privacy policy (p2.5, below).
 
 Covered by `app/test/onboarding/first_run_test.dart`.
+
+## Standalone privacy policy (p2.5)
+
+The whole policy lives in the app — there is no separate web version.
+`PrivacyPolicyScreen` (`app/lib/src/privacy/privacy_policy_screen.dart`) is
+reachable from **two** places: a "Read the full privacy policy" link on the
+first-run screen, and **Settings → Privacy → Privacy policy**. Requirement refs:
+§3, §6; aligned with Washington's My Health My Data Act (MHMDA) and Nevada SB370.
+
+The copy is named constants in `privacy/privacy_policy_content.dart` (same
+pattern as `disclaimers.dart` — a content test asserts every commitment is on
+screen; the p1.9 copy-lint scans it). Eight commitments:
+
+| Commitment | Substance |
+|---|---|
+| Everything stays on your device | no account / server; encrypted local DB only |
+| We never sell your data | explicit; no "anonymous set" / "change of ownership" carve-out |
+| We do not share it either | no ad networks / analytics / brokers; the dependency-audit gate enforces it |
+| If someone asks us for your data | "we require valid legal process" — and nothing to hand over, since data never leaves the device |
+| Your consumer-health-data rights | MHMDA / SB370: no collection or sharing without specific opt-in consent (off by default); access = data is all in the app + encrypted export; delete = auto-delete window or uninstall |
+| What we would ever collect | nothing now; any future practice listed here and opt-in |
+| Children | not directed at under-13s; nothing collected from anyone |
+| Changes to this policy | "last reviewed" date moves with the wording; new practices are opt-in; continued use never counts as agreement |
+
+### The two consent switches ("Your choices")
+
+Both are **independent** and **default off**, backed by `app_settings` keys and
+`privacy/privacy_providers.dart`:
+
+| Switch | Key | Meaning |
+|---|---|---|
+| Allow on-device usage analytics | `analytics_opt_in` | gates a *possible future* on-device metric; nothing is collected while off, and nothing leaves the device regardless |
+| Allow sharing data with third parties | `data_sharing_opt_in` | olf shares nothing today; stays off unless deliberately turned on for a named future feature |
+
+Nothing in the app reads these yet — they exist so any future change is the
+user's decision. The **educational explainers** (HIPAA gap, law-enforcement
+reality, a step-by-step delete walkthrough) are **p2.7**, not here.
+
+Covered by `app/test/privacy/privacy_policy_test.dart`.
 
 ## The app lock (PIN)
 
