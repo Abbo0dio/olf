@@ -1,0 +1,27 @@
+# Dependency updates — GitHub Actions ONLY.
+#
+# Rationale (CI-volume thread, 2026-08, after the repo went public):
+# pub-package *version* bumps are handled out-of-band by
+# .github/workflows/dependency-report.yml, which refreshes a single monthly
+# tracking issue instead of opening a PR (and firing the full CI matrix) per
+# package. Action-version drift is the real supply-chain exposure and those
+# updates are low-risk to merge, so github-actions DOES get PRs — grouped,
+# monthly, capped at 2 open.
+#
+# Security updates for pub packages still arrive automatically via Dependabot
+# alerts + automated security fixes (repo Settings -> Code security), which are
+# independent of this file.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"                 # scans .github/workflows/
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "ci"
