@@ -146,8 +146,8 @@ linked to a `periods` row.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `key` | TEXT, **PRIMARY KEY** | Well-known keys in `SettingKeys` — `temperature_unit` (p1.6), `onboarding_complete` (p1.8), `theme_mode` and `pronouns` (p1.9), `biometric_unlock` (p2.1), `retention_window` (p2.3). |
-| `value` | TEXT | Opaque string; each caller owns its encoding. `theme_mode` ∈ `system` \| `light` \| `dark` (absent → `system`). `pronouns` is a `Pronouns` enum name (`sheHer` \| `theyThem` \| `heHim`); absent or `''` → `unspecified`, which copy resolves to they/them. `biometric_unlock` is `'true'` when the user has opted in to the biometric unlock shortcut (p2.1); absent / anything else → off. `retention_window` is a `RetentionWindow` enum name (`months6` \| `year1` \| `years2` \| `years3`) for scheduled auto-deletion (p2.3); absent / `off` / anything unrecognised → keep everything. |
+| `key` | TEXT, **PRIMARY KEY** | Well-known keys in `SettingKeys` — `temperature_unit` (p1.6), `onboarding_complete` (p1.8), `theme_mode` and `pronouns` (p1.9), `biometric_unlock` (p2.1), `retention_window` (p2.3), `analytics_opt_in` and `data_sharing_opt_in` (p2.5). |
+| `value` | TEXT | Opaque string; each caller owns its encoding. `theme_mode` ∈ `system` \| `light` \| `dark` (absent → `system`). `pronouns` is a `Pronouns` enum name (`sheHer` \| `theyThem` \| `heHim`); absent or `''` → `unspecified`, which copy resolves to they/them. `biometric_unlock` is `'true'` when the user has opted in to the biometric unlock shortcut (p2.1); absent / anything else → off. `retention_window` is a `RetentionWindow` enum name (`months6` \| `year1` \| `years2` \| `years3`) for scheduled auto-deletion (p2.3); absent / `off` / anything unrecognised → keep everything. `analytics_opt_in` / `data_sharing_opt_in` are `'true'` only when the user opts in on the privacy-policy screen (p2.5); absent / anything else → off, and nothing in the app reads them yet. |
 | `updated_at` | INTEGER (unix seconds) | |
 
 Cervical-mucus observations feed an **observed fertile-window** line on the prediction card

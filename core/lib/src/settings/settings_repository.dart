@@ -23,6 +23,16 @@ abstract final class SettingKeys {
   /// anything unrecognised means `off` (keep everything). Dated entries older
   /// than the window are purged on launch, on change, and before a new backup.
   static const String retentionWindow = 'retention_window';
+
+  /// `'true'` if the user has opted in to on-device usage analytics (p2.5).
+  /// Absent / anything else means off — the default. olf collects nothing while
+  /// this is off; the switch only gates a possible future on-device metric.
+  static const String analyticsOptIn = 'analytics_opt_in';
+
+  /// `'true'` if the user has opted in to sharing data with third parties
+  /// (p2.5). Absent / anything else means off — the default. olf shares nothing
+  /// regardless of this today; it exists so any future sharing is opt-in.
+  static const String dataSharingOptIn = 'data_sharing_opt_in';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).

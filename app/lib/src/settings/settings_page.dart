@@ -6,6 +6,8 @@ import 'package:olf_core/olf_core.dart';
 import '../backup/backup_page.dart';
 import '../personalization/personalization_providers.dart';
 import '../pregnancy/pregnancy_events_page.dart';
+import '../privacy/privacy_policy_content.dart';
+import '../privacy/privacy_policy_screen.dart';
 import '../providers.dart';
 import '../retention/retention_providers.dart';
 import '../security/biometric_providers.dart';
@@ -14,7 +16,7 @@ import '../theme/theme_providers.dart';
 
 /// App settings (p1.8 lock; p1.9 appearance + pronouns; p1.10 backup;
 /// p1.11 pregnancy loss & birth; p2.1 biometric unlock; p2.2 decoy PIN;
-/// p2.3 auto-delete).
+/// p2.3 auto-delete; p2.5 privacy policy).
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -145,6 +147,16 @@ class SettingsPage extends ConsumerWidget {
               style: Theme.of(context).textTheme.labelLarge,
             ),
             onTap: () => _pickRetention(context, ref, retentionWindow),
+          ),
+          ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text(privacyPolicyTitle),
+            subtitle: const Text(privacyPolicySettingsSubtitle),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const PrivacyPolicyScreen(),
+              ),
+            ),
           ),
           const _SectionHeader('Cycle'),
           ListTile(
