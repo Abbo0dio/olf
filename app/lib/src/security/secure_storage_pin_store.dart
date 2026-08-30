@@ -1,16 +1,27 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:olf_core/olf_core.dart';
 
+/// Secure-storage key for the real app-unlock PIN credential (p1.8).
+const String realPinCredentialKey = 'olf.pin.credential.v1';
+
+/// Secure-storage key for the decoy / duress PIN credential (p2.2). A separate
+/// entry so the two credentials never share storage.
+const String decoyPinCredentialKey = 'olf.pin.decoy.credential.v1';
+
 /// [PinStore] backed by the platform secure enclave — iOS Keychain and Android
 /// Keystore (`EncryptedSharedPreferences`) — via `flutter_secure_storage`.
 ///
 /// Mirrors `SecureStorageKeyStore`: the PIN credential never touches plaintext
-/// storage or app preferences.
+/// storage or app preferences. [keyName] selects which credential this store
+/// owns ([realPinCredentialKey] by default, [decoyPinCredentialKey] for the
+/// decoy PIN).
 class SecureStoragePinStore implements PinStore {
-  SecureStoragePinStore([FlutterSecureStorage? storage])
-    : _storage = storage ?? const FlutterSecureStorage();
+  SecureStoragePinStore({
+    FlutterSecureStorage? storage,
+    this.keyName = realPinCredentialKey,
+  }) : _storage = storage ?? const FlutterSecureStorage();
 
-  static const _keyName = 'olf.pin.credential.v1';
+  final String keyName;
 
   final FlutterSecureStorage _storage;
 
@@ -24,7 +35,7 @@ class SecureStoragePinStore implements PinStore {
   @override
   Future<PinCredential?> read() async {
     final raw = await _storage.read(
-      key: _keyName,
+      key: keyName,
       aOptions: _androidOptions,
       iOptions: _iosOptions,
     );
@@ -39,7 +50,7 @@ class SecureStoragePinStore implements PinStore {
 
   @override
   Future<void> write(PinCredential credential) => _storage.write(
-    key: _keyName,
+    key: keyName,
     value: credential.toStorageString(),
     aOptions: _androidOptions,
     iOptions: _iosOptions,
@@ -47,7 +58,7 @@ class SecureStoragePinStore implements PinStore {
 
   @override
   Future<void> delete() => _storage.delete(
-    key: _keyName,
+    key: keyName,
     aOptions: _androidOptions,
     iOptions: _iosOptions,
   );

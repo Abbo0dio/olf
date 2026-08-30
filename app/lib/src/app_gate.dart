@@ -33,6 +33,9 @@ class _AppGateState extends ConsumerState<AppGate> {
             state == AppLifecycleState.hidden) {
           if (ref.read(pinIsSetProvider)) {
             ref.read(sessionUnlockedProvider.notifier).state = false;
+            // Never resume straight into a decoy session — the next unlock must
+            // choose the vault again (p2.2).
+            ref.read(appVaultProvider.notifier).state = AppVault.real;
           }
         }
       },
@@ -57,6 +60,7 @@ class _AppGateState extends ConsumerState<AppGate> {
   }
 
   Widget _resolved() {
+    final vault = ref.watch(appVaultProvider);
     final firstRunDone = ref.watch(firstRunDoneProvider);
     final credential = ref.watch(pinCredentialProvider);
 
@@ -67,7 +71,10 @@ class _AppGateState extends ConsumerState<AppGate> {
       return const _GateLoading();
     }
 
-    if (firstRunDone.value != true) return const FirstRunScreen();
+    // The decoy vault (p2.2) is a "lived-in" app — never replay first-run there.
+    if (vault == AppVault.real && firstRunDone.value != true) {
+      return const FirstRunScreen();
+    }
 
     final locked =
         credential.value != null && !ref.watch(sessionUnlockedProvider);

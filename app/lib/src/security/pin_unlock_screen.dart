@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../providers.dart';
 import 'biometric_gateway.dart';
 import 'biometric_providers.dart';
 import 'pin_providers.dart';
@@ -11,7 +12,9 @@ import 'pin_providers.dart';
 /// (p1.8). p2.1 adds an optional biometric shortcut: when the user has turned it
 /// on and the device supports it, the biometric prompt fires automatically on
 /// open and can be retried from a button. The PIN entry always stays available
-/// as the fallback. Lockout / backoff and a decoy PIN are still Phase 2.
+/// as the fallback. p2.2: entering the decoy PIN flips [appVaultProvider] to
+/// [AppVault.decoy] before unlocking, so the app opens the empty decoy vault —
+/// with no visible difference. Lockout / backoff is still Phase 2.
 class PinUnlockScreen extends ConsumerStatefulWidget {
   const PinUnlockScreen({super.key});
 
@@ -63,6 +66,8 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
         .authenticate(reason: 'Unlock olf');
     if (!mounted) return;
     if (result == BiometricAuthResult.success) {
+      // Biometric is only ever a shortcut into the real vault.
+      ref.read(appVaultProvider.notifier).state = AppVault.real;
       ref.read(sessionUnlockedProvider.notifier).state = true;
       return;
     }
@@ -76,16 +81,29 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
       _busy = true;
       _wrong = false;
     });
-    final ok = await ref.read(pinControllerProvider).verify(_controller.text);
+    final route = await ref.read(pinControllerProvider).route(_controller.text);
     if (!mounted) return;
-    if (ok) {
-      ref.read(sessionUnlockedProvider.notifier).state = true;
-    } else {
-      setState(() {
-        _busy = false;
-        _wrong = true;
-        _controller.clear();
-      });
+    switch (route) {
+      case PinRoute.real:
+        ref.read(appVaultProvider.notifier).state = AppVault.real;
+        ref.read(sessionUnlockedProvider.notifier).state = true;
+      case PinRoute.decoy:
+        ref.read(appVaultProvider.notifier).state = AppVault.decoy;
+        // Let the decoy database finish opening before the lock drops, so the
+        // real vault is never briefly visible.
+        try {
+          await ref.read(appDatabaseProvider.future);
+        } catch (_) {
+          // fall through — HomePage owns the fail-safe screen
+        }
+        if (!mounted) return;
+        ref.read(sessionUnlockedProvider.notifier).state = true;
+      case PinRoute.none:
+        setState(() {
+          _busy = false;
+          _wrong = true;
+          _controller.clear();
+        });
     }
   }
 

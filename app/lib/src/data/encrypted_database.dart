@@ -21,14 +21,16 @@ class EncryptedDatabase {
 
   static const _fileName = 'olf.db';
 
-  /// Open (creating on first run) the encrypted database in [directory], using
-  /// the key from [keyStore]. Generates and stores a fresh 256-bit key the first
-  /// time only.
+  /// Open (creating on first run) the encrypted database file [fileName] in
+  /// [directory], using the key from [keyStore]. Generates and stores a fresh
+  /// 256-bit key the first time only. [fileName] defaults to the real database;
+  /// the decoy vault (p2.2) passes its own name so the two files never collide.
   static Future<AppDatabase> open({
     required DatabaseKeyStore keyStore,
     required Directory directory,
+    String fileName = _fileName,
   }) async {
-    final file = File(p.join(directory.path, _fileName));
+    final file = File(p.join(directory.path, fileName));
 
     var key = await keyStore.read();
     if (key == null) {

@@ -181,3 +181,31 @@ bool verifyPin(String pin, PinCredential credential) {
   }
   return diff == 0;
 }
+
+/// Which vault an entered PIN opens (p2.2 — decoy / duress PIN).
+enum PinRoute {
+  /// Matches the real PIN — open the real data.
+  real,
+
+  /// Matches the decoy PIN — open the decoy (throwaway) vault instead.
+  decoy,
+
+  /// Matches neither credential.
+  none,
+}
+
+/// Route [pin] against the stored credentials. [real] is checked first, so if a
+/// PIN somehow matches both it opens the real vault. A `null` credential never
+/// matches. Both checks use [verifyPin]'s constant-time compare; the real check
+/// always runs even when a decoy is set.
+PinRoute routePin(
+  String pin, {
+  required PinCredential? real,
+  required PinCredential? decoy,
+}) {
+  final matchesReal = real != null && verifyPin(pin, real);
+  final matchesDecoy = decoy != null && verifyPin(pin, decoy);
+  if (matchesReal) return PinRoute.real;
+  if (matchesDecoy) return PinRoute.decoy;
+  return PinRoute.none;
+}

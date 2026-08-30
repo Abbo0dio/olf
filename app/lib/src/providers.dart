@@ -1,25 +1,30 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
-import 'package:path_provider/path_provider.dart';
 
-import 'data/encrypted_database.dart';
-import 'data/secure_storage_key_store.dart';
+import 'data/vault_database_opener.dart';
 
-/// Platform secure storage for the database encryption key.
-final databaseKeyStoreProvider = Provider<DatabaseKeyStore>(
-  (ref) => SecureStorageKeyStore(),
+export 'data/vault_database_opener.dart' show AppVault;
+
+/// The vault currently in effect (p2.2). Starts [AppVault.real]; the lock screen
+/// flips it to [AppVault.decoy] when the decoy PIN is entered, and `AppGate`
+/// resets it to [AppVault.real] whenever the app is backgrounded.
+final appVaultProvider = StateProvider<AppVault>((ref) => AppVault.real);
+
+/// How the encrypted database is opened for a vault. Overridden with a fake in
+/// widget tests.
+final vaultDatabaseOpenerProvider = Provider<VaultDatabaseOpener>(
+  (ref) => const EncryptedVaultDatabaseOpener(),
 );
 
-/// The opened, encrypted [AppDatabase].
+/// The opened, encrypted [AppDatabase] for the current [appVaultProvider].
 ///
-/// `loading` while it opens, `error` (typically [MissingDatabaseKeyException])
-/// when it can't — the UI turns that into a fail-safe screen instead of data.
+/// Rebuilds when the vault changes: the previous database is closed and the new
+/// one opened. `loading` while it opens, `error` (typically
+/// [MissingDatabaseKeyException]) when it can't — the UI turns that into a
+/// fail-safe screen instead of data.
 final appDatabaseProvider = FutureProvider<AppDatabase>((ref) async {
-  final directory = await getApplicationSupportDirectory();
-  final db = await EncryptedDatabase.open(
-    keyStore: ref.watch(databaseKeyStoreProvider),
-    directory: directory,
-  );
+  final vault = ref.watch(appVaultProvider);
+  final db = await ref.watch(vaultDatabaseOpenerProvider).open(vault);
   ref.onDispose(db.close);
   return db;
 });

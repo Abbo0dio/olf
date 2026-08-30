@@ -109,4 +109,38 @@ void main() {
       );
     });
   });
+
+  group('routePin (p2.2 decoy PIN)', () {
+    PinCredential cred(String pin) =>
+        derivePinCredential(pin, iterations: 200, random: Random(7));
+
+    final real = cred('1379');
+    final decoy = cred('2468');
+
+    test('real PIN → PinRoute.real', () {
+      expect(routePin('1379', real: real, decoy: decoy), PinRoute.real);
+    });
+
+    test('decoy PIN → PinRoute.decoy', () {
+      expect(routePin('2468', real: real, decoy: decoy), PinRoute.decoy);
+    });
+
+    test('neither → PinRoute.none', () {
+      expect(routePin('0000', real: real, decoy: decoy), PinRoute.none);
+    });
+
+    test('no decoy configured → real or none', () {
+      expect(routePin('1379', real: real, decoy: null), PinRoute.real);
+      expect(routePin('2468', real: real, decoy: null), PinRoute.none);
+    });
+
+    test('no real configured → decoy still routes, wrong is none', () {
+      expect(routePin('2468', real: null, decoy: decoy), PinRoute.decoy);
+      expect(routePin('9999', real: null, decoy: decoy), PinRoute.none);
+    });
+
+    test('real takes precedence when a PIN matches both', () {
+      expect(routePin('1379', real: real, decoy: real), PinRoute.real);
+    });
+  });
 }
