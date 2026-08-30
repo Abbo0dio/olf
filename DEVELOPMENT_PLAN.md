@@ -1406,7 +1406,7 @@ forward: the p0.5 manual physical-device smoke table, and the per-slice §9 foll
 
 ### Phase 2 — Privacy & security hardening
 
-**Status:** `IN PROGRESS` (p2.1) · **Requirement refs:** §3, §6, §7, §8.
+**Status:** `IN PROGRESS` (p2.1–p2.2 DONE; p2.3 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
 
 The Phase 1 slice-list has been expanded into task rows below (p2.1–p2.9). Rows
 p2.2–p2.9 carry the intended scope; the agent starting each one fills in the
@@ -1484,8 +1484,8 @@ threat model committed.
     build). Worktree + branch cleaned up. **DONE.**
 
 #### p2.2 — Decoy / duress PIN
-- **Status:** IN REVIEW
-- **PR:** [#26](https://github.com/Abbo0dio/olf/pull/26)
+- **Status:** DONE
+- **PR:** [#26](https://github.com/Abbo0dio/olf/pull/26) — merged (squash `ee69420`)
 - **Branch / worktree:** `feat/p2.2-decoy-pin` / `../olf-wt/p2.2`
 - **Owner:** worker: phase2
 - **Depends on:** p1.8, p2.1
@@ -1548,13 +1548,15 @@ threat model committed.
     recorded.
   - 2026-08-31 — PR [#26](https://github.com/Abbo0dio/olf/pull/26) opened into `main`;
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-31 — merged as PR #26 (squash `ee69420`). **DONE.**
 
 #### p2.3 — Scheduled auto-deletion (retention window)
-- **Status:** TODO
-- **Branch / worktree:** —
-- **Owner:** —
+- **Status:** IN REVIEW
+- **PR:** [#27](https://github.com/Abbo0dio/olf/pull/27)
+- **Branch / worktree:** `feat/p2.3-auto-deletion` / `../olf-wt/p2.3`
+- **Owner:** worker: phase2
 - **Depends on:** p1.1–p1.11 (whatever data exists), p1.10
-- **Requirement refs:** §3, §7
+- **Requirement refs:** §3, §7, §9(11)
 - **Goal:** The user picks a retention window (e.g. "keep 12 months"); anything older is purged
   automatically, and the purge also applies to backups/exports the app produces afterwards.
 - **Acceptance criteria:** setting a window purges existing older rows and keeps purging on a
@@ -1562,9 +1564,70 @@ threat model committed.
   exports created after a window is set exclude purged data.
 - **Tests required:** unit (cutoff maths across all tables, DST-safe); integration (set window
   → old rows gone, recent rows intact, survives restart).
-- **Notes / detail:** (agent fills this in.)
+- **Notes / detail:**
+  - **No schema change. No new dependencies** — the purge is raw `DELETE`s over the existing
+    drift schema.
+  - **`RetentionWindow` enum (`core`)** — `off` (default) · `months6` · `year1` · `years2` ·
+    `years3`. `cutoff(now)` is built from a fresh **local midnight** via calendar arithmetic
+    (`DateTime(now.year, now.month - 6, now.day)` etc.), not a fixed `Duration`, so it is
+    DST- and leap-safe and an impossible day (e.g. "31 Feb") normalises forward.
+    `storageToken` / `fromStorage` persist the enum name in `app_settings`
+    (`SettingKeys.retentionWindow = 'retention_window'`); any unrecognised value → `off`.
+  - **`RetentionService` (`core`)** — one `sweep({now, window})` runs a `DELETE` per dated
+    table **in a single transaction** and returns a `RetentionSweepResult` (per-table counts
+    + cutoff date, **no row content** — safe to log per §3). `deleteWhere` maps each dated
+    table to its predicate: plain `date < ?` for `daily_symptom_entries`, `daily_flows`,
+    `bbt_entries`, `cervical_mucus_entries`, `cycle_events`; `COALESCE(end_date, start_date)
+    < ?` for `periods` (a period straddling the cutoff is **kept**); `ended_on IS NOT NULL
+    AND ended_on < ?` for `birth_control_entries` (a still-current method is **always kept**,
+    however old). Config tables (`medications`, `symptom_types`, `reminders`, `app_settings`)
+    are never touched — a `deleteWhere`-vs-schema partition test fails loudly if a new table
+    is added without being classified.
+  - **When it runs (`app`):** (1) **on launch** — `retentionStartupSweepProvider`
+    (`FutureProvider`) is `ref.watch`ed by `HomePage`, so it fires once the app is past the
+    lock / first-run screens; it **guards on `appVaultProvider == AppVault.real`** so a decoy
+    session never purges, and no-ops when the window is `off`. (2) **on change** —
+    `RetentionController.setWindow` persists the setting then sweeps immediately. (3)
+    **before every backup** — `BackupController.export` calls an injected
+    `sweepRetention` callback (wired to `RetentionController.sweepNow`) before it snapshots,
+    so purged data never lands in a fresh `.olfbackup`.
+  - **Logging:** on a non-empty sweep the app `debugPrint`s `retention: purged N entr(y|ies)
+    older than YYYY-MM-DD` — a count and a date threshold only, never entry content (§3).
+  - **Settings UI:** Privacy → "Auto-delete old entries" `ListTile` showing the current
+    window's label; tapping opens a `RadioGroup`/`RadioListTile` picker. Choosing a
+    non-`off` window shows a confirmation `AlertDialog` ("permanently deleted now and kept
+    out of future backups. This can't be undone.") before it applies; switching to `off`
+    applies with no prompt. A `SnackBar` confirms either way. Plain, non-alarming copy;
+    gender-neutral; renders in both themes (reuses existing dialog/list components).
+  - **§9(11) — reaching already-saved backup files:** **out of scope for this slice, logged
+    as a follow-up** (see §9). The app does not track where the user saved past `.olfbackup`
+    files (the `BackupFileGateway` hands bytes to an OS save dialog and keeps no path
+    registry), so it cannot retroactively open and scrub them. What this slice *does*
+    guarantee is that **every backup written from now on** already has the purge applied
+    (purge-before-export, above).
+- **Decisions (§7):**
+  - Calendar-month/-year arithmetic from a fresh local midnight for the cutoff, matching the
+    existing `date_math.dart` convention (DST-safe); no fixed `Duration`.
+  - Purge = hard `DELETE` (not a soft-delete/tombstone). "Delete means delete" (§9(11)); a
+    tombstone would keep the data on disk and complicate backups.
+  - Startup sweep lives on `HomePage`, not `AppGate` — it must never run behind the lock or
+    in a decoy session, and `HomePage` is the first widget that only mounts on the real,
+    unlocked vault.
+  - `RetentionService` stays in `core` (operates on the drift schema); the *scheduling* (when
+    to sweep) stays in `app` providers.
 - **Log:**
   - 2026-08-30 — created.
+  - 2026-08-31 — claimed by worker: phase2; worktree `../olf-wt/p2.3`, branch
+    `feat/p2.3-auto-deletion` off `main` @ `ee69420`. Built: `RetentionWindow` +
+    `RetentionService` (core), retention providers + `RetentionController` (app), startup
+    sweep on `HomePage` (real-vault-guarded), purge-before-export hook on `BackupController`,
+    Settings picker + confirmation. No schema change, no new deps.
+  - 2026-08-31 — built. core 302 / app 92 green; analyze `--fatal-infos --fatal-warnings`
+    clean (core + app); `dart format` clean; drift codegen unchanged; dependency audit PASS
+    (38 rules); no `pubspec.lock` drift; no `app/android/` change. §7 decision + §9 follow-ups
+    recorded (incl. the §9(11) "scrub already-saved backup files" follow-up).
+  - 2026-08-31 — PR [#27](https://github.com/Abbo0dio/olf/pull/27) opened into `main`;
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 #### p2.4 — Background privacy (app-switcher mask, screenshot block, lock-screen hygiene)
 - **Status:** TODO
@@ -2324,9 +2387,10 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   compressed** before encryption — fine at Phase 1 data volumes, add gzip when history grows.
   Backup and the DB-at-rest key are **independent secrets** (backup passphrase vs. the enclave
   key); a future revision could derive both from one passphrase. **No integrity of the backup
-  set** — nothing tracks how many backups exist or where, and Phase 2's scheduled auto-deletion
-  (p2.3) does **not** yet reach saved backup files (§9(11) / requirements "delete means
-  delete"). Restore is **whole-database replace only** — no merge, no selective import, no
+  set** — nothing tracks how many backups exist or where. p2.3 makes every backup written
+  *after* a window is set exclude purged data (purge-before-export), but scheduled
+  auto-deletion still does **not** reach `.olfbackup` files already saved to disk (§9(11) /
+  requirements "delete means delete") — see the p2.3 follow-up. Restore is **whole-database replace only** — no merge, no selective import, no
   "preview before restoring", and it hard-refuses a backup from a different `schemaVersion`
   rather than migrating it (so a backup taken now cannot be restored after the next schema
   bump until a format migration is written). The real `file_picker` SAF/UIDocumentPicker path
@@ -2371,6 +2435,22 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   rather than the lock screen — acceptable but not graceful. (f) The decoy DB is created on
   first decoy unlock, so the very first duress use has a brief "opening database" spinner the
   real vault wouldn't show on a warm start. — noted by worker: phase2 during p2.2.
+- **p2.3 follow-ups:** (a) **§9(11) — already-saved backups are not scrubbed.** Scheduled
+  auto-deletion purges the live DB and every *new* export, but the app keeps no registry of
+  where past `.olfbackup` files were saved (the `BackupFileGateway` just streams bytes to an
+  OS save dialog), so it cannot retroactively open and rewrite them. Options for a later
+  slice: a "known backups" list the app maintains + a "re-scrub my backups" action, or making
+  restore itself apply the current window on import. (b) **No background/periodic sweep** —
+  the purge runs on app launch (past the lock), on window change, and before an export; an
+  app left open for days past a cutoff boundary won't purge until the next launch/export.
+  A `WorkManager`/`BGTaskScheduler` periodic job is Phase 4-adjacent. (c) **Coarse windows
+  only** (6 months / 1–3 years) — no custom "keep N days" or per-data-type retention. (d)
+  **Hard delete, no undo** — there is no trash/grace period; the confirmation dialog is the
+  only safety net. (e) The startup sweep runs **on every launch** when a window is set (it's
+  cheap — indexed `DELETE`s, usually zero rows — but it is not throttled to "once a day").
+  (f) `RetentionService.sweep` takes `now` from the caller (`DateTime.now()` in
+  `RetentionController`); a `clockProvider` would make the widget test fully time-independent
+  (shared with the p1.4 follow-up). — noted by worker: phase2 during p2.3.
 - (add more here)
 
 ## 10. Orphaned / cut work

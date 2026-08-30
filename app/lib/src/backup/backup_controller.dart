@@ -56,16 +56,26 @@ class BackupController {
   BackupController({
     required BackupService service,
     required BackupFileGateway files,
+    Future<void> Function()? sweepRetention,
   }) : _service = service,
-       _files = files;
+       _files = files,
+       _sweepRetention = sweepRetention;
 
   final BackupService _service;
   final BackupFileGateway _files;
+
+  /// Runs the scheduled auto-deletion sweep (p2.3) just before a snapshot is
+  /// taken, so entries past the retention window never reach a fresh backup
+  /// file. `null` when retention is not wired in (e.g. in unit tests).
+  final Future<void> Function()? _sweepRetention;
 
   /// Snapshot the database, encrypt it under [passphrase], and hand it to the
   /// save dialog. [passphrase] must already have passed
   /// [validateBackupPassphrase].
   Future<ExportResult> export({required String passphrase}) async {
+    // p2.3: purge anything past the retention window first so it is never
+    // captured in the file we are about to write.
+    await _sweepRetention?.call();
     final document = await _service.export();
     final bytes = await BackupCipher.seal(document, passphrase);
     final path = await _files.writeBackup(

@@ -1,11 +1,11 @@
-# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1 · p2.2)
+# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1 · p2.2 · p2.3)
 
 This documents the privacy posture the app ships with and the optional PIN lock.
 Requirement refs: `requirements.md` §3 (privacy & data security), §6 (regulatory /
-disclaimers), §7 (duress / coercion), §9(8) (privacy distrust). p2.1 adds an
-optional biometric unlock shortcut and p2.2 adds an optional decoy / duress PIN
-(both below). Scheduled auto-deletion and screenshot/background masking are still
-**Phase 2**.
+disclaimers), §7 (duress / coercion), §9(8) (privacy distrust), §9(11) (delete
+means delete). p2.1 adds an optional biometric unlock shortcut, p2.2 adds an
+optional decoy / duress PIN, and p2.3 adds an optional scheduled auto-deletion
+window (all below). Screenshot/background masking is still **Phase 2**.
 
 ## Anonymous by default
 
@@ -147,15 +147,59 @@ visible or reachable, with no on-screen sign that a decoy exists.
 - Turning the real lock off also clears the decoy PIN. Turning the decoy PIN off
   leaves the decoy database file in place (see §9 follow-ups).
 
+## Scheduled auto-deletion (p2.3)
+
+An **optional retention window**: the user picks how long dated entries are kept
+and anything older is deleted automatically. Off by default — nothing is ever
+removed unless the user turns this on. Requirement refs: §3, §7, §9(11) ("delete
+means delete").
+
+- **`RetentionWindow`** (`core/lib/src/retention/retention_window.dart`) — `off`
+  (default) · `months6` · `year1` · `years2` · `years3`. `cutoff(now)` is a fresh
+  **local midnight** from calendar arithmetic (not a fixed `Duration`), so it is
+  DST- and leap-safe. The choice is stored as the enum name under
+  `SettingKeys.retentionWindow` (`retention_window`) in `app_settings`; any
+  unrecognised value reads back as `off`.
+- **`RetentionService`** (`core/lib/src/retention/retention_service.dart`) — one
+  `sweep({now, window})` runs a `DELETE` per dated table **in a single
+  transaction** and returns a `RetentionSweepResult` (per-table row *counts* +
+  the cutoff date — **never row content**, so it is safe to log per §3). A period
+  straddling the cutoff is kept (`COALESCE(end_date, start_date)`); a still-current
+  birth-control method (`ended_on IS NULL`) is kept regardless of age. Config
+  tables (`medications`, `symptom_types`, `reminders`, `app_settings`) are never
+  touched.
+- **When it runs** (`app/lib/src/retention/retention_providers.dart`): on app
+  launch (`retentionStartupSweepProvider`, watched by `HomePage` so it is always
+  past the lock / first-run screens, and **guarded on the real vault** so a decoy
+  session never purges); immediately when the window is changed
+  (`RetentionController.setWindow`); and before every backup export
+  (`BackupController` calls the injected `sweepRetention` hook first, so purged
+  data never lands in a fresh `.olfbackup`).
+- **Logging.** A non-empty sweep `debugPrint`s `retention: purged N entr(y|ies)
+  older than YYYY-MM-DD` — a count and a date only, no entry content (§3).
+- **Settings.** Privacy → "Auto-delete old entries" → a radio picker. Choosing a
+  window shows a plain, non-alarming confirmation ("permanently deleted now and
+  kept out of future backups — this can't be undone") before applying; turning it
+  back to *off* applies with no prompt.
+- **Not retroactive to saved backups.** `.olfbackup` files the user already saved
+  elsewhere are **not** reached — the app keeps no record of where they went. Only
+  backups written *after* a window is set are pre-purged. See the p2.3 follow-up
+  in `DEVELOPMENT_PLAN.md` §9.
+
 ### Not yet (Phase 2)
 
-Failed-attempt lockout / backoff; scheduled auto-deletion; screenshot /
-app-switcher masking; wiping the decoy database when the decoy PIN is removed;
-moving the PIN hash off the main isolate and raising the work factor, or binding
-each vault's DB key to its PIN / biometric with a real KDF.
+Failed-attempt lockout / backoff; screenshot / app-switcher masking; a
+background/periodic auto-deletion sweep (p2.3 runs on launch / change / export
+only) and reaching already-saved backup files; wiping the decoy database when the
+decoy PIN is removed; moving the PIN hash off the main isolate and raising the
+work factor, or binding each vault's DB key to its PIN / biometric with a real
+KDF.
 
 Covered by `app/test/security/pin_gate_test.dart`,
 `app/test/security/biometric_unlock_test.dart`,
 `app/test/security/decoy_pin_test.dart`,
-`app/test/settings/settings_page_test.dart`, and
+`app/test/retention/retention_test.dart`,
+`app/test/backup/backup_controller_test.dart`,
+`app/test/settings/settings_page_test.dart`,
+`core/test/retention/`, and
 `core/test/security/pin_test.dart`.

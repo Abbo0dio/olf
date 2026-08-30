@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../providers.dart';
+import '../retention/retention_providers.dart';
 import 'backup_controller.dart';
 import 'backup_gateway.dart';
 
@@ -18,5 +19,6 @@ final backupControllerProvider = Provider<BackupController>((ref) {
   return BackupController(
     service: BackupService(db),
     files: ref.watch(backupFileGatewayProvider),
+    sweepRetention: () => ref.read(retentionControllerProvider).sweepNow(),
   );
 });

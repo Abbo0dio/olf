@@ -13,7 +13,7 @@ same device or a new one. It is a store-release prerequisite
 | `BackupService` | `core/lib/src/backup/backup_service.dart` | `export()` reads the whole DB into a document; `import(doc)` replaces the whole DB with one. |
 | `BackupCipher` | `core/lib/src/backup/backup_cipher.dart` | `seal` / `open` — AES-256-GCM under a PBKDF2 passphrase. |
 | `BackupFileGateway` | `app/lib/src/backup/backup_gateway.dart` | The one file-system touch: system "save as" / "open" via `file_picker`. Interface + fake for tests. |
-| `BackupController` | `app/lib/src/backup/backup_controller.dart` | Wires the three together; turns every expected failure into a result value. |
+| `BackupController` | `app/lib/src/backup/backup_controller.dart` | Wires the three together; turns every expected failure into a result value. Since p2.3, `export()` first runs an optional `sweepRetention` hook so scheduled auto-deletion is applied before the snapshot. |
 | `BackupPage` | `app/lib/src/backup/backup_page.dart` | UI. Reached from **Settings → Data → Backup & restore**. |
 
 ## The document
@@ -98,7 +98,7 @@ AES-256-GCM ciphertext       of the UTF-8 JSON document
 | `core/test/backup/backup_document_test.dart` | Versioning: rejects newer / non-int / wrong-`format` / malformed; round-trips; older version still parses. |
 | `core/test/backup/backup_cipher_test.dart` | seal→open; wrong passphrase + tampered bytes → `BackupPassphraseException`; garbage / truncated → `BackupFormatException`; passphrase length. |
 | `core/test/backup/backup_service_test.dart` | export → fresh DB → import reproduces every table exactly; replace-not-merge; schema mismatch refused; failed insert rolls back; `tableOrder` == schema. |
-| `app/test/backup/backup_controller_test.dart` | Round trip + every result branch (saved / cancelled / wrong passphrase / bad file) through a fake gateway. |
+| `app/test/backup/backup_controller_test.dart` | Round trip + every result branch (saved / cancelled / wrong passphrase / bad file) through a fake gateway; the p2.3 `sweepRetention` hook runs before the snapshot, and a `null` hook is skipped. |
 | `app/test/backup/backup_flow_test.dart` | Widget: Settings → Backup page → export → wipe → restore → data back, pops home; wrong passphrase reported. |
 
 The real `file_picker` SAF / `UIDocumentPicker` dialogs are exercised **manually / on-device**
@@ -109,7 +109,9 @@ only — CI covers the gateway seam with a fake, like p1.7's notification schedu
 - KDF runs on the **main isolate** — move to a background isolate (and consider Argon2id).
 - JSON is **not compressed** before encryption — add gzip as history grows.
 - Backup passphrase and the DB-at-rest key are **independent** — could derive both from one.
-- Phase 2's scheduled auto-deletion (p2.3) does **not** yet reach saved backup files.
+- Scheduled auto-deletion (p2.3) pre-purges every backup written **after** a retention window
+  is set (`BackupController.export` sweeps first), but does **not** reach `.olfbackup` files
+  already saved to disk — the app keeps no record of where they went.
 - Restore hard-refuses a different `schemaVersion` — no cross-version format migration yet.
 - `.olfbackup` isn't a registered file type; no "open with olf" from a file manager.
 - No automatic / periodic / cloud backup.

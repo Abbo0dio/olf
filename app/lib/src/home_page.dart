@@ -5,6 +5,7 @@ import 'package:olf_core/olf_core.dart';
 import 'meds/meds_page.dart';
 import 'period/period_calendar_page.dart';
 import 'providers.dart';
+import 'retention/retention_providers.dart';
 import 'settings/settings_page.dart';
 
 /// Home screen. Gates on the encrypted database opening, then hands off to the
@@ -15,6 +16,10 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final database = ref.watch(appDatabaseProvider);
+    // p2.3: run the scheduled auto-deletion sweep once we're in the app.
+    // Fire-and-forget — a no-op unless a retention window is set on the real
+    // vault. Kept here so it never runs behind the lock or first-run screens.
+    ref.watch(retentionStartupSweepProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('olf'),
