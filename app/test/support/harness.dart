@@ -9,6 +9,7 @@ import 'package:olf_app/src/providers.dart';
 import 'package:olf_app/src/security/biometric_gateway.dart';
 import 'package:olf_app/src/security/biometric_providers.dart';
 import 'package:olf_app/src/security/pin_providers.dart';
+import 'package:olf_app/src/security/screen_security.dart';
 import 'package:olf_core/olf_core.dart';
 
 /// A fresh in-memory database, closed automatically at the end of the test.
@@ -90,6 +91,18 @@ class FakeVaultOpener implements VaultDatabaseOpener {
   }
 }
 
+/// An in-memory [ScreenSecurity] for tests (p2.4). Records every `setSecure`
+/// call so a test can assert the capture block was engaged / released; never
+/// touches a platform channel.
+class FakeScreenSecurity implements ScreenSecurity {
+  final List<bool> calls = <bool>[];
+
+  bool? get last => calls.isEmpty ? null : calls.last;
+
+  @override
+  Future<void> setSecure(bool secure) async => calls.add(secure);
+}
+
 /// Resolve Future/Stream microtasks and short animations. **Not**
 /// `pumpAndSettle` — the loading state animates a spinner forever.
 Future<void> flush(WidgetTester tester, [int frames = 12]) async {
@@ -125,6 +138,7 @@ Future<void> pumpOlf(
   PinStore? pinStore,
   PinStore? decoyPinStore,
   BiometricGateway? biometricGateway,
+  ScreenSecurity? screenSecurity,
 }) async {
   await useTallSurface(tester);
   await tester.pumpWidget(
@@ -137,6 +151,9 @@ Future<void> pumpOlf(
         ),
         biometricGatewayProvider.overrideWithValue(
           biometricGateway ?? FakeBiometricGateway(),
+        ),
+        screenSecurityProvider.overrideWithValue(
+          screenSecurity ?? FakeScreenSecurity(),
         ),
         if (onboarded) firstRunDoneProvider.overrideWith((ref) async => true),
       ],

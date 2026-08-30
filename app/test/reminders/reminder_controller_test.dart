@@ -76,6 +76,8 @@ void main() {
     },
   );
 
+  // p2.4 lock-in: the reminder text sits on a lock screen / notification
+  // shade, so it must never carry a health detail. Extends the p1.7 check.
   test('the notification wording carries no health details', () {
     final text = '$reminderNotificationTitle $reminderNotificationBody'
         .toLowerCase();
@@ -90,8 +92,23 @@ void main() {
       'dosage',
       'birth control',
       'contracept',
+      'iud',
+      'implant',
       'period',
+      'menstru',
+      'cycle',
+      'ovulat',
+      'fertil',
+      'flow',
+      'bleed',
+      'spotting',
+      'cramp',
       'symptom',
+      'mood',
+      'pregnan',
+      'temperature',
+      'bbt',
+      'mucus',
     ]) {
       expect(text, isNot(contains(banned)), reason: 'leaks "$banned"');
     }

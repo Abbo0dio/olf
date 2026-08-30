@@ -1,11 +1,12 @@
-# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1 · p2.2 · p2.3)
+# Anonymous-by-default, first-run explainer, and the app lock (p1.8 · p2.1 · p2.2 · p2.3 · p2.4)
 
 This documents the privacy posture the app ships with and the optional PIN lock.
 Requirement refs: `requirements.md` §3 (privacy & data security), §6 (regulatory /
 disclaimers), §7 (duress / coercion), §9(8) (privacy distrust), §9(11) (delete
 means delete). p2.1 adds an optional biometric unlock shortcut, p2.2 adds an
-optional decoy / duress PIN, and p2.3 adds an optional scheduled auto-deletion
-window (all below). Screenshot/background masking is still **Phase 2**.
+optional decoy / duress PIN, p2.3 adds an optional scheduled auto-deletion
+window, and p2.4 adds always-on background privacy (app-switcher mask +
+screen-capture block) — all below.
 
 ## Anonymous by default
 
@@ -186,11 +187,43 @@ means delete").
   backups written *after* a window is set are pre-purged. See the p2.3 follow-up
   in `DEVELOPMENT_PLAN.md` §9.
 
+## Background privacy (p2.4)
+
+Always on — the whole app is health data, so there is no setting to weaken it.
+Requirement refs: §3 ("blur when backgrounded"), §7.
+
+- **App-switcher mask — `PrivacyShield`** (`app/lib/src/security/privacy_shield
+  .dart`), mounted from `MaterialApp.builder` so it sits above every route and
+  dialog. An `AppLifecycleListener` paints an opaque, content-free cover (a lock
+  icon + "olf" on `colorScheme.surface`, keyed `privacyShieldCoverKey`) over the
+  whole app **whenever the lifecycle state is not `resumed`** — so the OS
+  task-switcher snapshot, and transient interruptions like Control Centre or the
+  notification shade, never show real data. The masked subtree stays mounted, so
+  the nav stack, scroll position and any half-filled form survive backgrounding.
+- **Screen-capture block — `ScreenSecurity` seam** (`app/lib/src/security/
+  screen_security.dart`): `setSecure(bool)` behind the `olf/screen_security`
+  method channel, handled in `MainActivity.kt` as
+  `window.addFlags/clearFlags(FLAG_SECURE)`. `FLAG_SECURE` keeps the Android
+  window out of screenshots, screen recordings **and** the Recents thumbnail.
+  `PrivacyShield` holds it `true` for the app's whole lifetime. Same
+  fake-in-tests seam as `ReminderScheduler` (p1.7) / `BiometricGateway` (p2.1);
+  `MissingPluginException` is swallowed on platforms with no handler.
+- **iOS.** There is no `FLAG_SECURE` equivalent, so screenshots/recordings can't
+  be blocked. `AppDelegate.swift` adds a native cover `UIView` on
+  `applicationWillResignActive` (removed on `applicationDidBecomeActive`) as the
+  reliable app-switcher mask; the Flutter `PrivacyShield` is the cross-platform
+  secondary.
+- **Lock-screen hygiene.** The one reminder notification already uses fixed
+  generic copy (`reminderNotificationTitle` / `Body`, p1.7). p2.4 adds
+  `visibility: NotificationVisibility.private` (redacts on a secure lock screen)
+  and broadens the "no health details" content test to ~25 banned terms.
+
 ### Not yet (Phase 2)
 
-Failed-attempt lockout / backoff; screenshot / app-switcher masking; a
-background/periodic auto-deletion sweep (p2.3 runs on launch / change / export
-only) and reaching already-saved backup files; wiping the decoy database when the
+Failed-attempt lockout / backoff; a background/periodic auto-deletion sweep (p2.3
+runs on launch / change / export only) and reaching already-saved backup files;
+per-screen `FLAG_SECURE` scoping or a user opt-out (p2.4 is all-or-nothing);
+iOS screenshot/recording blocking (no OS API); wiping the decoy database when the
 decoy PIN is removed; moving the PIN hash off the main isolate and raising the
 work factor, or binding each vault's DB key to its PIN / biometric with a real
 KDF.
@@ -198,8 +231,10 @@ KDF.
 Covered by `app/test/security/pin_gate_test.dart`,
 `app/test/security/biometric_unlock_test.dart`,
 `app/test/security/decoy_pin_test.dart`,
+`app/test/security/privacy_shield_test.dart`,
 `app/test/retention/retention_test.dart`,
 `app/test/backup/backup_controller_test.dart`,
+`app/test/reminders/reminder_controller_test.dart`,
 `app/test/settings/settings_page_test.dart`,
 `core/test/retention/`, and
 `core/test/security/pin_test.dart`.
