@@ -138,6 +138,12 @@ jobs:
       # core/test/db/persistence_test.dart; the on-device integration_test runs
       # in the separate nightly workflow (.github/workflows/nightly-integration.yml).
 
+  # RELEASE BLOCKER (p2.9). This job is un-waivable: keep it blocking, do not
+  # gate it behind anything other than `detect`, and do not weaken the audit
+  # arguments below — they are locked by core/test/dependency_audit_test.dart.
+  # `ci-ok` requires this job's result to be exactly "success"; a skip or a
+  # failure blocks the merge. A genuinely needed package that trips a rule
+  # follows docs/dependency-audit.md, never a change to this wiring.
   dependency-audit:
     name: Dependency audit
     needs: detect
@@ -246,4 +252,14 @@ jobs:
             echo "A required job was cancelled."
             exit 1
           fi
-          echo "All required jobs passed or were skipped."
+          # The dependency audit (p2.9) is a release blocker: it must actually
+          # run and pass. Unlike the other jobs, "skipped" is NOT acceptable
+          # here — that is how the gate would be silently bypassed (e.g. by
+          # removing the Flutter workspace or its `if:` guard).
+          audit_result=$(echo "$NEEDS_JSON" | jq -r '."dependency-audit".result')
+          echo "dependency-audit result: ${audit_result}"
+          if [ "$audit_result" != "success" ]; then
+            echo "::error::dependency-audit did not pass (result: ${audit_result}). It is an un-waivable release blocker (DEVELOPMENT_PLAN.md p2.9); see docs/dependency-audit.md."
+            exit 1
+          fi
+          echo "All required jobs passed (dependency audit ran and passed)."

@@ -5,6 +5,42 @@ analytics SDKs, ever** — transitively included. Embedding SDKs that can see he
 direct legal-liability vector (Flo/FTC 2021; the 2025 Meta/CIPA verdict). The dependency-audit
 CI gate enforces this mechanically. It is a **release blocker** (`DEVELOPMENT_PLAN.md` p2.9).
 
+## Release blocker (p2.9)
+
+A red dependency audit **blocks the release**. It is un-waivable by design:
+
+- The script has **no `--skip` / `--force` / `--allow` flag** and reads **no environment
+  variable** that could bypass it. Any non-zero exit fails the job.
+- The `dependency-audit` job carries **no `continue-on-error`** and is gated only by
+  `detect` (the workspace probe).
+- The `CI OK` aggregate requires the `dependency-audit` job result to be exactly
+  `success`. A **skipped** audit (e.g. someone removes the Flutter workspace or the job's
+  `if:` guard) is treated as a **failure**, not a pass.
+- The canonical audit arguments in `ci.yml` are **locked by
+  `core/test/dependency_audit_test.dart`** — dropping a `--lock`, `--manifest`,
+  `--net-config` or `--plist`, or pointing `--denylist` at a stub, fails the test job.
+
+### Escalation path — a package genuinely trips a rule
+
+**Who decides:** the change needs sign-off from whoever holds the **security-reviewer**
+role for the release (recorded in the PR; for a solo maintainer this is an explicit,
+written self-review in the PR description — see `release-checklist.md`).
+
+1. **A real ad / analytics / tracking package is in the graph.** Not a waiver case — the
+   gate is correct. Find the dependency that pulls it in
+   (`dart pub deps -s list` / `flutter pub deps -s list`) and **remove or replace it**, or
+   drop the feature that needs it. Ship the PR with the graph clean.
+2. **False positive** — an over-broad `~fragment` / `re:pattern` rule matched a package
+   that genuinely has **no** ad/analytics/tracking capability. The security reviewer
+   **narrows that specific rule** in `.github/dependency-denylist.txt` so it no longer
+   matches the innocent package, **in the same PR**, with a rationale comment and recorded
+   sign-off. Never a blanket carve-out, never a new allowlist.
+3. **Removing a denylist entry** (rules 1 or 2 aside) always needs explicit
+   security-reviewer sign-off in the PR — see [Adding an entry](#adding-an-entry).
+
+There is deliberately no fourth option. If a genuinely needed package carries tracking
+capability, the answer is to not ship that package.
+
 ## What runs
 
 - **Script:** [`.github/scripts/dependency_audit.dart`](../.github/scripts/dependency_audit.dart)
@@ -82,13 +118,17 @@ fragment specific enough that it cannot match an unrelated package.
 mise exec -- dart .github/scripts/dependency_audit.dart \
   --denylist .github/dependency-denylist.txt \
   --lock core/pubspec.lock --lock app/pubspec.lock \
-  --manifest app/android/app/src/main/AndroidManifest.xml
+  --manifest app/android/app/src/main/AndroidManifest.xml \
+  --net-config app/android/app/src/main/res/xml/network_security_config.xml \
+  --plist app/ios/Runner/Info.plist
 
 # and the fixture-backed tests
 cd core && mise exec -- dart test test/dependency_audit_test.dart
 ```
 
-Exit codes: `0` clean · `1` violation(s) · `2` bad invocation / missing input.
+Exit codes: `0` clean · `1` violation(s) · `2` bad invocation / missing input. In CI **any**
+non-zero exit fails the job, and a bad invocation (exit `2`) is a failure too — it means the
+gate did not actually run.
 
 ## What the audit does NOT catch
 
