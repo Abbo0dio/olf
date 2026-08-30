@@ -84,4 +84,36 @@ void main() {
     final result = await controller.restore(passphrase: 'passphrase-1');
     expect(result, isA<RestoreBadFile>());
   });
+
+  test('export runs the retention sweep before snapshotting (p2.3)', () async {
+    var sweepCalls = 0;
+    var rowsAtSweep = -1;
+    final withSweep = BackupController(
+      service: BackupService(db),
+      files: gateway,
+      sweepRetention: () async {
+        sweepCalls++;
+        // The sweep gets to touch the data before the snapshot is taken.
+        await db.delete(db.periods).go();
+        rowsAtSweep = (await db.select(db.periods).get()).length;
+      },
+    );
+
+    await addPeriod();
+    final result = await withSweep.export(passphrase: 'passphrase-1');
+
+    expect(result, isA<ExportSaved>());
+    expect(sweepCalls, 1);
+    expect(rowsAtSweep, 0);
+    // Restoring the file it wrote brings back an empty periods table.
+    await addPeriod();
+    await withSweep.restore(passphrase: 'passphrase-1');
+    expect(await db.select(db.periods).get(), isEmpty);
+  });
+
+  test('a null sweepRetention hook is simply skipped', () async {
+    await addPeriod();
+    final result = await controller.export(passphrase: 'passphrase-1');
+    expect(result, isA<ExportSaved>());
+  });
 }

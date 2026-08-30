@@ -18,6 +18,11 @@ abstract final class SettingKeys {
   /// (p2.1). Only meaningful while a PIN is set — biometric unlock is a shortcut
   /// past the PIN, never a lock on its own. Absent / anything else means off.
   static const String biometricUnlock = 'biometric_unlock';
+
+  /// Scheduled auto-deletion window (p2.3) — a `RetentionWindow` name. Absent /
+  /// anything unrecognised means `off` (keep everything). Dated entries older
+  /// than the window are purged on launch, on change, and before a new backup.
+  static const String retentionWindow = 'retention_window';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).

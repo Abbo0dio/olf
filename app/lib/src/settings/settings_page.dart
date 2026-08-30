@@ -7,12 +7,14 @@ import '../backup/backup_page.dart';
 import '../personalization/personalization_providers.dart';
 import '../pregnancy/pregnancy_events_page.dart';
 import '../providers.dart';
+import '../retention/retention_providers.dart';
 import '../security/biometric_providers.dart';
 import '../security/pin_providers.dart';
 import '../theme/theme_providers.dart';
 
 /// App settings (p1.8 lock; p1.9 appearance + pronouns; p1.10 backup;
-/// p1.11 pregnancy loss & birth; p2.1 biometric unlock; p2.2 decoy PIN).
+/// p1.11 pregnancy loss & birth; p2.1 biometric unlock; p2.2 decoy PIN;
+/// p2.3 auto-delete).
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -35,6 +37,8 @@ class SettingsPage extends ConsumerWidget {
         ref.watch(biometricCapableProvider).valueOrNull ?? false;
     final biometricEnabled =
         ref.watch(biometricUnlockEnabledProvider).valueOrNull ?? false;
+    final retentionWindow =
+        ref.watch(retentionWindowProvider).valueOrNull ?? RetentionWindow.off;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -127,6 +131,21 @@ class SettingsPage extends ConsumerWidget {
                   ? (want) => setBiometricUnlockEnabled(ref, enabled: want)
                   : null,
             ),
+          ListTile(
+            leading: const Icon(Icons.auto_delete_outlined),
+            title: const Text('Auto-delete old entries'),
+            subtitle: Text(
+              retentionWindow == RetentionWindow.off
+                  ? 'Keep everything until you remove it yourself.'
+                  : 'Entries older than this are removed automatically and '
+                        'left out of new backups.',
+            ),
+            trailing: Text(
+              retentionWindow.label,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            onTap: () => _pickRetention(context, ref, retentionWindow),
+          ),
           const _SectionHeader('Cycle'),
           ListTile(
             leading: const Icon(Icons.favorite_border),
@@ -255,6 +274,75 @@ class SettingsPage extends ConsumerWidget {
     if (yes != true) return;
     await ref.read(pinControllerProvider).clearDecoyPin();
     messenger.showSnackBar(const SnackBar(content: Text('Decoy PIN is off.')));
+  }
+
+  Future<void> _pickRetention(
+    BuildContext context,
+    WidgetRef ref,
+    RetentionWindow current,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final chosen = await showDialog<RetentionWindow>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Auto-delete old entries'),
+        children: [
+          RadioGroup<RetentionWindow>(
+            groupValue: current,
+            onChanged: (v) => Navigator.of(dialogContext).pop(v),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final w in RetentionWindow.values)
+                  RadioListTile<RetentionWindow>(
+                    value: w,
+                    title: Text(
+                      w == RetentionWindow.off
+                          ? 'Off — keep everything'
+                          : w.label,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (chosen == null || chosen == current) return;
+    if (chosen != RetentionWindow.off) {
+      if (!context.mounted) return;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete older entries now?'),
+          content: const Text(
+            'Entries older than this will be permanently deleted now and kept '
+            "out of future backups. This can't be undone.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    await ref.read(retentionControllerProvider).setWindow(chosen);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          chosen == RetentionWindow.off
+              ? 'Auto-delete turned off.'
+              : 'Old entries will be cleaned up automatically.',
+        ),
+      ),
+    );
   }
 }
 

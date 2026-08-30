@@ -146,8 +146,8 @@ linked to a `periods` row.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `key` | TEXT, **PRIMARY KEY** | Well-known keys in `SettingKeys` — `temperature_unit` (p1.6), `onboarding_complete` (p1.8), `theme_mode` and `pronouns` (p1.9), `biometric_unlock` (p2.1). |
-| `value` | TEXT | Opaque string; each caller owns its encoding. `theme_mode` ∈ `system` \| `light` \| `dark` (absent → `system`). `pronouns` is a `Pronouns` enum name (`sheHer` \| `theyThem` \| `heHim`); absent or `''` → `unspecified`, which copy resolves to they/them. `biometric_unlock` is `'true'` when the user has opted in to the biometric unlock shortcut (p2.1); absent / anything else → off. |
+| `key` | TEXT, **PRIMARY KEY** | Well-known keys in `SettingKeys` — `temperature_unit` (p1.6), `onboarding_complete` (p1.8), `theme_mode` and `pronouns` (p1.9), `biometric_unlock` (p2.1), `retention_window` (p2.3). |
+| `value` | TEXT | Opaque string; each caller owns its encoding. `theme_mode` ∈ `system` \| `light` \| `dark` (absent → `system`). `pronouns` is a `Pronouns` enum name (`sheHer` \| `theyThem` \| `heHim`); absent or `''` → `unspecified`, which copy resolves to they/them. `biometric_unlock` is `'true'` when the user has opted in to the biometric unlock shortcut (p2.1); absent / anything else → off. `retention_window` is a `RetentionWindow` enum name (`months6` \| `year1` \| `years2` \| `years3`) for scheduled auto-deletion (p2.3); absent / `off` / anything unrecognised → keep everything. |
 | `updated_at` | INTEGER (unix seconds) | |
 
 Cervical-mucus observations feed an **observed fertile-window** line on the prediction card
@@ -282,6 +282,24 @@ The file is written / read through the platform document picker (`file_picker`, 
 so tests never load the plugin. **No schema change** — backup only touches tables that already
 exist. Full detail and the deferred items are in
 [`backup-and-restore.md`](backup-and-restore.md).
+
+## Scheduled auto-deletion (p2.3)
+
+`core/lib/src/retention/` deletes dated entries older than a user-chosen
+`RetentionWindow` (`off` default · `months6` · `year1` · `years2` · `years3`,
+stored by name under `retention_window` in `app_settings`). `RetentionService
+.sweep` runs one `DELETE` per dated table in a **single transaction**:
+`daily_symptom_entries`, `daily_flows`, `bbt_entries`, `cervical_mucus_entries`,
+`cycle_events` on `date < cutoff`; `periods` on `COALESCE(end_date, start_date) <
+cutoff` (a period straddling the cutoff is kept); `birth_control_entries` on
+`ended_on IS NOT NULL AND ended_on < cutoff` (a still-current method is always
+kept). The config tables (`medications`, `symptom_types`, `reminders`,
+`app_settings`) are never touched — a partition test in
+`core/test/retention/retention_service_test.dart` fails if a new table is added
+without being classified. The cutoff is a fresh **local midnight** from calendar
+arithmetic (DST/leap-safe). **No schema change, no new dependency.** The app runs
+the sweep on launch (real vault only, past the lock), on window change, and
+before every backup export; see [`privacy-and-lock.md`](privacy-and-lock.md).
 
 ## Tests
 
