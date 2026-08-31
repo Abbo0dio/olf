@@ -2471,7 +2471,8 @@ exception says so and is negotiated before code):
     CI OK).
 
 #### p3.3 — Visible correction loop
-- **Status:** IN PROGRESS
+- **Status:** IN REVIEW — do not self-merge, do not set DONE.
+- **PR:** [#37](https://github.com/Abbo0dio/olf/pull/37)
 - **Branch / worktree:** `feat/p3.3-correction-loop` / `../olf-wt/p3.3`
 - **Owner:** worker: phase3
 - **Depends on:** p3.2 (`PredictionDelta`)
@@ -2531,6 +2532,18 @@ exception says so and is negotiated before code):
     (`PredictionDelta`); p3.3 is now the widget + wiring only.
   - 2026-08-31 — claimed by worker: phase3; worktree `../olf-wt/p3.3`, branch
     `feat/p3.3-correction-loop` off `main` @ `c1d108c`. Folded p3.2 → DONE.
+  - 2026-08-31 — built: `correctionNoticeProvider` (in-memory `Notifier`,
+    no schema change) + `_runCorrection` capture-before / recompute-after
+    wiring + `_CorrectionNotice` live-region widget in
+    `period_calendar_page.dart`; `correctionNoticeDismissLabel` const.
+    Engine-agnostic (diffs two `CyclePrediction`s). Tests:
+    `app/test/prediction/correction_notice_test.dart` (correct-a-date → note
+    matches `PredictionDelta` + card matches engine on corrected history;
+    no-change branch still renders; live-region + `announce` assertion).
+    core 387 + app 119 tests green; analyze `--fatal-infos` clean; format
+    clean; dependency audit PASS; `inclusive_language_test` green.
+  - 2026-08-31 — PR [#37](https://github.com/Abbo0dio/olf/pull/37) opened into
+    `main`; **IN REVIEW**. Do not self-merge.
 
 #### p3.4 — Anti-snowball guarantees
 - **Status:** TODO
