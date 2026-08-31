@@ -210,3 +210,18 @@ The CI guard requires an entry naming the current phase.
   slice in the Mitigations table. Residual risks seeded from the per-slice
   `§9` follow-up notes. No design changes required by this review; the open
   items are all already tracked as `§9` follow-ups.
+- **2026-08-31 — Phase 3 opening gate — reviewer: worker: phase3.** Phase 3
+  (correctable adaptive prediction engine v2) is pure-Dart computation in
+  `core/` — a backtesting library (p3.1), an adaptive estimator (p3.2+), and an
+  on-device private metrics view (p3.5). It introduces **no new asset, no new
+  trust boundary, and no new data flow**: predictions are still derived-on-read
+  from the same encrypted `olf.db`; the synthetic backtest datasets are
+  generated in memory from a seeded RNG and never persisted; the opt-in
+  real-data backtest reads the user's own DB behind an explicit action and its
+  results never leave the device; nothing here touches the network, and the
+  no-analytics / no-telemetry rule is unchanged. Assets, adversaries, trust
+  boundaries, and the data-flow diagram are unchanged. Watch item for later
+  slices: if p3.2/p3.3 persist model state or a correction-event log, that adds
+  a table to the encrypted DB (still inside the existing app ↔ DB boundary) and
+  must ship a migration — no new boundary, but record it here when it lands. No
+  design changes required by this review.

@@ -4,6 +4,9 @@
 /// §3): the mobile app and the future desktop shell both consume it.
 library;
 
+export 'src/backtest/backtest_harness.dart';
+export 'src/backtest/backtest_metrics.dart';
+export 'src/backtest/synthetic_history.dart';
 export 'src/backup/backup_cipher.dart';
 export 'src/backup/backup_document.dart';
 export 'src/backup/backup_service.dart';
