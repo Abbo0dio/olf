@@ -2078,7 +2078,7 @@ physical-device smoke table.
 
 ### Phase 3 — Correctable adaptive prediction engine v2
 
-**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 DONE · p3.3 DONE · p3.4 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
+**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 DONE · p3.3 DONE · p3.4 DONE · p3.5 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
 
 **What this phase is.** The v1 predictor (`RobustPredictor`, p1.4) is a correct, humble
 stats projection: median recent cycle length off a fixed anchor, widened to the observed
@@ -2558,8 +2558,8 @@ exception says so and is negotiated before code):
     CI OK).
 
 #### p3.4 — Anti-snowball guarantees
-- **Status:** IN REVIEW — do not self-merge, do not set DONE.
-- **PR:** [#38](https://github.com/Abbo0dio/olf/pull/38)
+- **Status:** DONE — merged into `main` (squash `c27b813`, PR #38).
+- **PR:** [#38](https://github.com/Abbo0dio/olf/pull/38) — merged (squash `c27b813`)
 - **Branch / worktree:** `feat/p3.4-anti-snowball` / `../olf-wt/p3.4`
 - **Owner:** worker: phase3
 - **Depends on:** p3.2
@@ -2655,9 +2655,15 @@ exception says so and is negotiated before code):
     `threat_model_doc_test` green.
   - 2026-09-01 — PR [#38](https://github.com/Abbo0dio/olf/pull/38) opened into
     `main`; **IN REVIEW**. Do not self-merge.
+  - 2026-09-01 — **DONE.** Merged into `main` (squash `c27b813`, PR #38). CI
+    fully green (format, analyze, test, dependency-audit, build apk + iOS,
+    CI OK).
 
 #### p3.5 — Internal accuracy metrics (local, private)
-- **Status:** TODO
+- **Status:** IN REVIEW — do not self-merge, do not set DONE.
+- **PR:** [#39](https://github.com/Abbo0dio/olf/pull/39)
+- **Branch / worktree:** `feat/p3.5-accuracy-metrics` / `../olf-wt/p3.5`
+- **Owner:** worker: phase3
 - **Depends on:** p3.1, p3.2
 - **Requirement refs:** §3, §4, §6 (substantiable claims — ASA precedent)
 - **Goal:** An on-device, private view of prediction quality over the user's own history —
@@ -2669,10 +2675,53 @@ exception says so and is negotiated before code):
   that it is the user's own data only; copy is non-alarming.
 - **Tests required:** widget test (renders the metrics from a seeded in-memory DB; empty /
   thin-history state); a test asserting no network client is constructed on this path.
-- **Notes / detail:** presentation layer in `app/`; all computation stays in the `core`
-  harness. No new deps. *(agent fills in the rest.)*
+- **Notes / detail:** presentation in `app/`; all computation stays in the `core` harness
+  (`runBacktest` / `BacktestMetrics`, already Flutter-free). No new dep, no schema change
+  (read-only over `periods`).
+  - **Entry point:** a `Prediction accuracy` `ListTile` in Settings under the **Cycle**
+    section (below *Pregnancy loss & birth*) → pushes `AccuracyPage`. Not on the home
+    screen; explicit action to open.
+  - **What it measures:** the **production** predictor (`predictorProvider`), so it reflects
+    v2 automatically once p3.6 lands. `accuracyReportProvider` — a
+    `FutureProvider.autoDispose` — reads the user's period starts
+    (`periodsProvider.future` → `p.startDate`, ascending) and runs
+    `runBacktest(periodStarts:, predictor:, minCompletedCycles: 1)`, then
+    `BacktestMetrics.of`. Re-runs on open, frees on close. A v1-vs-v2 comparison on the
+    user's own data was **deferred** (follow-up in §9) — keeps the slice tight and avoids
+    showing a v2 number before p3.6 swaps it into production.
+  - **Shows:** *typical miss* (mean abs period-start error, days), *median miss*, *landed in
+    the estimated range* (coverage %), *checked against N past periods* (the scored-point
+    count = sample size), and a **plain `CustomPaint` sparkline** of abs error per past
+    decision point (no charting package; a text range fallback under 2 points). All values
+    from `BacktestMetrics`; nothing fabricated.
+  - **States:** loading → spinner + "Working through your logged history…"; thin history
+    (`scoredPoints < 3`) → "There isn't enough logged history to measure yet. Keep logging
+    your periods and check back." — never a number; normal → the metrics + sample size +
+    sparkline. The screen body states the numbers are computed **on this device** from the
+    user's own logged history and **nothing is sent anywhere**; it makes **no** accuracy
+    claim of its own (it shows the user *their* number with its sample size).
+  - **a11y / dark mode:** every metric row and the sparkline carry `Semantics` labels
+    (sparkline → "Miss per past estimate, from X to Y days"); colours from the theme.
+  - **Not pregnancy-gap-aware:** the backtest replays raw period starts, so a recorded
+    pregnancy gap shows as a transient error spike rather than being modelled — noted as a
+    §9 follow-up; most users have no such event and for them the number is exact.
+  - **Copy:** user-facing strings are named `const`s in
+    `app/lib/src/prediction/accuracy_format.dart`; `accuracy_copy_test.dart` asserts the
+    disclaimer + headings are non-alarming (no "wrong / bad / poor / unreliable / failed")
+    and carry no marketing claim (no "best / most accurate / proven / guaranteed"), and that
+    the privacy sentence names the device and "not sent". The p1.9
+    `inclusive_language_test` scan covers gender-neutrality automatically.
+  - **Files:** `app/lib/src/prediction/accuracy_providers.dart` (new — `AccuracyReport` +
+    `accuracyReportProvider`), `accuracy_format.dart` (new — strings + format helpers),
+    `accuracy_page.dart` (new — `AccuracyPage` + `_Sparkline`);
+    `app/lib/src/settings/settings_page.dart` (+1 `ListTile`). Tests:
+    `app/test/prediction/accuracy_page_test.dart` (renders + matches an in-test
+    `runBacktest`; thin-history state; **no `HttpClient` constructed** via a throwing
+    `HttpOverrides`), `accuracy_copy_test.dart`.
 - **Log:**
   - 2026-08-31 — created.
+  - 2026-09-01 — claimed by worker: phase3; worktree `../olf-wt/p3.5`, branch
+    `feat/p3.5-accuracy-metrics` off `main` @ `c27b813`. Folded p3.4 → DONE.
 
 #### p3.6 — Swap `Predictor` to the adaptive engine
 - **Status:** TODO
@@ -3464,6 +3513,22 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   by tooling — it relies on the maintainer following it. (d) The `jq` dependency in `ci-ok`
   is fine on `ubuntu-latest` (preinstalled) but is a new assumption vs. the previous
   `grep`-only step. — noted by worker: phase2 during p2.9.
+- **p3.4 follow-up — `AdaptivePredictor` interval-width discontinuity:** adding a cycle
+  that flips the drift detector on/off can jump the predicted **range width** (a ~56-day
+  tail in `adaptive_predictor_property_test`). The p3.4 anti-snowball work stabilised the
+  *point* estimate (a single outlier now moves it ≤ 2 days) but not the interval recompute
+  — that needs a drift-strength ramp applied to the *interval*, not just the centre.
+  Candidate for p3.6 or a follow-up slice. — noted by worker: phase3 during p3.5 (deferred
+  at p3.4 review).
+- **p3.5 follow-ups:** (a) the accuracy screen shows only the **production** predictor's
+  number — a v1-vs-v2 comparison on the user's own history was cut from the slice; add once
+  it is useful (i.e. around / after p3.6, when both engines are worth contrasting). (b) The
+  backtest replays raw period starts and is **not pregnancy-gap-aware** — a recorded loss /
+  birth shows as a transient error spike rather than a modelled reset; a gap-aware
+  `runBacktest` variant (slice a `List<Cycle>` history, or pass pregnancy events) would fix
+  it. (c) The whole-history replay runs on the **main isolate** on screen open — fine for
+  realistic histories (tens of cycles) but a candidate for a background isolate if a very
+  long history janks the spinner. — noted by worker: phase3 during p3.5.
 - (add more here)
 
 ## 10. Orphaned / cut work
