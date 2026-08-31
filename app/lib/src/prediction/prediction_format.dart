@@ -67,3 +67,7 @@ String overdueHeadline(int daysPastExpected) => daysPastExpected <= 1
 const String overdueBody =
     "Cycles shift for all sorts of reasons, so this on its own isn't a "
     'concern. Log the start when it arrives and the estimate updates.';
+
+/// Button label for dismissing the transient "your update was applied" note
+/// (p3.3). The note's body text comes entirely from `PredictionDelta.reasons`.
+const String correctionNoticeDismissLabel = 'Dismiss';

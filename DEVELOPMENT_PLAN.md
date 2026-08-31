@@ -2078,7 +2078,7 @@ physical-device smoke table.
 
 ### Phase 3 — Correctable adaptive prediction engine v2
 
-**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
+**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 DONE · p3.3 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
 
 **What this phase is.** The v1 predictor (`RobustPredictor`, p1.4) is a correct, humble
 stats projection: median recent cycle length off a fixed anchor, widened to the observed
@@ -2222,9 +2222,9 @@ exception says so and is negotiated before code):
     is in the p3.2 row Log and the p3.2 PR body.
 
 #### p3.2 — Adaptive prediction engine
-- **Status:** IN REVIEW — built to the trust-first reframed bar (orchestrator decision
+- **Status:** DONE — built to the trust-first reframed bar (orchestrator decision
   2026-08-31). See Log.
-- **PR:** [#36](https://github.com/Abbo0dio/olf/pull/36)
+- **PR:** [#36](https://github.com/Abbo0dio/olf/pull/36) — merged (squash `c1d108c`)
 - **Branch / worktree:** `feat/p3.2-adaptive-engine` / `../olf-wt/p3.2`
 - **Owner:** worker: phase3
 - **Depends on:** p3.1
@@ -2466,10 +2466,15 @@ exception says so and is negotiated before code):
     drift; `threat_model_doc_test` green.
   - 2026-08-31 — PR [#36](https://github.com/Abbo0dio/olf/pull/36) opened into
     `main`; **IN REVIEW**. Do not self-merge.
+  - 2026-08-31 — **DONE.** Merged into `main` (squash `c1d108c`, PR #36). CI
+    fully green (format, analyze, test, dependency-audit, build apk + iOS,
+    CI OK).
 
 #### p3.3 — Visible correction loop
-- **Status:** TODO
-- **Depends on:** p3.2
+- **Status:** IN PROGRESS
+- **Branch / worktree:** `feat/p3.3-correction-loop` / `../olf-wt/p3.3`
+- **Owner:** worker: phase3
+- **Depends on:** p3.2 (`PredictionDelta`)
 - **Requirement refs:** §2, §4, §9(1)
 - **Goal:** When the user corrects a prediction (fixes a wrong period start, adjusts a
   logged date), the app **shows** that the correction was taken into account and what
@@ -2485,16 +2490,47 @@ exception says so and is negotiated before code):
   corrected history; widget test for the "no change needed" branch.
 - **Notes / detail:** **the "what changed" computation is done — it lands in p3.2 as
   `PredictionDelta` (`core/lib/src/prediction/prediction_delta.dart`) with its own unit
-  tests and the never-a-silent-no-op invariant.** p3.3 is now purely the presentation +
-  correction-flow wiring: call the delta factory with `followedCorrection: true`, render
-  `reasons`, show before→after. Corrections are already just edits to logged periods
-  (derived-on-read picks them up) — no persisted "correction event" log unless p3.3 wants a
-  *history* of corrections → schema change + migration test + negotiate first (constraint
-  6). *(agent fills in the rest.)*
+  tests and the never-a-silent-no-op invariant.** p3.3 is purely presentation + wiring.
+  - **What counts as "correcting a prediction":** the user editing a logged period's
+    start/end date, or adding / removing a logged period, via the existing period editor
+    (`showPeriodEditor`) or the history "delete" action on the calendar screen
+    (`period_calendar_page.dart`). These are the derived-on-read inputs the forecast is
+    built from; fixing one *is* correcting the prediction.
+  - **Flow (engine-agnostic — it just diffs two `CyclePrediction`s, so it survives the p3.6
+    swap unchanged):** on entering an edit, capture `before = ref.read(predictionProvider)`.
+    Run the edit. On a real change (`PeriodEditorOutcome.saved` / `deleted`), recompute
+    **from the freshly-written data** — `predictorProvider.predict(cycles: deriveCycles(
+    await periodRepo.allPeriods(), pregnancyEvents: await cycleEventRepo.pregnancyEvents()),
+    today: …)` — so the delta is real, not fabricated, and does not race the provider
+    stream. Then `PredictionDelta.between(before, after, context:
+    PredictionChangeContext(followedCorrection: true))` and publish it to a new
+    `correctionNoticeProvider` (`NotifierProvider<…, PredictionDelta?>`, in-memory session
+    state only — **no schema change, no correction-event history**).
+  - **Where it surfaces:** a `_CorrectionNotice` block on the calendar screen, rendered
+    directly where the prediction card is / would be (so a `withdrawn` delta still explains
+    why the card vanished). Renders `delta.reasons` verbatim (plain-language, gender-neutral,
+    non-alarming — all from `PredictionDelta`), a leading check icon, and a dismiss (×)
+    button. The **"no change needed" branch always renders** — `PredictionDelta` guarantees
+    a non-empty reason when `followedCorrection` is set.
+  - **Transient:** auto-clears after ~10 s (a `Timer` in the notice widget) or on manual
+    dismiss; also cleared if the user hits *Undo* on a delete. Not persisted, no history.
+  - **a11y:** the notice is wrapped in `Semantics(liveRegion: true, container: true,
+    label: <joined reasons>)` and additionally fires `SemanticsService.announce(<joined
+    reasons>)` on show / change. Dark mode via `colorScheme.secondaryContainer`; the one
+    app-side string (`correctionNoticeDismissLabel = 'Dismiss'`) is a named const in
+    `prediction_format.dart` and covered by the p1.9 `inclusive_language_test` scan plus a
+    focused non-alarming assertion in the new widget test.
+  - **Files:** `app/lib/src/prediction/correction_notice_providers.dart` (new — the
+    `Notifier`); `app/lib/src/prediction/prediction_format.dart` (+1 const);
+    `app/lib/src/period/period_calendar_page.dart` (capture-before / recompute-after
+    wiring + `_CorrectionNotice` widget). Tests:
+    `app/test/prediction/correction_notice_test.dart`.
 - **Log:**
   - 2026-08-31 — created.
   - 2026-08-31 — scope narrowed: the structured "what changed" diff moved into p3.2
     (`PredictionDelta`); p3.3 is now the widget + wiring only.
+  - 2026-08-31 — claimed by worker: phase3; worktree `../olf-wt/p3.3`, branch
+    `feat/p3.3-correction-loop` off `main` @ `c1d108c`. Folded p3.2 → DONE.
 
 #### p3.4 — Anti-snowball guarantees
 - **Status:** TODO
