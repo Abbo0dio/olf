@@ -150,7 +150,7 @@ A task is not `DONE` until **all** of these hold:
 | **0** | Repo, workflow, CI, app-runs-and-does-one-real-thing | `DONE` | CI green; a build installs; one real slice merged |
 | **1** | MVP core tracking — free, un-paywalled | `DONE` | Core tracking usable end-to-end; correction loop works; backup/restore works |
 | **2** | Privacy & security hardening | `DONE` | Lock + decoy + auto-delete + masking shipped and tested; standalone policy live; threat model committed; audit gate enforced as a release blocker |
-| **3** | Correctable adaptive prediction engine v2 | `IN PROGRESS` | Handles irregular cycles; backtesting harness + accuracy metrics; corrections visibly improve output |
+| **3** | Correctable adaptive prediction engine v2 | `DONE` | v2 shipped behind the unchanged seam: MAE beat on PCOS/postpartum + large calibration gains on every fat-tailed profile (the honest headline is "stops the false precision", per §4); corrections move v2 ~1.7–2.2× v1; no snowballing in-sample or held-out |
 | **4** | Notifications & reminders | `TODO` | Per-category controls; humane copy; quiet hours; "stop asking" control |
 | **5** | Accessibility & design polish | `TODO` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
 | **6** | Health-platform interop & doctor export | `TODO` | Two-way Apple Health / Health Connect sync; doctor-ready PDF |
@@ -2078,7 +2078,7 @@ physical-device smoke table.
 
 ### Phase 3 — Correctable adaptive prediction engine v2
 
-**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 DONE · p3.3 DONE · p3.4 DONE · p3.5 DONE · p3.6 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
+**Status:** `DONE` (2026-09-01) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
 
 **What this phase is.** The v1 predictor (`RobustPredictor`, p1.4) is a correct, humble
 stats projection: median recent cycle length off a fixed anchor, widened to the observed
@@ -2726,8 +2726,8 @@ exception says so and is negotiated before code):
     (format · analyze · test · dependency-audit · apk + ios build · CI OK).
 
 #### p3.6 — Swap `Predictor` to the adaptive engine
-- **Status:** IN REVIEW — do not self-merge, do not set DONE.
-- **PR:** [#40](https://github.com/Abbo0dio/olf/pull/40)
+- **Status:** DONE — merged into `main` (squash `cca91d5`, PR #40).
+- **PR:** [#40](https://github.com/Abbo0dio/olf/pull/40) — merged (squash `cca91d5`)
 - **Branch / worktree:** `feat/p3.6-swap-predictor` / `../olf-wt/p3.6`
 - **Owner:** worker: phase3
 - **Depends on:** p3.2, p3.4, p3.5
@@ -2811,9 +2811,78 @@ exception says so and is negotiated before code):
     `predictorProvider` to `AdaptivePredictor`; added `phase3_exit_gate_test`; updated three
     app test oracles to v2 (reasons above). core 407 green, app 129 green, analyze / format
     / dependency-audit clean. Migration-notice deferred to §9 with rationale.
+  - 2026-09-01 — **DONE.** Merged into `main` (squash `cca91d5`, PR #40). CI fully green
+    (format · analyze · test · dependency-audit · apk + ios build · CI OK). Migration-notice
+    deferral accepted at review. Last Phase 3 build slice.
 
 **Exit gate:** measurable improvement over v1 on the irregular-cycle datasets; corrections
 demonstrably change output; no snowballing in tests.
+
+**Exit-gate status — MET (2026-09-01).** All six slices p3.1–p3.6 merged to `main`
+(PRs [#35](https://github.com/Abbo0dio/olf/pull/35)–[#40](https://github.com/Abbo0dio/olf/pull/40))
+with CI green; each slice's acceptance criteria were verified in its PR. The `Predictor`
+seam signature and `CyclePrediction` shape are unchanged from p1.4 — the entire phase
+landed behind the frozen interface. `RobustPredictor` (v1) stays in the tree as the
+labelled reference baseline for the harness.
+
+The gate as written — *"measurable improvement over v1 on the irregular-cycle datasets;
+corrections demonstrably change output; no snowballing in tests"* — was **reframed during
+p3.2** (orchestrator decision, "trust first"): a recency-weighted robust median is already
+near-MAE-optimal on the synthetic irregular / perimenopause DGPs, and PCOS length spikes
+are history-independent by construction, so a uniform "lower MAE everywhere" target would
+have meant overfitting. The gate is met on the honest reframe below.
+
+- **Measurable improvement over v1 on the irregular-cycle datasets** — met as a
+  **point-error beat where a beat is possible, plus a calibration step-change everywhere**.
+  MAE: v2 beats v1 on `pcos` (~−4%: 12.90 → 12.44 in-sample, 11.37 → 10.99 held-out) and
+  `postpartum` (~−11%: 4.61 → 4.09, 4.55 → 4.10); statistical parity (≤ +3%) on `regular` /
+  `irregular` / `perimenopause` — a proven near-optimality of the v1 estimator on those
+  processes, not a concession. The real improvement is calibration: the predicted range
+  **stops claiming false precision** (`requirements.md` §4, "accuracy with humility") —
+  in-range coverage rises `pcos` 0.48 → 0.73, `perimenopause` 0.54 → 0.74, `postpartum`
+  0.69 → 0.88, `irregular` 0.79 → 0.90, while `regular` holds at 0.91 and wide-range
+  forecasts are no longer sold as high-confidence. Evidence:
+  `core/test/backtest/phase3_exit_gate_test.dart` (consolidated table, asserted) and
+  `core/test/backtest/v2_vs_v1_test.dart`, both in-sample (seeds 1–20) **and** held-out
+  (seeds 200–249, never tuned against). Built across **p3.1** (backtest harness + synthetic
+  DGPs + v1 baseline, PR [#35](https://github.com/Abbo0dio/olf/pull/35) `c63915e`) and
+  **p3.2** (the adaptive engine — recency-weighted robust centre, monotone drift term,
+  lag-1 mean-reversion, empirical calibrated interval, thin-history Bayesian shrinkage,
+  PR [#36](https://github.com/Abbo0dio/olf/pull/36) `c1d108c`).
+- **Corrections demonstrably change output** — met. **p3.3** shipped the visible correction
+  loop (PR [#37](https://github.com/Abbo0dio/olf/pull/37) `98a324a`): editing or adding a
+  logged date recomputes the forecast on the same screen and shows a plain-language note of
+  what moved, announced to screen readers, never silent even on a no-op. The
+  correction-response backtest (`core/test/backtest/correction_response_test.dart`) proves
+  the engine half: on a fixed 3-day mis-log v1's forecast moves < 1 day on every profile
+  while v2 moves **~1.7–2.2× v1** (0.84–1.26 days), and the mean correction *accuracy* gain
+  stays ≥ −0.3 d — correcting a date never meaningfully worsens the forecast.
+- **No snowballing in tests** — met. **p3.4** (PR [#38](https://github.com/Abbo0dio/olf/pull/38)
+  `c27b813`) hardened the engine (time-position-preserving exclusion of implausible cycles;
+  an outlier-influence down-weight on the centre; a ramped AR outlier gate) and proved it:
+  the aggregate post-outlier / baseline error ratio is **v2 ≤ v1 in-sample (1.229 ≤ 1.236)
+  and held-out (1.064 ≤ 1.082)**, and a single injected outlier of any magnitude (40–110 d)
+  against an established ~28-day history shifts the expected next-period date **≤ 3 days**,
+  immediately and at every later cutoff (measured max over the sweep: 2 days). Evidence:
+  `core/test/backtest/anti_snowball_test.dart`.
+
+**Shipped on top of the gate:** **p3.5** — a private, on-device prediction-accuracy screen
+(PR [#39](https://github.com/Abbo0dio/olf/pull/39) `12dc0a6`): a read-only backtest replay
+of the user's own logged history through the production predictor, shown behind an explicit
+Settings action, with sample size stated, no fabricated number on thin history, and no
+network (asserted). **p3.6** — the production swap (PR [#40](https://github.com/Abbo0dio/olf/pull/40)
+`cca91d5`): `predictorProvider` moved from `RobustPredictor` to `AdaptivePredictor` with no
+call-site change; `phase3_exit_gate_test` added as the single reproducible evidence table.
+
+**Outstanding non-blockers carried forward** (all filed as Phase 3 rows in §9): the
+`AdaptivePredictor` interval-width discontinuity (a cycle that flips the drift detector can
+jump the range width — the point estimate is stable, the interval recompute is not); the
+v1-vs-v2-on-the-user's-own-history comparison cut from p3.5; the accuracy backtest not
+being pregnancy-gap-aware (a logged loss/birth shows as a transient error spike); the
+whole-history replay running on the main isolate on screen open; and the v2 migration
+notice (a one-time "your ranges are calibrated now" note for users whose forecast visibly
+widened on the swap — deferred from p3.6 because a precise, non-misfiring notice depends on
+the v1-vs-v2-on-own-data comparison above).
 
 ---
 
