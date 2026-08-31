@@ -19,8 +19,10 @@ void main() {
       );
 
   /// The prediction the screen will compute, for cross-checking rendered text.
+  /// p3.6: the production engine is `AdaptivePredictor` now, so this oracle is
+  /// too — the asserted dates/ranges/confidence below are v2's output.
   CyclePrediction predictionFor(List<DateTime> starts) =>
-      const RobustPredictor().predict(
+      const AdaptivePredictor().predict(
         cycles: deriveCycles([
           for (final s in starts)
             Period(
@@ -37,7 +39,17 @@ void main() {
   testWidgets('a regular history renders next-period and fertile ranges', (
     tester,
   ) async {
-    final starts = [daysAgo(104), daysAgo(76), daysAgo(48), daysAgo(20)];
+    // p3.6: v2 needs ~4 completed cycles of steady evidence (effective sample
+    // ≥ 3) before it will call a forecast "high confidence"; v1 reached it at 3.
+    // Same intent — a strong regular history renders the confident-estimate
+    // path — with one more metronomic cycle so v2 legitimately gets there.
+    final starts = [
+      daysAgo(132),
+      daysAgo(104),
+      daysAgo(76),
+      daysAgo(48),
+      daysAgo(20),
+    ];
     final db = memoryDb();
     for (final s in starts) {
       await seedStart(db, s);

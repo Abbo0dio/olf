@@ -24,6 +24,13 @@ const int minPredictionMarginDays = 1;
 /// median recent cycle length, and widen to the range those cycles actually
 /// covered. Robust enough for v1; deliberately **not** adaptive — that is
 /// Phase 3, which swaps this out behind the [Predictor] seam.
+///
+/// **v1 reference baseline — no longer the production `Predictor` as of p3.6.**
+/// The app wires `AdaptivePredictor` (v2) through `predictorProvider` now; this
+/// class is kept only as the fixed comparison point for the backtest harness
+/// (`v1_baseline_test`, `v2_vs_v1_test`, `anti_snowball_test`,
+/// `phase3_exit_gate_test`). Its behaviour must stay stable so those tests keep
+/// measuring the same thing — treat it as frozen. See `AdaptivePredictor`.
 class RobustPredictor implements Predictor {
   const RobustPredictor();
 
