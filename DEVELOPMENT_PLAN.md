@@ -149,7 +149,7 @@ A task is not `DONE` until **all** of these hold:
 |-------|-------|--------|-----------------|
 | **0** | Repo, workflow, CI, app-runs-and-does-one-real-thing | `DONE` | CI green; a build installs; one real slice merged |
 | **1** | MVP core tracking — free, un-paywalled | `DONE` | Core tracking usable end-to-end; correction loop works; backup/restore works |
-| **2** | Privacy & security hardening | `IN PROGRESS` | Lock + decoy + auto-delete + standalone policy shipped; audit gate enforced |
+| **2** | Privacy & security hardening | `DONE` | Lock + decoy + auto-delete + masking shipped and tested; standalone policy live; threat model committed; audit gate enforced as a release blocker |
 | **3** | Correctable adaptive prediction engine v2 | `TODO` | Handles irregular cycles; backtesting harness + accuracy metrics; corrections visibly improve output |
 | **4** | Notifications & reminders | `TODO` | Per-category controls; humane copy; quiet hours; "stop asking" control |
 | **5** | Accessibility & design polish | `TODO` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
@@ -1406,7 +1406,7 @@ forward: the p0.5 manual physical-device smoke table, and the per-slice §9 foll
 
 ### Phase 2 — Privacy & security hardening
 
-**Status:** `IN PROGRESS` (p2.1–p2.8 DONE; p2.9 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
+**Status:** `DONE` (2026-08-31) · **Requirement refs:** §3, §6, §7, §8.
 
 The Phase 1 slice-list has been expanded into task rows below (p2.1–p2.9). Rows
 p2.2–p2.9 carry the intended scope; the agent starting each one fills in the
@@ -1631,8 +1631,8 @@ threat model committed.
   - 2026-08-31 — merged as PR #27 (squash `c55bac8`). **DONE.**
 
 #### p2.4 — Background privacy (app-switcher mask, screenshot block, lock-screen hygiene)
-- **Status:** IN REVIEW
-- **PR:** [#28](https://github.com/Abbo0dio/olf/pull/28)
+- **Status:** DONE
+- **PR:** [#28](https://github.com/Abbo0dio/olf/pull/28) — merged (squash `5198074`)
 - **Branch / worktree:** `feat/p2.4-background-privacy` / `../olf-wt/p2.4`
 - **Owner:** worker: phase2
 - **Depends on:** p1.8
@@ -1698,8 +1698,8 @@ threat model committed.
   - 2026-08-31 — merged as PR #28 (squash `5198074`). **DONE.**
 
 #### p2.5 — Standalone consumer-health privacy policy screen
-- **Status:** IN REVIEW
-- **PR:** [#29](https://github.com/Abbo0dio/olf/pull/29)
+- **Status:** DONE
+- **PR:** [#29](https://github.com/Abbo0dio/olf/pull/29) — merged (squash `b24ca49`)
 - **Branch / worktree:** `feat/p2.5-privacy-policy` / `../olf-wt/p2.5`
 - **Owner:** worker: phase2
 - **Depends on:** p1.8
@@ -1969,8 +1969,8 @@ threat model committed.
   - 2026-08-31 — merged (squash `834a4d4`). **DONE.**
 
 #### p2.9 — Dependency-audit gate: strict + documented release blocker
-- **Status:** IN REVIEW
-- **PR:** [#33](https://github.com/Abbo0dio/olf/pull/33)
+- **Status:** DONE
+- **PR:** [#33](https://github.com/Abbo0dio/olf/pull/33) — merged (squash `314bba0`)
 - **Branch / worktree:** `feat/p2.9-audit-release-blocker` / `../olf-wt/p2.9`
 - **Owner:** worker: phase2
 - **Depends on:** p0.3
@@ -2041,6 +2041,38 @@ threat model committed.
     clean (core + app + the audit script); `dart format` clean (core + app + `.github/
     scripts`); drift codegen unchanged; the real-tree audit run PASSes; no `pubspec.lock`
     drift. No schema change, no new runtime dependency, no new workflow.
+  - 2026-08-31 — merged (squash `314bba0`, PR #33). **DONE.**
+
+**Phase 2 exit gate:** the MUST-HAVE privacy/security controls from `requirements.md` §3
+(and §6/§7/§8) are shipped, tested, and enforced: PIN + biometric lock, decoy/duress PIN,
+scheduled auto-deletion, background masking, a standalone consumer-health privacy policy,
+a TLS-only transport baseline, in-app privacy education, a committed threat model, and an
+un-waivable dependency-audit release blocker.
+
+**Exit-gate status — MET (2026-08-31).** All nine slices p2.1–p2.9 merged to `main`
+(PRs #25–#33) with CI green; each slice's acceptance criteria were verified in its PR.
+
+- **Lock + decoy + auto-delete + masking shipped and tested:** biometric unlock over the
+  PIN (**p2.1**, PR #25 `0afdd48`); decoy/duress PIN routing to a separate empty vault
+  (**p2.2**, PR #26 `ee69420`); retention window with purge-before-export (**p2.3**, PR #27
+  `c55bac8`); app-switcher mask + `FLAG_SECURE` + no-PHI recents (**p2.4**, PR #28
+  `5198074`). Each carries unit + widget/seam tests headless in CI.
+- **Standalone policy live:** in-app `PrivacyPolicyScreen` with the commitments + two
+  default-off consent switches, reachable from first-run and Settings, MHMDA/SB370-aligned
+  (**p2.5**, PR #29 `b24ca49`), plus the honest, non-alarming in-app explainers — HIPAA
+  gap, law-enforcement reality, how to delete everything (**p2.7**, PR #31 `a7585fe`).
+- **Threat model committed:** `docs/threat-model.md` (assets / adversaries / trust
+  boundaries / data-flow diagram / mitigation cross-reference to every Phase 0–2 slice /
+  residual risks / phase-gate Review log) with a CI guard (**p2.8**, PR #32 `834a4d4`).
+- **Supporting hardening:** TLS-only Android/iOS config + `OlfHttpClient` chokepoint +
+  transport gate (**p2.6**, PR #30 `9370943`); the dependency-audit promoted to an
+  explicit, un-waivable release blocker with a documented escalation path and a
+  `docs/release-checklist.md` (**p2.9**, PR #33 `314bba0`).
+
+Outstanding non-blockers carried forward: the per-slice §9 follow-ups (key-to-PIN binding,
+failed-attempt lockout/backoff, iOS screenshot gap, decoy-DB cleanup on disable, retro-scrub
+of saved backups, cert-pinning enforcement, native-dep audit coverage), and the p0.5 manual
+physical-device smoke table.
 
 ---
 
