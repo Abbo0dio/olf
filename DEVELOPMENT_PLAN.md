@@ -2078,7 +2078,7 @@ physical-device smoke table.
 
 ### Phase 3 — Correctable adaptive prediction engine v2
 
-**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 BLOCKED — hard stop, awaiting decision) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
+**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 IN PROGRESS — reframed bar) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
 
 **What this phase is.** The v1 predictor (`RobustPredictor`, p1.4) is a correct, humble
 stats projection: median recent cycle length off a fixed anchor, widened to the observed
@@ -2215,36 +2215,57 @@ exception says so and is negotiated before code):
   - 2026-08-31 — PR [#35](https://github.com/Abbo0dio/olf/pull/35) opened into
     `main`; **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
   - 2026-08-31 — **DONE.** Merged into `main` (squash `c63915e`, PR #35).
-  - 2026-08-31 — v1 baseline table **to be regenerated in p3.2** — the
-    irregular/pcos fixtures are gaining lag-1 autocorrelation to match real
-    cycle behaviour (agreed with orchestrator). Regeneration is deferred: p3.2
-    hit a hard stop after the fixture change (the engine still can't beat v1 MAE
-    on pcos/perimenopause), so `core/test/backtest/v1_baseline_test.dart` is not
-    updated until the orchestrator confirms the fixtures stay. See the p3.2 row
-    hard-stop Log entry for the measured before/after.
+  - 2026-08-31 — v1 baseline table regenerated in p3.2 — the irregular/pcos
+    fixtures gained lag-1 autocorrelation to match real cycle behaviour
+    (AR(1), phi 0.3 / 0.4 fixed before measuring; cycle count 24 → 36). The new
+    numbers are in `core/test/backtest/v1_baseline_test.dart`; the before/after
+    is in the p3.2 row Log and the p3.2 PR body.
 
 #### p3.2 — Adaptive prediction engine
-- **Status:** BLOCKED — hard stop after the agreed fixture change (see Log 2026-08-31 hard
-  stop). No PR opened. Awaiting orchestrator decision.
+- **Status:** IN PROGRESS — resumed under the reframed acceptance bar (orchestrator decision
+  2026-08-31, "Option 14" + engine-substrate for "what changed"). See Log.
 - **Branch / worktree:** `feat/p3.2-adaptive-engine` / `../olf-wt/p3.2`
 - **Owner:** worker: phase3
 - **Depends on:** p3.1
 - **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR
-- **Goal:** A per-user adaptive `Predictor` implementation that beats v1 on the irregular /
-  PCOS / perimenopause / postpartum backtest sets while never regressing on the regular set,
-  and outputs **calibrated** confidence ranges (stated coverage ≈ observed coverage).
-- **Acceptance criteria:** recency-weighted robust central estimate (more weight to recent
-  cycles); interval width driven by recent dispersion (MAD / trimmed spread), not a fixed
-  margin; conjugate Bayesian update on cycle length so few-cycle histories degrade
-  gracefully toward a wide, honest range rather than a fabricated point; explicit
-  non-stationarity handling (a detected level shift discounts pre-shift cycles); on the p3.1
-  harness it improves period-start MAE on the non-regular sets by a documented margin;
-  **observed coverage >= 0.80 for the nominal ~90% next-period range on every synthetic
-  set** (n≈23–35 scored points per set makes a ±5-pt calibration band unrealistic, so the
-  bar is a one-sided floor on the ~90% range); regular-set MAE not worse than v1.
-- **Tests required:** unit tests per estimator; harness comparison test (v2 vs the p3.1 v1
-  baseline) asserting the improvement + calibration bounds; property test that adding one
-  cycle never widens or shifts the estimate more than a bounded amount (pre-snowball).
+- **Goal:** A per-user adaptive `Predictor` implementation that is **more accurate where more
+  accuracy is achievable** (irregular, postpartum), **at least as accurate everywhere else**
+  (regular, PCOS, perimenopause — where a robust median is already near-optimal on point
+  error), outputs a **calibrated** next-period range on every profile, and — unlike v1 —
+  **visibly responds when the user corrects a logged date** (§9(1)).
+- **Acceptance criteria (reframed 2026-08-31 — see Log for the "why"):**
+  - **Point error (period-start MAE), multi-seed on the p3.1 harness:**
+    - `irregular`, `postpartum`: v2 **beats** v1 by a documented margin.
+    - `pcos`, `perimenopause`: v2 MAE **≤ v1 MAE × 1.02** (statistical parity — a
+      recency-weighted robust median is provably near-MAE-optimal on a fat-tailed / high-
+      noise stationary-ish process; the 15%-chance PCOS spikes are independent of history so
+      no forecaster can beat the non-spike median on point error). Rationale written into
+      the notes + PR.
+    - `regular`: v2 MAE not worse than v1.
+  - **Calibration:** observed coverage **≥ 0.80** for the nominal ~90% next-period range on
+    **every** synthetic set (one-sided floor — n≈23–35 scored points makes a two-sided ±5-pt
+    band finer than the sampling noise); **and** on `pcos` + `perimenopause`, v2 coverage is
+    **closer to nominal than v1's** (this is the headline win on those sets — honest ranges,
+    dispersion-driven, not `[shortest, longest]`).
+  - **Anti-snowball:** v2 snowball ratio **≤ v1 × 1.05** on every set where it is defined
+    (the mean-reversion term must not chase unpredictable spikes; p3.4 hardens this further).
+  - **Correction response (§9(1)):** on a correction-response backtest — a recent logged
+    boundary is mis-logged by a few days, then corrected — v2's forecast **visibly moves**
+    between the mis-logged and corrected states (mean |Δ expected| clearly above v1's, which
+    is ≈ 0), the correction **does not make accuracy worse** on average, and the move is
+    **bounded** (≤ the size of the mis-log — no over-reaction).
+  - **Estimator shape:** recency-weighted robust central estimate; interval width from
+    recent dispersion, not a fixed margin; weak conjugate Bayesian shrinkage so few-cycle
+    histories degrade toward a wide honest range; explicit non-stationarity handling (a
+    detected level shift shortens memory / adds a bounded drift term).
+- **Tests required:** unit tests per estimator (incl. the AR-outlier gate); harness
+  comparison test (v2 vs the regenerated v1 baseline) reproducing the table and asserting
+  the reframed bar (MAE beat / parity / coverage floor / coverage-vs-v1 / snowball);
+  correction-response test (v2 visible-effect > v1, correction non-harmful, bounded);
+  property test that adding one **ordinary** cycle shifts/widens the estimate by no more
+  than a bounded amount (pre-snowball); `PredictionDelta` unit tests (structural diff,
+  `isMeaningful`, a correction is never reported as "no change" silently, gender-neutral
+  non-alarming phrasing).
 - **Notes / detail:** **plain-Dart statistics only** — no package added (constraint 2).
   Interface unchanged — `AdaptivePredictor implements Predictor`, same `predict({cycles,
   today})` signature, same `CyclePrediction` shape (constraint 4). No persisted model state:
@@ -2262,10 +2283,13 @@ exception says so and is negotiated before code):
        strictly monotone lo→mid→hi median progression whose total shift clears a MAD-scaled
        floor before applying a per-cycle drift term, clamped to ±2.5 d/cycle. Catches the
        perimenopause ramp without firing on noise.
-    3b. **Lag-1 mean-reversion (AR(1))** — when no trend is detected, estimate the recent
-       lag-1 autocorrelation (`phiHat`, clamped `[0, 0.55]`) and shift the forecast a
-       fraction of the last cycle's deviation from the level, capped at ±6 d. This is the
-       term that is meant to exploit the new autocorrelated fixtures.
+    3b. **Lag-1 mean-reversion (AR(1)), outlier-gated** — when no trend is detected,
+       estimate the recent lag-1 autocorrelation (`phiHat`, clamped `[0, 0.55]`) and shift
+       the forecast a fraction of the last cycle's deviation from the level, capped at ±6 d.
+       **Gated off when the most recent cycle is itself an outlier** (`|last − centre| >
+       2·MAD`): you cannot mean-revert from a shock you did not forecast, and chasing a
+       PCOS-type spike doubles the error when it reverts (this gate is what keeps the PCOS
+       snowball ratio from regressing).
     4. **Weak Bayesian shrinkage** — conjugate-style pull toward a `29 d` prior with prior
        weight `0.5`, so 1–2-cycle histories degrade toward the prior and a wide range rather
        than a confident wrong point; the shrinkage also inflates the interval by
@@ -2278,12 +2302,31 @@ exception says so and is negotiated before code):
   - Ovulation / fertile-window derivation and the `status` / `daysPastExpected` logic are
     identical to v1 (`expected − lutealPhaseDays`, fertile `[ov−5, ov+1]`), so only the
     next-period centre + range change.
-  - **Files:** `core/lib/src/prediction/adaptive_predictor.dart` (engine + private weighted
-    -stats helpers), exported from `olf_core.dart`. Tests:
-    `core/test/prediction/adaptive_predictor_test.dart` (per-estimator units + edge cases),
-    `core/test/backtest/v2_vs_v1_test.dart` (reproduces the comparison table + coverage
-    floor), `core/test/backtest/adaptive_predictor_property_test.dart` (bounded-response
-    property).
+  - **`PredictionDelta` — the "here's what changed" substrate (engine-side; p3.3 renders
+    it).** A plain-Dart value object + pure factory `PredictionDelta.between(before:, after:,
+    context:)` that diffs two `CyclePrediction`s into: signed expected-date shift, signed
+    range-width change, earliest/latest shifts, confidence before→after, and a list of
+    plain-language, **gender-neutral, non-alarming** `reasons`. `context`
+    (`followedCorrection`, `cyclesAdded`) shapes the wording. Invariants: a correction is
+    **never** reported as a silent no-op (if nothing moved, it still says "your correction
+    was applied; the prediction didn't need to change"); `isMeaningful` is true iff any
+    field moved past a 1-day / 1-bucket threshold. No persistence, no `DateTime.now()`.
+  - **Correction-response backtest (`core/lib/src/backtest/`).** New harness mode: at each
+    replay point, perturb a recent logged period-start by `mislogOffsetDays` (default 3),
+    predict; then "correct" it back to truth, predict; record the two predictions + the
+    actual. Metrics: `visibleEffectDays` = |Δ expected midpoint| between mis-logged and
+    corrected; `correctionGainDays` = `absErr(mislogged) − absErr(corrected)`. Lets the
+    test show v2's forecast **moves** when you fix a date (v1's barely does — the §9(1)
+    complaint) while staying bounded and non-harmful.
+  - **Files:** `core/lib/src/prediction/adaptive_predictor.dart` (engine + private
+    weighted-stats helpers); `core/lib/src/prediction/prediction_delta.dart` (the diff
+    value object + factory); `core/lib/src/backtest/correction_response.dart` (the new
+    harness mode). All exported from `olf_core.dart`. Tests:
+    `core/test/prediction/adaptive_predictor_test.dart` (per-estimator units + edge cases +
+    AR-outlier gate), `core/test/prediction/prediction_delta_test.dart`,
+    `core/test/backtest/v2_vs_v1_test.dart` (comparison table + reframed bar),
+    `core/test/backtest/correction_response_test.dart`,
+    `core/test/backtest/adaptive_predictor_property_test.dart` (bounded-response property).
   - **Edge cases:** empty history → `null`; `cycles.first.isPregnancyGap` → `null` (same as
     v1); all-gap / all-current history → `null`; single usable cycle → prior-dominated wide
     range, `low` confidence; pregnancy gap partway through → only the post-gap run is used
@@ -2299,10 +2342,10 @@ exception says so and is negotiated before code):
     engine**. Noise SD scaled by `sqrt(1 − phi²)` so the marginal variance matches the old
     generators; the PCOS occasional-very-long-cycle spike is kept; irregular/pcos cycle
     count raised 24 → 36 for more scored points; seed stays 42; regular / perimenopause /
-    postpartum generators unchanged. The v1 baseline table in
-    `core/test/backtest/v1_baseline_test.dart` needs regenerating against the new generators
-    (before/after in the hard-stop Log entry) — **not yet done**, pending the decision on
-    whether these fixtures stay.
+    postpartum generators unchanged. The v1 baseline in
+    `core/test/backtest/v1_baseline_test.dart` is regenerated against the new generators
+    (before/after in the Log below and the PR body). The orchestrator confirmed these
+    fixtures stay (decision 2026-08-31).
 - **Log:**
   - 2026-08-31 — created.
   - 2026-08-31 — claimed by worker: phase3; worktree `../olf-wt/p3.2`, branch
@@ -2344,6 +2387,26 @@ exception says so and is negotiated before code):
     MAE bar to "not worse", change the fixture differently, or drop the
     MAE-beat framing for the intrinsically-unpredictable-spike sets). No PR,
     no `v1_baseline_test.dart` regeneration, no new tests until then.
+  - 2026-08-31 — **orchestrator decision: "Option 14" + engine-substrate for
+    "what changed".** Fixtures stay. Acceptance bar reframed (above): MAE *beat*
+    on irregular + postpartum; MAE *parity* (≤ v1 × 1.02) on pcos + perimenopause
+    with the "median is near-optimal on a fat-tailed / spike process" rationale;
+    coverage ≥ 0.80 every set **and** v2 coverage closer to nominal than v1 on
+    pcos/perimenopause; snowball not worse anywhere; regular not worse. Plus:
+    (a) gate the AR(1) term off when the last cycle is an outlier; (b) ship a
+    plain-Dart `PredictionDelta` "here's what changed" explainer behind the seam;
+    (c) add a correction-response backtest showing v2 visibly reacts to a fix and
+    v1 does not. p3.3 narrows to rendering the delta. Plan edited first (this
+    row + p3.3 + p3.1 baseline note); build resumed.
+  - 2026-08-31 — v1 baseline regenerated against the AR(1) generators
+    (`core/test/backtest/v1_baseline_test.dart`). Before → after (seed 42):
+    | set | scored | v1 MAE | v1 coverage | v1 snowball |
+    |---|--:|--:|--:|--:|
+    | regular | 23 → 23 | 0.87 → 0.87 | 0.957 → 0.957 | – |
+    | irregular | 23 → 35 | 4.39 → 4.34 | 0.739 → 0.771 | – → 1.382 |
+    | pcos | 23 → 35 | 7.22 → 6.94 | 0.565 → 0.629 | 1.108 → 1.008 |
+    | perimenopause | 23 → 23 | 5.91 → 5.91 | 0.609 → 0.609 | 1.071 → 1.071 |
+    | postpartum | 16 → 16 | 5.06 → 5.06 | 0.688 → 0.688 | – |
 
 #### p3.3 — Visible correction loop
 - **Status:** TODO
@@ -2352,19 +2415,27 @@ exception says so and is negotiated before code):
 - **Goal:** When the user corrects a prediction (fixes a wrong period start, adjusts a
   logged date), the app **shows** that the correction was taken into account and what
   changed — directly answering the §9(1) complaint that corrections silently do nothing.
-- **Acceptance criteria:** after a correction the prediction card surfaces a plain-language
-  "your correction updated this — expected date moved from X to Y / range narrowed" note;
-  the change is real (the engine re-runs on the corrected history); no correction is ever
-  silently discarded; the note is gender-neutral and non-alarming.
-- **Tests required:** widget test — correct a date, assert the card shows the before→after
-  and that the new prediction matches the engine on the corrected history; unit test that a
-  correction always changes *or explicitly confirms* the output.
-- **Notes / detail:** corrections are already just edits to logged periods (derived-on-read
-  picks them up). This slice is mostly the *explanation* layer; a persisted "correction
-  event" log is only needed if p3.3 wants history of corrections → schema change + migration
-  test + negotiate first (constraint 6). *(agent fills in the rest.)*
+- **Acceptance criteria:** after a correction the prediction card surfaces the p3.2
+  `PredictionDelta` in plain language — "your correction updated this — expected date moved
+  from X to Y / range narrowed", or, when nothing moved, the explicit "your correction was
+  applied; the prediction didn't need to change"; the change is real (the adaptive engine
+  re-runs on the corrected history); no correction is ever silently discarded; the note is
+  gender-neutral and non-alarming.
+- **Tests required:** widget test — correct a date, assert the card renders the
+  `PredictionDelta` before→after and that the new prediction matches the engine on the
+  corrected history; widget test for the "no change needed" branch.
+- **Notes / detail:** **the "what changed" computation is done — it lands in p3.2 as
+  `PredictionDelta` (`core/lib/src/prediction/prediction_delta.dart`) with its own unit
+  tests and the never-a-silent-no-op invariant.** p3.3 is now purely the presentation +
+  correction-flow wiring: call the delta factory with `followedCorrection: true`, render
+  `reasons`, show before→after. Corrections are already just edits to logged periods
+  (derived-on-read picks them up) — no persisted "correction event" log unless p3.3 wants a
+  *history* of corrections → schema change + migration test + negotiate first (constraint
+  6). *(agent fills in the rest.)*
 - **Log:**
   - 2026-08-31 — created.
+  - 2026-08-31 — scope narrowed: the structured "what changed" diff moved into p3.2
+    (`PredictionDelta`); p3.3 is now the widget + wiring only.
 
 #### p3.4 — Anti-snowball guarantees
 - **Status:** TODO

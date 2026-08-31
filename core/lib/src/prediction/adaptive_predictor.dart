@@ -37,7 +37,9 @@ import 'robust_predictor.dart'
 ///    lag-1 autocorrelation (`phiHat`, clamped to `[0, 0.55]`) pulls the
 ///    forecast a fraction of the last cycle's deviation from the level — a long
 ///    cycle nudges the next estimate up. Capped at [_maxArShiftDays]; trending
-///    histories skip it because [_drift] already carries the systematic part.
+///    histories skip it because [_drift] already carries the systematic part;
+///    **gated off when the last cycle is an outlier** (`|last − median| >
+///    2·MAD`), so a PCOS-type spike is not chased.
 /// 4. **Bayesian shrinkage (thin history only).** The centre is blended with a
 ///    weak population prior (mean [_priorMean], pseudo-count [_priorWeight]).
 ///    With `nEff` of 8+ the prior is negligible; with one or two cycles it
@@ -66,6 +68,12 @@ class AdaptivePredictor implements Predictor {
   /// two-sided ±5-pt band around 0.90 is finer than the sampling noise, so the
   /// bar is "the ~90% range must not under-cover badly", not "hit 0.90 exactly".
   static const double nominalCoverage = 0.90;
+
+  /// A flat multiplier on the empirical half-width. An in-sample deviation
+  /// quantile systematically under-covers out of sample (more so on the short,
+  /// fat-tailed non-regular histories); this lifts the ~90% band back onto its
+  /// ≥ 0.80 coverage floor across every profile.
+  static const double _widthSafety = 1.06;
 
   /// Per-cycle geometric decay for recency weighting. The engine **widens its
   /// memory when your cycles are steady and shortens it when they are
@@ -97,6 +105,10 @@ class AdaptivePredictor implements Predictor {
   static const int _arMinCycles = 6;
   static const double _arPhiCap = 0.55;
   static const double _maxArShiftDays = 6.0;
+
+  /// The AR term is gated off when the last cycle sits more than this many
+  /// robust MADs from the recent median (an unpredictable shock).
+  static const double _arOutlierMadFactor = 2.0;
 
   /// The predicted range is never narrower than ±this — a date is never claimed
   /// to the day (shared with v1).
@@ -185,11 +197,11 @@ class AdaptivePredictor implements Predictor {
     final tailRatio =
         _weightedQuantile(absDevs, 0.92) /
         math.max(1.0, _weightedQuantile(absDevs, 0.6));
-    final tailBump = 1 + 0.16 * (tailRatio - 2.0).clamp(0.0, 4.0);
-    final q = (nominalCoverage * (1 + 0.25 / nEff)).clamp(0.0, 0.98);
+    final tailBump = 1 + 0.18 * (tailRatio - 2.0).clamp(0.0, 4.0);
+    final q = (nominalCoverage * (1 + 0.30 / nEff)).clamp(0.0, 0.985);
     final halfWidth = math.max(
       _minMargin.toDouble(),
-      _weightedQuantile(absDevs, q) * thinInflation * tailBump,
+      _weightedQuantile(absDevs, q) * thinInflation * tailBump * _widthSafety,
     );
 
     // --- 6. anchor + assemble ----------------------------------------------
@@ -266,12 +278,25 @@ class AdaptivePredictor implements Predictor {
 
   /// A fraction of the most recent cycle's deviation from [centre], sized by the
   /// recent lag-1 autocorrelation. 0 when trending, when the history is too
-  /// short, or when the estimate is non-positive. [newestFirst] is newest-first.
+  /// short, when the estimate is non-positive, or — the **outlier gate** — when
+  /// the most recent cycle is itself a shock far from the recent median: you
+  /// cannot mean-revert from something you could not have forecast, and chasing
+  /// a spike doubles the error when it snaps back. [newestFirst] is newest-first.
   double _arCorrection(List<int> newestFirst, double centre, bool trending) {
     if (trending || newestFirst.length < _arMinCycles) return 0;
     final w = newestFirst
         .take(math.min(_arWindow, newestFirst.length))
         .toList();
+
+    final wMedian = _median(w);
+    final mad = math.max(
+      1.0,
+      _median([for (final x in w) (x - wMedian).abs().round()]),
+    );
+    if ((newestFirst.first - wMedian).abs() > _arOutlierMadFactor * mad) {
+      return 0;
+    }
+
     final mean = w.reduce((a, b) => a + b) / w.length;
     var cov = 0.0;
     var varr = 0.0;

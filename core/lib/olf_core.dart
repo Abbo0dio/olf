@@ -6,6 +6,7 @@ library;
 
 export 'src/backtest/backtest_harness.dart';
 export 'src/backtest/backtest_metrics.dart';
+export 'src/backtest/correction_response.dart';
 export 'src/backtest/synthetic_history.dart';
 export 'src/backup/backup_cipher.dart';
 export 'src/backup/backup_document.dart';
@@ -58,6 +59,7 @@ export 'src/period/period_validation.dart';
 export 'src/personalization/pronouns.dart';
 export 'src/prediction/adaptive_predictor.dart';
 export 'src/prediction/date_range.dart';
+export 'src/prediction/prediction_delta.dart';
 export 'src/prediction/predictor.dart';
 export 'src/prediction/robust_predictor.dart';
 export 'src/reminders/drift_reminder_repository.dart';
