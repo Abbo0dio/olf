@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
@@ -12,6 +15,7 @@ import '../flow/flow_quick_log.dart';
 import '../mucus/mucus_providers.dart';
 import '../pregnancy/pregnancy_format.dart';
 import '../pregnancy/pregnancy_providers.dart';
+import '../prediction/correction_notice_providers.dart';
 import '../prediction/prediction_format.dart';
 import '../prediction/prediction_providers.dart';
 import '../symptom/symptom_day_sheet.dart';
@@ -105,18 +109,67 @@ class _LoadedState extends ConsumerState<_Loaded> {
     );
   }
 
-  Future<void> _startPeriodOn(DateTime day) async {
-    _reportOutcome(await showPeriodEditor(context, initialStart: day));
+  // Adding a period is *logging* (`cyclesAdded`); editing or removing an
+  // existing entry is *correcting* (`followedCorrection`). The distinction only
+  // changes the wording of the note — `PredictionDelta` picks the right lead.
+  static const _logging = PredictionChangeContext(cyclesAdded: 1);
+  static const _correcting = PredictionChangeContext(followedCorrection: true);
+
+  Future<void> _startPeriodOn(DateTime day) => _runHistoryEdit(
+    () => showPeriodEditor(context, initialStart: day),
+    _logging,
+  );
+
+  Future<void> _addPeriod() => _runHistoryEdit(
+    () => showPeriodEditor(context, initialStart: DateTime.now()),
+    _logging,
+  );
+
+  Future<void> _edit(Period period) => _runHistoryEdit(
+    () => showPeriodEditor(context, existing: period),
+    _correcting,
+  );
+
+  /// Run a period add / edit, then — if it actually changed something — show
+  /// the "what changed" note. The before-prediction is captured *before* the
+  /// edit; the after-prediction is recomputed from the freshly written data so
+  /// the [PredictionDelta] is real and does not race the provider stream.
+  Future<void> _runHistoryEdit(
+    Future<PeriodEditorOutcome?> Function() edit,
+    PredictionChangeContext change,
+  ) async {
+    final before = ref.read(predictionProvider);
+    final outcome = await edit();
+    if (!mounted) return;
+    _reportOutcome(outcome);
+    if (outcome == null) return;
+    await _showCorrectionNotice(before, change);
   }
 
-  Future<void> _addPeriod() async {
-    _reportOutcome(
-      await showPeriodEditor(context, initialStart: DateTime.now()),
-    );
-  }
-
-  Future<void> _edit(Period period) async {
-    _reportOutcome(await showPeriodEditor(context, existing: period));
+  Future<void> _showCorrectionNotice(
+    CyclePrediction? before,
+    PredictionChangeContext change,
+  ) async {
+    final periods = await ref.read(periodRepositoryProvider).allPeriods();
+    final events = await ref
+        .read(cycleEventRepositoryProvider)
+        .pregnancyEvents();
+    if (!mounted) return;
+    final after = ref
+        .read(predictorProvider)
+        .predict(
+          cycles: deriveCycles(periods, pregnancyEvents: events),
+          today: DateTime.now(),
+        );
+    ref
+        .read(correctionNoticeProvider.notifier)
+        .show(
+          PredictionDelta.between(
+            before: before,
+            after: after,
+            context: change,
+          ),
+        );
   }
 
   Future<void> _deleteFromHistory(Period period) async {
@@ -144,16 +197,22 @@ class _LoadedState extends ConsumerState<_Loaded> {
     final messenger = ScaffoldMessenger.of(context);
     final repo = ref.read(periodRepositoryProvider);
     final restore = PeriodDraft(start: period.startDate, end: period.endDate);
+    final before = ref.read(predictionProvider);
     await repo.deletePeriod(period.id);
     messenger.showSnackBar(
       SnackBar(
         content: const Text('Period deleted.'),
         action: SnackBarAction(
           label: 'Undo',
-          onPressed: () => repo.addPeriod(restore),
+          onPressed: () {
+            repo.addPeriod(restore);
+            ref.read(correctionNoticeProvider.notifier).clear();
+          },
         ),
       ),
     );
+    if (!mounted) return;
+    await _showCorrectionNotice(before, _correcting);
   }
 
   void _reportOutcome(PeriodEditorOutcome? outcome) {
@@ -177,6 +236,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
     final cycles = ref.watch(cyclesProvider);
     final cycleStats = ref.watch(cycleStatsProvider);
     final prediction = ref.watch(predictionProvider);
+    final correctionDelta = ref.watch(correctionNoticeProvider);
     final cycleByStart = <DateTime, Cycle>{
       for (final c in cycles) c.periodStart: c,
     };
@@ -225,6 +285,14 @@ class _LoadedState extends ConsumerState<_Loaded> {
           if (pregnancyState != PregnancyRecoveryState.none) ...[
             const SizedBox(height: 16),
             _PregnancyStatusCard(state: pregnancyState, since: pregnancySince),
+          ],
+          if (correctionDelta != null) ...[
+            const SizedBox(height: 16),
+            _CorrectionNotice(
+              delta: correctionDelta,
+              onDismiss: () =>
+                  ref.read(correctionNoticeProvider.notifier).clear(),
+            ),
           ],
           if (prediction != null) ...[
             const SizedBox(height: 16),
@@ -899,6 +967,118 @@ class _PredictionCard extends StatelessWidget {
         'most likely ${formatDay(prediction.nextPeriodExpected)}. '
         'Fertile window estimated ${formatDateRange(prediction.fertileWindow)}. '
         '$signs${confidenceNote(prediction)}';
+  }
+}
+
+/// Transient "your update was taken in" note (p3.3).
+///
+/// Shown right where the prediction card is (or would be) after the user edits,
+/// adds, or deletes a logged period. Its body is [PredictionDelta.reasons]
+/// verbatim — plain-language, gender-neutral, non-alarming lines produced by the
+/// core engine, including the explicit "did not need to change" line when the
+/// forecast held. It is a live change, so it announces itself to screen readers
+/// and clears on its own after a short while (or on manual dismiss).
+class _CorrectionNotice extends StatefulWidget {
+  const _CorrectionNotice({required this.delta, required this.onDismiss});
+
+  final PredictionDelta delta;
+  final VoidCallback onDismiss;
+
+  @override
+  State<_CorrectionNotice> createState() => _CorrectionNoticeState();
+}
+
+class _CorrectionNoticeState extends State<_CorrectionNotice> {
+  static const _visibleFor = Duration(seconds: 10);
+  Timer? _autoClear;
+
+  @override
+  void initState() {
+    super.initState();
+    _restartTimer();
+    _announce();
+  }
+
+  @override
+  void didUpdateWidget(_CorrectionNotice old) {
+    super.didUpdateWidget(old);
+    if (widget.delta != old.delta) {
+      _restartTimer();
+      _announce();
+    }
+  }
+
+  @override
+  void dispose() {
+    _autoClear?.cancel();
+    super.dispose();
+  }
+
+  void _restartTimer() {
+    _autoClear?.cancel();
+    _autoClear = Timer(_visibleFor, widget.onDismiss);
+  }
+
+  void _announce() {
+    final message = widget.delta.reasons.join(' ');
+    if (message.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      SemanticsService.announce(
+        message,
+        Directionality.maybeOf(context) ?? TextDirection.ltr,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onColor = theme.colorScheme.onSecondaryContainer;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: widget.delta.reasons.join(' '),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2, right: 12),
+              child: Icon(Icons.check_circle_outline, size: 20, color: onColor),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < widget.delta.reasons.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 4),
+                    Text(
+                      widget.delta.reasons[i],
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: onColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 20),
+              color: onColor,
+              tooltip: correctionNoticeDismissLabel,
+              onPressed: widget.onDismiss,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
