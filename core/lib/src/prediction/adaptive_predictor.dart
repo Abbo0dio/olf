@@ -17,14 +17,21 @@ import 'robust_predictor.dart'
 /// arithmetic you can follow by hand, which matters for a health prediction the
 /// user is asked to trust and correct (`requirements.md` §4).
 ///
-/// Pipeline, from the completed-cycle length series (newest cycle first, likely
-/// missed-entry gaps and pregnancy gaps already removed):
+/// Pipeline, from the completed-cycle length series (newest cycle first,
+/// pregnancy gaps removed; a probable missed log is down-weighted, not dropped):
 ///
+/// 0. **Plausibility down-weight.** Each cycle carries a weight in `[0, 1]` that
+///    ramps linearly down over the ~10 days past the 45-day mark (or the
+///    person's own median, capped). A likely missed log lands at weight 0 — but
+///    the ramp, not a step, means a one- or two-day edit near the mark can't
+///    lurch the forecast, and cycles past the ramp are also dropped from the
+///    trend / dispersion estimators outright.
 /// 1. **Recency weighting.** Cycle `i` back from the newest gets weight
-///    `decay^i`. The engine **widens its memory when cycles are steady and
-///    shortens it when they are changing**: [_decayStable] when the history
-///    looks stationary, [_decayTrending] once a level shift is detected. `nEff`
-///    — the sum of the weights — is the *effective* sample size.
+///    `decay^i` (times its plausibility). The engine **widens its memory when
+///    cycles are steady and shortens it when they are changing**: [_decayStable]
+///    with no trend, ramping smoothly toward [_decayTrending] as a level shift
+///    strengthens. `nEff` — the sum of the weights — is the *effective* sample
+///    size.
 /// 2. **Robust centre.** A recency-weighted quantile near the **median** of the
 ///    recent lengths — unmoved by one freak long cycle (PCOS), unlike a mean —
 ///    nudged toward the shorter side on a right-skewed history.
@@ -98,6 +105,14 @@ class AdaptivePredictor implements Predictor {
   static const double _driftMinShiftDays = 4.0;
   static const double _maxDriftPerCycle = 2.5;
 
+  /// Memory ([decay]) ramps from long to short as the detected per-cycle drift
+  /// grows across this band: at or below [_driftDeadbandDays] the history still
+  /// counts as stationary (long memory); at or above [_driftSaturateDays] it is
+  /// a firm trend (short memory, tracks the new regime — e.g. a postpartum
+  /// return). The ramp, not a step, keeps a noisy edit from flipping memory.
+  static const double _driftDeadbandDays = 0.25;
+  static const double _driftSaturateDays = 1.0;
+
   /// Lag-1 mean-reversion. `phiHat` is estimated over at most this many recent
   /// cycles and clamped to `[0, _arPhiCap]`; the resulting forecast shift is
   /// capped at `_maxArShiftDays`.
@@ -109,6 +124,23 @@ class AdaptivePredictor implements Predictor {
   /// The AR term is gated off when the last cycle sits more than this many
   /// robust MADs from the recent median (an unpredictable shock).
   static const double _arOutlierMadFactor = 2.0;
+
+  /// Graded "is this a real cycle or a missed log?" down-weight. A cycle up to
+  /// [_plausibleCycleDays] (or the person's own median, whichever is larger)
+  /// counts fully; over the next [_plausibilityRampDays] the weight ramps
+  /// **linearly to zero**. The ramp (not a step) is what stops a 1–2 day edit
+  /// near the 45-day mark from lurching the forecast; past the ramp a cycle is
+  /// genuinely not menstrual (a postpartum lochia stretch, a long missed gap)
+  /// and is dropped from the trend / dispersion estimators entirely. Cycles
+  /// still inside the ramp are also capped at median + [_winsorMarginDays]
+  /// before the trend / lag-1 estimators.
+  static const int _plausibleCycleDays = 45;
+  static const double _plausibilityRampDays = 10;
+  static const double _winsorMarginDays = 12;
+
+  /// If the plausibility-weighted history carries less than this much effective
+  /// evidence, there is no usable cycle to speak from — return `null`.
+  static const double _minEffectiveCycles = 0.4;
 
   /// The predicted range is never narrower than ±this — a date is never claimed
   /// to the day (shared with v1).
@@ -125,45 +157,72 @@ class AdaptivePredictor implements Predictor {
     // post-event anchor yet. Say nothing rather than project across it.
     if (cycles.first.isPregnancyGap) return null;
 
-    // Completed lengths, newest cycle first, up to the most recent pregnancy
-    // gap; drop the current (open) cycle and any likely missed-entry cycle.
-    final newestFirst = <int>[
+    // Completed cycle lengths, newest first, up to the most recent pregnancy
+    // gap. The open (current) cycle is dropped. Over-long cycles — a probable
+    // missed log — are **kept but smoothly down-weighted** ([_plausibility]),
+    // never hard-excluded, so a one- or two-day edit near the 45-day mark
+    // cannot make a whole cycle blink in or out of the estimate.
+    final lengths = <int>[
       for (final c in cycles.takeWhile((c) => !c.isPregnancyGap))
-        if (!c.isCurrent && !c.isLikelyGap) c.lengthInDays!,
+        if (!c.isCurrent) c.lengthInDays!,
     ];
-    if (newestFirst.isEmpty) return null;
+    if (lengths.isEmpty) return null;
 
     final anchor = cycles.first.periodStart;
     final t = dateOnly(today);
+
+    final rawMedian = _median(lengths);
+    final plausibility = [
+      for (final len in lengths) _plausibility(len, rawMedian),
+    ];
+
+    // A winsorised copy for the trend and lag-1 estimators — they cannot
+    // consume the weight vector, so an over-long-but-still-plausible cycle is
+    // capped here, and a fully implausible one (weight 0) is left out.
+    final cap = (rawMedian + _winsorMarginDays).round();
+    final winsor = [
+      for (var i = 0; i < lengths.length; i++)
+        if (plausibility[i] > 0) math.min(lengths[i], cap),
+    ];
 
     // --- 1. drift (robust monotone level-shift detector) ----------------
     // Only a monotone shift across the recent thirds that clears the series'
     // own noise floor counts as a trend — a noisy stationary history
     // (irregular / PCOS) must not pick up a spurious slope. chronological.
-    final chron = newestFirst.reversed.toList();
+    final chron = winsor.reversed.toList();
     final appliedDrift = _drift(chron);
-    final trending = appliedDrift != 0;
 
     // --- 2. recency weights (index 0 = newest) --------------------------
-    final decay = trending ? _decayTrending : _decayStable;
+    // Memory shortens **smoothly** as the detected drift grows: no trend → long
+    // memory ([_decayStable]); a full-strength trend → short memory
+    // ([_decayTrending]); in between, in between — no binary switch for a noisy
+    // edit to flip. Each weight also carries its cycle's [_plausibility].
+    final driftFrac =
+        ((appliedDrift.abs() - _driftDeadbandDays) /
+                (_driftSaturateDays - _driftDeadbandDays))
+            .clamp(0.0, 1.0);
+    final decay = _decayStable - (_decayStable - _decayTrending) * driftFrac;
+    final trending = driftFrac > 0;
     final weights = [
-      for (var i = 0; i < newestFirst.length; i++) math.pow(decay, i) + 0.0,
+      for (var i = 0; i < lengths.length; i++)
+        math.pow(decay, i) * plausibility[i] + 0.0,
     ];
     final nEff = weights.fold<double>(0, (a, b) => a + b);
+    if (nEff < _minEffectiveCycles) return null;
 
     // --- 3. robust weighted centre + drift step ------------------------
     // On a right-skewed history — occasional very long PCOS-type cycles — the
     // *typical* (non-outlier) cycle sits a little below the middle value, so
     // the centre quantile is nudged down in proportion to the skew. Symmetric
     // histories keep the plain weighted median.
-    final wMedian = _weightedMedian(newestFirst, weights);
-    final wMean = _weightedMean(newestFirst, weights);
+    final wMedian = _weightedMedian(lengths, weights);
+    final wMean = _weightedMean(lengths, weights);
     final skew = wMean - wMedian;
     final centreQ = (0.5 - 0.03 * skew.clamp(0.0, 4.0)).clamp(0.38, 0.5);
     final centre =
         _weightedQuantile([
-          for (var i = 0; i < newestFirst.length; i++)
-            (v: newestFirst[i], w: weights[i]),
+          for (var i = 0; i < lengths.length; i++)
+            (v: lengths[i], w: weights[i]),
         ], centreQ) +
         appliedDrift;
 
@@ -175,7 +234,7 @@ class AdaptivePredictor implements Predictor {
     // lengths do not anti-correlate; the cap guards a noisy estimate) and the
     // shift itself is capped. Trending histories skip this — the drift term
     // already carries the systematic part.
-    final arShift = _arCorrection(newestFirst, centre, trending);
+    final arShift = _arCorrection(winsor, centre, trending);
     final forecastCentre = centre + arShift;
 
     // --- 4. Bayesian shrinkage (thin history) -------------------------
@@ -191,8 +250,9 @@ class AdaptivePredictor implements Predictor {
     // in-sample quantile under-covers out of sample — worst for fat-tailed
     // PCOS histories.
     final absDevs = [
-      for (var i = 0; i < newestFirst.length; i++)
-        (v: (newestFirst[i] - centre).abs(), w: weights[i]),
+      for (var i = 0; i < lengths.length; i++)
+        if (plausibility[i] > 0)
+          (v: (lengths[i] - centre).abs(), w: weights[i]),
     ];
     final tailRatio =
         _weightedQuantile(absDevs, 0.92) /
@@ -239,12 +299,29 @@ class AdaptivePredictor implements Predictor {
         nEff: nEff,
         halfWidth: halfWidth,
         regimeChanged: appliedDrift.abs() >= 1.0,
-        usableCycles: newestFirst.length,
+        usableCycles: lengths.length,
       ),
-      basedOnCycles: newestFirst.length,
+      basedOnCycles: lengths.length,
       status: status,
       daysPastExpected: daysPastExpected,
     );
+  }
+
+  /// Graded plausibility weight in `[0, 1]` for a completed cycle of [len] days,
+  /// given the person's robust [level]. Continuous in [len] through the ramp;
+  /// exactly zero past it (a genuine non-menstrual stretch).
+  double _plausibility(int len, double level) {
+    // The person's own median can lift the "counts fully" mark above 45 — but
+    // only so far, so a lone freak-long cycle (its own median) can't declare
+    // itself plausible.
+    final full = math.max(
+      _plausibleCycleDays.toDouble(),
+      math.min(level, _plausibleCycleDays + _winsorMarginDays),
+    );
+    final zero = full + _plausibilityRampDays;
+    if (len <= full) return 1;
+    if (len >= zero) return 0;
+    return 1 - (len - full) / (zero - full);
   }
 
   /// Per-cycle drift, or 0 when the recent history shows no clear monotone
