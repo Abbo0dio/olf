@@ -23,6 +23,11 @@
 //     --plist app/ios/Runner/Info.plist
 //
 // Exit code 0 = clean, 1 = violation(s), 2 = bad invocation / missing input.
+// Any non-zero exit fails the CI `dependency-audit` job, which is a RELEASE
+// BLOCKER (DEVELOPMENT_PLAN.md p2.9): there is no `--skip`, no environment
+// bypass, and no allowlist. `ci-ok` treats this job being skipped as a failure.
+// A genuinely-needed package that trips a rule is handled by the escalation
+// path in docs/dependency-audit.md — never by weakening this gate.
 //
 // Extending the denylist: docs/dependency-audit.md.
 
@@ -130,12 +135,49 @@ void main(List<String> args) {
   for (final v in violations) {
     stderr.writeln('  - $v');
   }
-  stderr.writeln('\nSee docs/dependency-audit.md.');
+  stderr.write(_failureProcess);
   exit(1);
 }
 
+/// Printed after every violation list. The gate is un-waivable, so the output
+/// has to tell the reader what to actually do instead of looking for an
+/// override.
+const String _failureProcess = '''
+
+This gate is a RELEASE BLOCKER (DEVELOPMENT_PLAN.md p2.9). It cannot be waived,
+skipped, or overridden in CI — there is no flag, no environment variable, and no
+allowlist. A red audit blocks the release.
+
+What to do:
+
+  1. A denylisted advertising / analytics / tracking package is in the graph.
+     Find who pulls it in:
+         (cd core && dart pub deps -s list) | grep <package>
+         (cd app  && flutter pub deps -s list) | grep <package>
+     The default and expected fix is to REMOVE it: drop or replace the
+     dependency that introduced it, then re-run. A denylist hit is the gate
+     working, not a false alarm to be silenced.
+
+  2. If an over-broad "~fragment" / "re:pattern" rule matched a package that
+     genuinely has no ad/analytics/tracking capability, the security reviewer
+     narrows THAT rule in .github/dependency-denylist.txt so it stops matching
+     the innocent package — in the same PR, with a rationale and recorded
+     sign-off. Never a blanket carve-out; never removing a rule to get green.
+
+  3. Removing a denylist entry entirely always needs explicit security-reviewer
+     sign-off in the PR.
+
+Full process: docs/dependency-audit.md (see "Release blocker" and
+"Adding an entry"); pre-release steps: docs/release-checklist.md.
+''';
+
 Never _fail2(String msg) {
   stderr.writeln('dependency audit: $msg');
+  stderr.writeln(
+    'bad invocation — the gate did not run. This is still a failure: the '
+    'canonical CI arguments are in .github/workflows/ci.yml and are locked by '
+    'core/test/dependency_audit_test.dart. See docs/dependency-audit.md.',
+  );
   exit(2);
 }
 

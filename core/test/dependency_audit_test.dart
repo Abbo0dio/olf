@@ -12,8 +12,13 @@ void main() {
   const script = '../.github/scripts/dependency_audit.dart';
   const fixtures = 'test/fixtures';
 
-  ProcessResult run(List<String> args) =>
-      Process.runSync(dart, [script, ...args]);
+  ProcessResult run(List<String> args, {Map<String, String>? environment}) =>
+      Process.runSync(
+        dart,
+        [script, ...args],
+        environment: environment,
+        includeParentEnvironment: true,
+      );
 
   setUpAll(() {
     expect(
@@ -141,8 +146,118 @@ void main() {
     );
   });
 
-  test('exits 2 on a bad invocation (no --denylist)', () {
+  test('exits 2 on a bad invocation, and says the gate did not run', () {
     final r = run(['--lock', '$fixtures/clean.pubspec.lock']);
     expect(r.exitCode, 2, reason: r.stderr.toString());
+    expect(r.stderr, contains('the gate did not run'));
+    expect(r.stderr, contains('This is still a failure'));
+  });
+
+  // --- p2.9: the gate is a strict, un-waivable release blocker ---------------
+
+  group('release blocker (p2.9)', () {
+    test(
+      'failure output points at the escalation process, not an override',
+      () {
+        final r = run([
+          '--denylist',
+          '$fixtures/denylist.txt',
+          '--lock',
+          '$fixtures/denylisted.pubspec.lock',
+        ]);
+        expect(r.exitCode, 1);
+        final err = r.stderr.toString();
+        expect(err, contains('RELEASE BLOCKER'));
+        expect(err, contains('cannot be waived'));
+        expect(err, contains('no flag, no environment variable, and no'));
+        expect(err, contains('REMOVE it'));
+        expect(err, contains('security reviewer'));
+        expect(err, contains('docs/dependency-audit.md'));
+        expect(err, contains('docs/release-checklist.md'));
+      },
+    );
+
+    test('no environment variable can turn the gate off', () {
+      // Anything a well-meaning "just this once" hack might reach for.
+      for (final key in const [
+        'SKIP_DEPENDENCY_AUDIT',
+        'OLF_SKIP_AUDIT',
+        'DEPENDENCY_AUDIT_SKIP',
+        'CI_SKIP_AUDIT',
+        'NO_AUDIT',
+        'DEPENDENCY_AUDIT_ALLOW',
+      ]) {
+        final r = run(
+          [
+            '--denylist',
+            '$fixtures/denylist.txt',
+            '--lock',
+            '$fixtures/denylisted.pubspec.lock',
+          ],
+          environment: {key: '1'},
+        );
+        expect(
+          r.exitCode,
+          1,
+          reason: '$key must not suppress a violation\n${r.stderr}',
+        );
+      }
+    });
+
+    test('the script exposes no skip/allow/force flag', () {
+      final src = File(script).readAsStringSync();
+      for (final needle in const [
+        "'--skip'",
+        "'--force'",
+        "'--allow'",
+        "'--allowlist'",
+        "'--no-fail'",
+        "'--waive'",
+      ]) {
+        expect(
+          src,
+          isNot(contains(needle)),
+          reason: 'audit script must not grow a $needle bypass',
+        );
+      }
+    });
+
+    test('CI wiring keeps the gate strict and complete', () {
+      final ci = File('../.github/workflows/ci.yml').readAsStringSync();
+
+      // The audit runs with the full argument set (weakening any of these
+      // would shrink what the gate sees).
+      for (final arg in const [
+        '--denylist .github/dependency-denylist.txt',
+        '--lock core/pubspec.lock',
+        '--lock app/pubspec.lock',
+        '--manifest app/android/app/src/main/AndroidManifest.xml',
+        '--net-config app/android/app/src/main/res/xml/network_security_config.xml',
+        '--plist app/ios/Runner/Info.plist',
+      ]) {
+        expect(ci, contains(arg), reason: 'ci.yml lost audit arg: $arg');
+      }
+
+      // The stale-lock guard stays in place.
+      expect(
+        ci,
+        contains('git diff --exit-code core/pubspec.lock app/pubspec.lock'),
+      );
+
+      // No soft-pass on the audit job.
+      expect(
+        ci,
+        isNot(contains('continue-on-error')),
+        reason:
+            'no job may be marked continue-on-error while the audit is a blocker',
+      );
+
+      // ci-ok depends on the audit and requires it to actually succeed
+      // (a skip is treated as a failure).
+      final ciOk = ci.substring(ci.indexOf('ci-ok:'));
+      expect(ciOk, contains('dependency-audit'));
+      expect(ciOk, contains('"dependency-audit".result'));
+      expect(ciOk, contains(r'if [ "$audit_result" != "success" ]'));
+    });
   });
 }

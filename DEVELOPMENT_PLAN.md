@@ -1406,7 +1406,7 @@ forward: the p0.5 manual physical-device smoke table, and the per-slice §9 foll
 
 ### Phase 2 — Privacy & security hardening
 
-**Status:** `IN PROGRESS` (p2.1–p2.7 DONE; p2.8 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
+**Status:** `IN PROGRESS` (p2.1–p2.8 DONE; p2.9 IN REVIEW) · **Requirement refs:** §3, §6, §7, §8.
 
 The Phase 1 slice-list has been expanded into task rows below (p2.1–p2.9). Rows
 p2.2–p2.9 carry the intended scope; the agent starting each one fills in the
@@ -1897,8 +1897,8 @@ threat model committed.
   - 2026-08-31 — merged (squash `a7585fe`). **DONE.**
 
 #### p2.8 — Threat model + data-flow diagram committed to the repo
-- **Status:** IN REVIEW
-- **PR:** [#32](https://github.com/Abbo0dio/olf/pull/32)
+- **Status:** DONE
+- **PR:** [#32](https://github.com/Abbo0dio/olf/pull/32) — merged (squash `834a4d4`)
 - **Branch / worktree:** `feat/p2.8-threat-model` / `../olf-wt/p2.8`
 - **Owner:** worker: phase2
 - **Depends on:** none
@@ -1966,11 +1966,13 @@ threat model committed.
     adversaries / trust boundaries / Mermaid + ASCII data-flow / mitigation cross-reference
     to every Phase 0–2 slice / residual risks / Review log with a Phase 2 entry) and the
     `core/test/threat_model_doc_test.dart` guard wired via the existing `test` job.
+  - 2026-08-31 — merged (squash `834a4d4`). **DONE.**
 
 #### p2.9 — Dependency-audit gate: strict + documented release blocker
-- **Status:** TODO
-- **Branch / worktree:** —
-- **Owner:** —
+- **Status:** IN REVIEW
+- **PR:** [#33](https://github.com/Abbo0dio/olf/pull/33)
+- **Branch / worktree:** `feat/p2.9-audit-release-blocker` / `../olf-wt/p2.9`
+- **Owner:** worker: phase2
 - **Depends on:** p0.3
 - **Requirement refs:** §3
 - **Goal:** Promote the p0.3 dependency-audit from "green by convention" to an explicit,
@@ -1981,9 +1983,64 @@ threat model committed.
   checklist doc references it.
 - **Tests required:** extend `core/test/dependency_audit_test.dart` for any new rule classes;
   doc review.
-- **Notes / detail:** (agent fills this in.)
+- **Notes / detail:**
+  - **No schema change. No new runtime dependency. No new permission. No new workflow**
+    (ci.yml hardened in place). This is the **last Phase 2 build slice** — the phase-close
+    doc bump comes after.
+  - **Un-waivable in CI — the three soft-pass surfaces closed:**
+    1. **A skipped audit now fails the board.** `ci-ok` (the required `CI OK` check) already
+       failed on a job `result` of `failure` / `cancelled`; it now *also* fails unless the
+       `dependency-audit` job `result` is exactly `success`. Previously, removing the Flutter
+       workspace (or the job's `if:` guard) would let the audit **skip** while `CI OK` stayed
+       green — that path is gone. Uses `jq '."dependency-audit".result'` on `toJSON(needs)`.
+    2. **The CI arguments are locked.** A new test in `dependency_audit_test.dart` reads
+       `.github/workflows/ci.yml` and asserts the audit still runs with all five inputs
+       (`--denylist`, both `--lock`s, `--manifest`, `--net-config`, `--plist`), the
+       stale-lock `git diff --exit-code` guard is still present, no job carries
+       `continue-on-error`, and `ci-ok` still `needs:` + hard-checks `dependency-audit`.
+       Quietly dropping `--lock app/pubspec.lock` (etc.) now fails the `test` job.
+    3. **No script bypass.** Tests assert the script has **no** `--skip` / `--force` /
+       `--allow` / `--allowlist` / `--no-fail` / `--waive` option and that **no environment
+       variable** (`SKIP_DEPENDENCY_AUDIT`, `OLF_SKIP_AUDIT`, `NO_AUDIT`, …) suppresses a
+       violation — it still exits 1.
+  - **Failure output points at the process** (`.github/scripts/dependency_audit.dart`). After
+    the violation list the script now prints: this is a RELEASE BLOCKER (p2.9), it cannot be
+    waived / skipped / overridden, there is no flag / env var / allowlist, then the concrete
+    steps — find who pulls the package in (`dart pub deps -s list` / `flutter pub deps -s
+    list`), **remove/replace it** as the default fix; a genuine false positive from an
+    over-broad `~`/`re:` rule is handled by the **security reviewer narrowing that rule** in
+    the same PR with recorded sign-off (never a carve-out, never removing a rule to go
+    green); removing an entry needs sign-off. Links `docs/dependency-audit.md` +
+    `docs/release-checklist.md`. The exit-2 "bad invocation" path also now states plainly
+    that the gate did not run and that this is still a failure.
+  - **`docs/dependency-audit.md`** gains a **"Release blocker (p2.9)"** section: the
+    un-waivable properties spelled out (no flag, no env var, no `continue-on-error`, a skip
+    counts as a failure, the CI args are test-locked) and the **escalation path** — who
+    decides (the security-reviewer role; for a solo maintainer, an explicit written
+    self-review in the PR), and the two legitimate outcomes (remove the dependency; or
+    narrow a false-positive rule with sign-off). Local-run snippet updated to the full
+    five-flag invocation; exit-code note says any non-zero (incl. exit 2) fails CI.
+  - **`docs/release-checklist.md`** (new, deliberately short — ponytail): a pre-release
+    checklist with **BLOCKER** line items — `CI OK` green, **dependency audit ran and
+    passed** (linking the escalation path), no unreviewed runtime dependency, threat-model
+    Review log current for the phase — plus lighter checks (version bump, changelog,
+    migration test, size report) and a "who signs off" note.
+  - **`core/test/dependency_audit_test.dart`** — the `run` helper gained an `environment:`
+    parameter; +4 tests in a `release blocker (p2.9)` group (failure-text content, env-var
+    no-op, no bypass flag in the script source, CI wiring lock), and the exit-2 test now
+    also asserts the "gate did not run" message. 315 core tests pass (was 311).
 - **Log:**
   - 2026-08-30 — created.
+  - 2026-08-31 — claimed by worker: phase2; worktree `../olf-wt/p2.9`, branch
+    `feat/p2.9-audit-release-blocker` off `main` @ `834a4d4`. Hardened `ci-ok` to require a
+    `success` (not `skipped`) audit result; expanded the script's failure epilogue with the
+    un-waivable statement + escalation steps; added the "Release blocker (p2.9)" section to
+    `docs/dependency-audit.md`; created `docs/release-checklist.md`; extended
+    `dependency_audit_test.dart` with the wiring-lock / no-bypass / failure-text tests.
+  - 2026-08-31 — built. core 315 / app 116 green; analyze `--fatal-infos --fatal-warnings`
+    clean (core + app + the audit script); `dart format` clean (core + app + `.github/
+    scripts`); drift codegen unchanged; the real-tree audit run PASSes; no `pubspec.lock`
+    drift. No schema change, no new runtime dependency, no new workflow.
 
 ---
 
@@ -2761,6 +2818,19 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   hand-off; there is no measurement (and won't be — no analytics) of whether users reach or
   act on these screens. (e) The tone check is a **fixed denylist** of alarmist words, not a
   readability or reading-level check. — noted by worker: phase2 during p2.7.
+- **p2.9 follow-ups:** (a) **`ci.yml` itself is still editable in a PR.** The wiring-lock test
+  makes weakening the audit *visible* (it fails the `test` job) but a reviewer could still
+  approve a PR that changes both the workflow and the test together. On a solo repo the
+  release-checklist self-review is the backstop; a CODEOWNERS rule on `.github/` +
+  `dependency-denylist.txt` requiring a second approver is the real fix once there is a
+  second maintainer. (b) **The audit still only sees pub packages.** Native Gradle/CocoaPods
+  SDKs added directly are not in `pubspec.lock`; the threat model (p2.8) and the release
+  checklist call this out but there is no mechanical gate (candidate: parse
+  `settings.gradle` / `Podfile.lock` if native deps are ever added). (c) **"Security
+  reviewer" is a role with one holder.** The escalation path is documented but not enforced
+  by tooling — it relies on the maintainer following it. (d) The `jq` dependency in `ci-ok`
+  is fine on `ubuntu-latest` (preinstalled) but is a new assumption vs. the previous
+  `grep`-only step. — noted by worker: phase2 during p2.9.
 - (add more here)
 
 ## 10. Orphaned / cut work
