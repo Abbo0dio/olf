@@ -18,23 +18,30 @@ import 'robust_predictor.dart'
 /// user is asked to trust and correct (`requirements.md` §4).
 ///
 /// Pipeline, from the completed-cycle length series (newest cycle first,
-/// pregnancy gaps removed; a probable missed log is down-weighted, not dropped):
+/// pregnancy gaps removed):
 ///
-/// 0. **Plausibility down-weight.** Each cycle carries a weight in `[0, 1]` that
-///    ramps linearly down over the ~10 days past the 45-day mark (or the
-///    person's own median, capped). A likely missed log lands at weight 0 — but
-///    the ramp, not a step, means a one- or two-day edit near the mark can't
-///    lurch the forecast, and cycles past the ramp are also dropped from the
-///    trend / dispersion estimators outright.
-/// 1. **Recency weighting.** Cycle `i` back from the newest gets weight
-///    `decay^i` (times its plausibility). The engine **widens its memory when
-///    cycles are steady and shortens it when they are changing**: [_decayStable]
-///    with no trend, ramping smoothly toward [_decayTrending] as a level shift
-///    strengthens. `nEff` — the sum of the weights — is the *effective* sample
-///    size.
+/// 0. **Plausibility split (p3.4 hardened).** Each completed cycle is scored on
+///    a `[0, 1]` plausibility ramp that falls from 1 over the ~10 days past the
+///    45-day mark (or the person's own median, capped). A cycle **past the ramp**
+///    (weight 0 — a skipped month, a missed log, an anovulatory or
+///    pregnancy-adjacent stretch) is **excluded outright** from every estimator
+///    below, exactly as a pregnancy gap is; it keeps its slot on the timeline so
+///    the recency decay of the real cycles behind it is unchanged. A cycle
+///    **inside the ramp** (`0 < w < 1`, ~46–55 days) is kept and down-weighted —
+///    that band is a continuity device so a one- or two-day edit near 45 cannot
+///    make a whole cycle blink in or out of the forecast.
+/// 1. **Recency weighting.** Real cycle at timeline position `i` back from the
+///    newest gets weight `decay^i` (times its ramp plausibility). The engine
+///    **widens its memory when cycles are steady and shortens it when they are
+///    changing**: [_decayStable] with no trend, ramping smoothly toward
+///    [_decayTrending] as a level shift strengthens. `nEff` — the sum of the
+///    weights — is the *effective* sample size.
 /// 2. **Robust centre.** A recency-weighted quantile near the **median** of the
 ///    recent lengths — unmoved by one freak long cycle (PCOS), unlike a mean —
-///    nudged toward the shorter side on a right-skewed history.
+///    nudged toward the shorter side on a right-skewed history. The centre reads
+///    an **outlier-influence-shrunk** copy of the weights ([_centreOutlierFloor]
+///    …1) so a recent moderate spike cannot drag the typical-length estimate the
+///    way plain recency weighting would (p3.4 anti-snowball).
 /// 3. **Drift.** A robust monotone level-shift term over the last [_driftWindow]
 ///    lengths (the thirds' medians must move monotonically and clear the
 ///    series' own MAD-scaled noise floor). If it fires it is added once, capped
@@ -44,9 +51,11 @@ import 'robust_predictor.dart'
 ///    lag-1 autocorrelation (`phiHat`, clamped to `[0, 0.55]`) pulls the
 ///    forecast a fraction of the last cycle's deviation from the level — a long
 ///    cycle nudges the next estimate up. Capped at [_maxArShiftDays]; trending
-///    histories skip it because [_drift] already carries the systematic part;
-///    **gated off when the last cycle is an outlier** (`|last − median| >
-///    2·MAD`), so a PCOS-type spike is not chased.
+///    histories skip it because [_drift] already carries the systematic part.
+///    Its strength **ramps down to zero** as the last cycle moves from
+///    [_arOutlierRampLoMad] to [_arOutlierRampHiMad] robust MADs off the median
+///    (p3.4) — you cannot mean-revert from a shock you could not have forecast,
+///    and a hard cliff still let a spike just inside it be chased at full phi.
 /// 4. **Bayesian shrinkage (thin history only).** The centre is blended with a
 ///    weak population prior (mean [_priorMean], pseudo-count [_priorWeight]).
 ///    With `nEff` of 8+ the prior is negligible; with one or two cycles it
@@ -121,9 +130,27 @@ class AdaptivePredictor implements Predictor {
   static const double _arPhiCap = 0.55;
   static const double _maxArShiftDays = 6.0;
 
-  /// The AR term is gated off when the last cycle sits more than this many
-  /// robust MADs from the recent median (an unpredictable shock).
-  static const double _arOutlierMadFactor = 2.0;
+  /// Outlier-influence down-weight on the **centre** estimate (p3.4). A completed
+  /// cycle whose robust z-score (`|len − median| / MAD`) exceeds
+  /// [_centreOutlierLoZ] has its weight in the centre quantile shrunk linearly to
+  /// a floor of [_centreOutlierFloor] by [_centreOutlierHiZ]. This pulls v2's
+  /// reactivity to a recent moderate spike back down to v1's flat-median level —
+  /// the structural source of v2's higher post-outlier ("snowball") error — while
+  /// leaving the **dispersion** estimate to see the spike in full (a real cycle
+  /// *is* more variable, and the interval should say so). MAD-scaled, so a
+  /// genuinely high-variance PCOS history barely triggers it.
+  static const double _centreOutlierLoZ = 2.0;
+  static const double _centreOutlierHiZ = 4.0;
+  static const double _centreOutlierFloor = 0.5;
+
+  /// The AR term's influence **ramps down to zero** as the last cycle moves from
+  /// [_arOutlierRampLoMad] to [_arOutlierRampHiMad] robust MADs off the recent
+  /// median: a slightly-unusual last cycle is chased at reduced strength, a clear
+  /// shock not at all. A hard cliff (p3.2 had one at 2·MAD) still let a
+  /// 1.9-MAD spike be chased at full phi and then snap back — the ramp is the
+  /// p3.4 anti-snowball fix for the engine's most outlier-amplifying term.
+  static const double _arOutlierRampLoMad = 1.0;
+  static const double _arOutlierRampHiMad = 2.0;
 
   /// Graded "is this a real cycle or a missed log?" down-weight. A cycle up to
   /// [_plausibleCycleDays] (or the person's own median, whichever is larger)
@@ -158,31 +185,50 @@ class AdaptivePredictor implements Predictor {
     if (cycles.first.isPregnancyGap) return null;
 
     // Completed cycle lengths, newest first, up to the most recent pregnancy
-    // gap. The open (current) cycle is dropped. Over-long cycles — a probable
-    // missed log — are **kept but smoothly down-weighted** ([_plausibility]),
-    // never hard-excluded, so a one- or two-day edit near the 45-day mark
-    // cannot make a whole cycle blink in or out of the estimate.
-    final lengths = <int>[
+    // gap. The open (current) cycle is dropped.
+    final allLengths = <int>[
       for (final c in cycles.takeWhile((c) => !c.isPregnancyGap))
         if (!c.isCurrent) c.lengthInDays!,
     ];
-    if (lengths.isEmpty) return null;
+    if (allLengths.isEmpty) return null;
 
     final anchor = cycles.first.periodStart;
     final t = dateOnly(today);
 
+    // p3.4 — a completed cycle past the plausibility ramp is not a menstrual
+    // cycle at all: a skipped month, a missed log, an anovulatory or
+    // pregnancy-adjacent stretch. Such a cycle is **excluded outright** from
+    // every adaptive estimator below (centre, drift, dispersion, AR) — the same
+    // treatment a pregnancy gap already gets — rather than merely down-weighted.
+    // It keeps its position on the timeline, though: [_keepAt] holds each real
+    // cycle's *original* index back from the newest, so the recency decay still
+    // says "this cycle was 4 cycles ago", and a skip does not make the cycles
+    // behind it look more recent (which would bias a drifting history downward).
+    //
+    // Cycles still *inside* the ramp (`0 < w < 1`, ~46–55 days) are kept and
+    // down-weighted, not excluded — that band is what stops a one- or two-day
+    // edit near the 45-day mark from lurching the forecast (p3.2's
+    // no-discontinuity property), and empirically those heavily-discounted,
+    // winsor-capped cycles do not drive the post-outlier ("snowball") error.
+    final rawMedianAll = _median(allLengths);
+    final keepAt = [
+      for (var i = 0; i < allLengths.length; i++)
+        if (_plausibility(allLengths[i], rawMedianAll) > 0) i,
+    ];
+    if (keepAt.isEmpty) return null;
+
+    final lengths = [for (final i in keepAt) allLengths[i]];
     final rawMedian = _median(lengths);
     final plausibility = [
       for (final len in lengths) _plausibility(len, rawMedian),
     ];
 
     // A winsorised copy for the trend and lag-1 estimators — they cannot
-    // consume the weight vector, so an over-long-but-still-plausible cycle is
-    // capped here, and a fully implausible one (weight 0) is left out.
+    // consume the weight vector, so an over-long-but-still-plausible cycle
+    // (inside the ramp) is capped here.
     final cap = (rawMedian + _winsorMarginDays).round();
     final winsor = [
-      for (var i = 0; i < lengths.length; i++)
-        if (plausibility[i] > 0) math.min(lengths[i], cap),
+      for (var i = 0; i < lengths.length; i++) math.min(lengths[i], cap),
     ];
 
     // --- 1. drift (robust monotone level-shift detector) ----------------
@@ -203,26 +249,41 @@ class AdaptivePredictor implements Predictor {
             .clamp(0.0, 1.0);
     final decay = _decayStable - (_decayStable - _decayTrending) * driftFrac;
     final trending = driftFrac > 0;
+    // Recency decay uses each cycle's *original* position ([keepAt]), so an
+    // excluded skip does not renumber the cycles behind it.
     final weights = [
-      for (var i = 0; i < lengths.length; i++)
-        math.pow(decay, i) * plausibility[i] + 0.0,
+      for (var j = 0; j < lengths.length; j++)
+        math.pow(decay, keepAt[j]) * plausibility[j] + 0.0,
     ];
     final nEff = weights.fold<double>(0, (a, b) => a + b);
     if (nEff < _minEffectiveCycles) return null;
 
     // --- 3. robust weighted centre + drift step ------------------------
+    // The centre uses an **outlier-influence-shrunk** copy of the weights: a
+    // recent moderate spike (a late month that is still a real cycle, under the
+    // plausibility ramp) does not get to drag the typical-length estimate the
+    // way v2's recency weighting would otherwise let it — that reactivity is
+    // what pushed v2's post-outlier error above v1's (p3.4). The dispersion
+    // step below keeps the *unshrunk* weights, so the interval still widens.
+    final mad = math.max(1.0, _madOf(lengths, rawMedian));
+    final centreWeights = [
+      for (var i = 0; i < lengths.length; i++)
+        weights[i] *
+            _centreOutlierInfluence((lengths[i] - rawMedian).abs() / mad),
+    ];
+
     // On a right-skewed history — occasional very long PCOS-type cycles — the
     // *typical* (non-outlier) cycle sits a little below the middle value, so
     // the centre quantile is nudged down in proportion to the skew. Symmetric
     // histories keep the plain weighted median.
-    final wMedian = _weightedMedian(lengths, weights);
-    final wMean = _weightedMean(lengths, weights);
+    final wMedian = _weightedMedian(lengths, centreWeights);
+    final wMean = _weightedMean(lengths, centreWeights);
     final skew = wMean - wMedian;
     final centreQ = (0.5 - 0.03 * skew.clamp(0.0, 4.0)).clamp(0.38, 0.5);
     final centre =
         _weightedQuantile([
           for (var i = 0; i < lengths.length; i++)
-            (v: lengths[i], w: weights[i]),
+            (v: lengths[i], w: centreWeights[i]),
         ], centreQ) +
         appliedDrift;
 
@@ -251,8 +312,7 @@ class AdaptivePredictor implements Predictor {
     // PCOS histories.
     final absDevs = [
       for (var i = 0; i < lengths.length; i++)
-        if (plausibility[i] > 0)
-          (v: (lengths[i] - centre).abs(), w: weights[i]),
+        (v: (lengths[i] - centre).abs(), w: weights[i]),
     ];
     final tailRatio =
         _weightedQuantile(absDevs, 0.92) /
@@ -324,6 +384,21 @@ class AdaptivePredictor implements Predictor {
     return 1 - (len - full) / (zero - full);
   }
 
+  /// Centre-weight multiplier in `[_centreOutlierFloor, 1]` for a cycle at robust
+  /// z-score [z]. 1 up to [_centreOutlierLoZ]; ramps linearly to the floor by
+  /// [_centreOutlierHiZ].
+  double _centreOutlierInfluence(double z) {
+    if (z <= _centreOutlierLoZ) return 1;
+    final t =
+        ((z - _centreOutlierLoZ) / (_centreOutlierHiZ - _centreOutlierLoZ))
+            .clamp(0.0, 1.0);
+    return 1 - (1 - _centreOutlierFloor) * t;
+  }
+
+  /// Median absolute deviation of [xs] about [centre] (plain, unweighted).
+  double _madOf(List<int> xs, double centre) =>
+      _median([for (final x in xs) (x - centre).abs().round()]);
+
   /// Per-cycle drift, or 0 when the recent history shows no clear monotone
   /// trend. [chron] is oldest → newest.
   double _drift(List<int> chron) {
@@ -355,10 +430,13 @@ class AdaptivePredictor implements Predictor {
 
   /// A fraction of the most recent cycle's deviation from [centre], sized by the
   /// recent lag-1 autocorrelation. 0 when trending, when the history is too
-  /// short, when the estimate is non-positive, or — the **outlier gate** — when
-  /// the most recent cycle is itself a shock far from the recent median: you
-  /// cannot mean-revert from something you could not have forecast, and chasing
-  /// a spike doubles the error when it snaps back. [newestFirst] is newest-first.
+  /// short, or when the estimate is non-positive. The term's strength is also
+  /// **ramped down by how unusual the last cycle is** ([_arOutlierRampLoMad] →
+  /// [_arOutlierRampHiMad] robust MADs off the recent median): you cannot
+  /// mean-revert from something you could not have forecast, and chasing a spike
+  /// doubles the error when it snaps back — a ramp, not a cliff, so a cycle just
+  /// inside the old 2-MAD gate is no longer chased at full strength.
+  /// [newestFirst] is newest-first.
   double _arCorrection(List<int> newestFirst, double centre, bool trending) {
     if (trending || newestFirst.length < _arMinCycles) return 0;
     final w = newestFirst
@@ -370,9 +448,13 @@ class AdaptivePredictor implements Predictor {
       1.0,
       _median([for (final x in w) (x - wMedian).abs().round()]),
     );
-    if ((newestFirst.first - wMedian).abs() > _arOutlierMadFactor * mad) {
-      return 0;
-    }
+    final robustZ = (newestFirst.first - wMedian).abs() / mad;
+    final outlierDamp =
+        (1 -
+                (robustZ - _arOutlierRampLoMad) /
+                    (_arOutlierRampHiMad - _arOutlierRampLoMad))
+            .clamp(0.0, 1.0);
+    if (outlierDamp == 0) return 0;
 
     final mean = w.reduce((a, b) => a + b) / w.length;
     var cov = 0.0;
@@ -385,7 +467,10 @@ class AdaptivePredictor implements Predictor {
     final phiHat = (cov / varr).clamp(0.0, _arPhiCap);
     if (phiHat == 0) return 0;
     final lastDev = newestFirst.first - centre;
-    return (phiHat * lastDev).clamp(-_maxArShiftDays, _maxArShiftDays);
+    return (outlierDamp * phiHat * lastDev).clamp(
+      -_maxArShiftDays,
+      _maxArShiftDays,
+    );
   }
 
   PredictionConfidence _confidence({

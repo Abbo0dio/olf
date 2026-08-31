@@ -12,14 +12,19 @@ import 'package:test/test.dart';
 ///    on `pcos` / `perimenopause` v2 coverage beats v1's by a clear margin and
 ///    clears a 0.68 floor (an absolute 0.80 there would need a useless ±13-day
 ///    band), and the wide-range predictions are marked **not high** confidence.
-///  * **Anti-snowball:** v2 mean snowball ratio ≤ v1's × 1.20 per set (a loose
-///    non-regression guard — p3.4 owns the real hardening).
+///  * **Anti-snowball:** v2 mean snowball ratio ≤ v1's (p3.4). The full
+///    guarantee — per-profile, aggregate, in- *and* out-of-sample, plus a
+///    single-injected-outlier recovery bound — lives in `anti_snowball_test`;
+///    this file keeps a light in-sample smoke.
 ///
 /// Aggregated over a fixed seed set so per-seed sampling noise cannot flip it.
+/// **Out-of-sample:** the calibration floors are re-checked on a held-out seed
+/// range ([heldOutSeeds]) the p3.2 constants were never tuned against.
 void main() {
   const v1 = RobustPredictor();
   const v2 = AdaptivePredictor();
   final seeds = List<int>.generate(20, (i) => i + 1);
+  final heldOutSeeds = List<int>.generate(50, (i) => i + 200);
   const profiles = [
     'regular',
     'irregular',
@@ -36,11 +41,16 @@ void main() {
     SyntheticHistories.postpartum(seed: seed),
   ];
 
-  /// Mean of [f] over the seed set for profile [i].
-  double mean(int i, double? Function(BacktestMetrics) f, Predictor p) {
+  /// Mean of [f] over [over] (default: the in-sample [seeds]) for profile [i].
+  double mean(
+    int i,
+    double? Function(BacktestMetrics) f,
+    Predictor p, {
+    List<int>? over,
+  }) {
     var sum = 0.0;
     var n = 0;
-    for (final seed in seeds) {
+    for (final seed in over ?? seeds) {
       final v = f(
         BacktestMetrics.of(runBacktestOn(setsFor(seed)[i], predictor: p)),
       );
@@ -151,16 +161,67 @@ void main() {
       }
       expect(high / total, lessThan(0.15));
     });
+
+    test(
+      'held-out (seeds 200–249) — the p3.2 calibration floors still hold',
+      () {
+        // The p3.2 constants (_widthSafety, the coverage-quantile lifts) were
+        // tuned on low seed ranges that overlap this file's assertion seeds.
+        // Re-check the floors on a range they never saw.
+        for (final label in ['regular', 'irregular', 'postpartum']) {
+          final i = profiles.indexOf(label);
+          expect(
+            mean(i, (m) => m.coverage, v2, over: heldOutSeeds),
+            greaterThanOrEqualTo(0.80),
+            reason: '$label held-out coverage',
+          );
+        }
+        for (final label in ['pcos', 'perimenopause']) {
+          final i = profiles.indexOf(label);
+          final v1Cov = mean(i, (m) => m.coverage, v1, over: heldOutSeeds);
+          final v2Cov = mean(i, (m) => m.coverage, v2, over: heldOutSeeds);
+          expect(v2Cov, greaterThan(v1Cov + 0.10), reason: '$label held-out');
+          expect(
+            v2Cov,
+            greaterThanOrEqualTo(0.68),
+            reason: '$label held-out floor',
+          );
+        }
+      },
+    );
+
+    test('held-out — MAE parity / beat carries out of sample', () {
+      for (final label in ['pcos', 'postpartum']) {
+        final i = profiles.indexOf(label);
+        expect(
+          mean(i, (m) => m.meanAbsErrorDays, v2, over: heldOutSeeds),
+          lessThan(mean(i, (m) => m.meanAbsErrorDays, v1, over: heldOutSeeds)),
+          reason: '$label held-out: v2 must still beat v1',
+        );
+      }
+      for (final label in ['regular', 'irregular', 'perimenopause']) {
+        final i = profiles.indexOf(label);
+        expect(
+          mean(i, (m) => m.meanAbsErrorDays, v2, over: heldOutSeeds),
+          lessThanOrEqualTo(
+            mean(i, (m) => m.meanAbsErrorDays, v1, over: heldOutSeeds) * 1.03,
+          ),
+          reason: '$label held-out: v2 must not regress past +3%',
+        );
+      }
+    });
   });
 
-  test('anti-snowball non-regression guard (p3.4 hardens this)', () {
+  test('anti-snowball smoke — v2 ≤ v1 + 0.05 per set in-sample', () {
+    // The real guarantee (aggregate + per-profile + held-out + single-outlier
+    // recovery) is in anti_snowball_test; this is a fast tripwire.
     for (var i = 0; i < profiles.length; i++) {
       final s1 = meanSnowball(i, v1);
       final s2 = meanSnowball(i, v2);
       if (s1.isNaN || s2.isNaN) continue;
       expect(
         s2,
-        lessThanOrEqualTo(s1 * 1.20),
+        lessThanOrEqualTo(s1 + 0.05),
         reason: '${profiles[i]}: v2 snowball $s2 vs v1 $s1',
       );
     }

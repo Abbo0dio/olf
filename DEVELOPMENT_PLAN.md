@@ -2078,7 +2078,7 @@ physical-device smoke table.
 
 ### Phase 3 — Correctable adaptive prediction engine v2
 
-**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 DONE · p3.3 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
+**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 DONE · p3.3 DONE · p3.4 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
 
 **What this phase is.** The v1 predictor (`RobustPredictor`, p1.4) is a correct, humble
 stats projection: median recent cycle length off a fixed anchor, widened to the observed
@@ -2471,8 +2471,8 @@ exception says so and is negotiated before code):
     CI OK).
 
 #### p3.3 — Visible correction loop
-- **Status:** IN REVIEW — do not self-merge, do not set DONE.
-- **PR:** [#37](https://github.com/Abbo0dio/olf/pull/37)
+- **Status:** DONE — merged into `main` (squash `98a324a`, PR #37).
+- **PR:** [#37](https://github.com/Abbo0dio/olf/pull/37) — merged (squash `98a324a`)
 - **Branch / worktree:** `feat/p3.3-correction-loop` / `../olf-wt/p3.3`
 - **Owner:** worker: phase3
 - **Depends on:** p3.2 (`PredictionDelta`)
@@ -2553,9 +2553,15 @@ exception says so and is negotiated before code):
     keep `followedCorrection`. Added two add-path widget tests. core 387 +
     app 121 green; analyze / format / audit clean. Re-pushed to PR #37,
     still IN REVIEW.
+  - 2026-09-01 — **DONE.** Merged into `main` (squash `98a324a`, PR #37). CI
+    fully green (format, analyze, test, dependency-audit, build apk + iOS,
+    CI OK).
 
 #### p3.4 — Anti-snowball guarantees
-- **Status:** TODO
+- **Status:** IN REVIEW — do not self-merge, do not set DONE.
+- **PR:** [#38](https://github.com/Abbo0dio/olf/pull/38)
+- **Branch / worktree:** `feat/p3.4-anti-snowball` / `../olf-wt/p3.4`
+- **Owner:** worker: phase3
 - **Depends on:** p3.2
 - **Requirement refs:** §4, §9(2)
 - **Goal:** Guarantee — with tests — that one anomalous cycle (a skipped period, a very late
@@ -2570,10 +2576,85 @@ exception says so and is negotiated before code):
 - **Tests required:** harness snowball-metric assertions per dataset; targeted "inject one
   outlier, measure recovery" tests; regression test for the late-period no-rollforward
   rule.
-- **Notes / detail:** builds on the p3.2 non-stationarity logic; no new deps, interface
-  unchanged. *(agent fills in the rest.)*
+- **Notes / detail:** `AdaptivePredictor` only — not wired to the app (still p3.6). Seam
+  signature + `CyclePrediction` shape unchanged; plain-Dart, no dep; deterministic; core
+  stays Flutter-free. **What was hardened (three changes to the engine, all motivated by
+  "v2's recency-weighted centre is structurally more outlier-reactive than v1's flat
+  median"):**
+  1. **Time-position-preserving exclusion.** A completed cycle past the plausibility ramp
+     (weight 0 — a skipped month, a missed log, an anovulatory / pregnancy-adjacent
+     stretch) is now removed from **every** estimator (centre, drift, dispersion, AR) up
+     front, the same treatment a pregnancy gap gets — not "kept at weight 0", which still
+     let it occupy a recency slot. It keeps its slot on the *timeline* (`keepAt` holds each
+     real cycle's original index) so the recency decay of the real cycles behind it is
+     unchanged and a skip cannot bias a drifting history downward. Cycles *inside* the ramp
+     (~46–55 d) stay down-weighted — that band is the p3.2 no-discontinuity device for an
+     edit near 45 d.
+  2. **Centre outlier-influence down-weight.** The centre quantile reads an
+     outlier-influence-shrunk copy of the weights (`_centreOutlierInfluence`, floor 0.5,
+     ramp 2→4 robust MADs), so a recent moderate spike cannot drag the typical-length
+     estimate the way plain recency weighting let it. The **dispersion** step keeps the
+     unshrunk weights — a real cycle *is* more variable and the interval should say so
+     (coverage unaffected).
+  3. **AR outlier gate → ramp.** The lag-1 mean-reversion term's strength now ramps to zero
+     over `_arOutlierRampLoMad`(1)→`_arOutlierRampHiMad`(2) MADs instead of a hard cliff at
+     2·MAD — a spike just inside the old gate is no longer chased at full φ and then
+     snapped back.
+  - **Recovery bound (documented N):** against an established ~28-day history, one injected
+    outlier of *any* magnitude (40–110 d) shifts the expected next-start by **≤ 2 days**,
+    immediately and at every later cutoff (asserted ≤ 3; measured max 2 over 120 seeds × 9
+    magnitudes). Effectively **N ≈ 1** — it never poisons.
+  - **Snowball bound (documented):** on the union of in-sample (1–20) and held-out
+    (200–249) seeds, `minCompletedCycles = 3` ("a snowball is an *established* forecast
+    degraded by an anomaly"): v2 mean ratio **≤ v1 + 0.05** per profile; **≤ v1** on the
+    profiles with a real snowball (v1 ratio ≥ 1.10: irregular, pcos, postpartum); and the
+    **aggregate across profiles is ≤ v1** in-sample, held-out, and union. Per-seed the
+    ratio is noise-dominated (often < 15 post-outlier points/seed) → per-seed parity
+    (v2 ≤ v1 on ~46–57 % of seeds), the guarantee rests on the aggregate.
+  - **Held-out validation (p3.2 follow-up):** the p3.2 calibration constants were tuned on
+    low seed ranges overlapping `v2_vs_v1_test`'s assertion seeds; added held-out
+    (seeds 200–249) coverage-floor and MAE-parity/beat assertions to `v2_vs_v1_test` — both
+    hold out of sample.
+  - **Known still-deferred:** the `adaptive_predictor_property_test` range-width tail
+    (max 56 d) from a drift-detector on/off flip when a cycle is added — a discontinuity in
+    the *interval* recompute, not the point estimate; needs a drift-strength ramp on the
+    interval, out of scope for the anti-snowball slice.
+  - **Files:** `core/lib/src/prediction/adaptive_predictor.dart` (the three changes +
+    doc-comment rewrite of pipeline steps 0/1/2/3b). Tests:
+    `core/test/backtest/anti_snowball_test.dart` (new — snowball guarantee in/out of
+    sample + single-outlier recovery + "excluded cycle's length is irrelevant"),
+    `core/test/prediction/adaptive_predictor_test.dart` (+group: late-period no-rollforward,
+    skip excluded-not-down-weighted, rising-trend not biased by a skip, AR gate is a ramp),
+    `core/test/backtest/v2_vs_v1_test.dart` (snowball guard tightened + held-out
+    calibration/MAE). `RobustPredictor` / `v1_baseline_test` untouched — v1 unchanged.
+- **Before / after — snowball ratio (post-outlier MAE ÷ baseline MAE), `minCompletedCycles = 3`:**
+
+  | profile | seeds | v1 | v2 (p3.2) | v2 (p3.4) |
+  |---|---|--:|--:|--:|
+  | irregular | in-sample | 1.147 | 1.237 | **1.143** |
+  | irregular | held-out | 1.224 | 1.188 | 1.221 |
+  | irregular | union | 1.199 | 1.204 | **1.196** |
+  | pcos | union | 1.175 | 1.156 | 1.164 |
+  | perimenopause | union | 1.042 | 1.050 | 1.053 |
+  | postpartum | held-out | 0.862 | 0.953 | **0.782** |
+  | postpartum | union | 1.198 | 1.246 | **1.153** |
+  | **aggregate (defined profiles)** | union | **1.154** | **1.164** | **1.142** |
+
+  p3.2's aggregate snowball was **above** v1's (1.164 vs 1.154); p3.4 brings it **below**
+  (1.142). MAE / coverage unchanged within tolerance: v2 still beats v1 on pcos (−4 %) and
+  postpartum (−12 %), parity elsewhere; coverage floors hold in- and out-of-sample.
 - **Log:**
   - 2026-08-31 — created.
+  - 2026-09-01 — claimed by worker: phase3; worktree `../olf-wt/p3.4`, branch
+    `feat/p3.4-anti-snowball` off `main` @ `98a324a`. Folded p3.3 → DONE.
+  - 2026-09-01 — hardened `AdaptivePredictor` (the three changes above). Added
+    `anti_snowball_test`, the `adaptive_predictor_test` p3.4 group, and held-out
+    assertions in `v2_vs_v1_test`. core 399 tests green; app 121 unaffected;
+    analyze `--fatal-infos` clean (core + app); `dart format` clean; drift
+    codegen unchanged; dependency audit PASS; no `pubspec.lock` drift;
+    `threat_model_doc_test` green.
+  - 2026-09-01 — PR [#38](https://github.com/Abbo0dio/olf/pull/38) opened into
+    `main`; **IN REVIEW**. Do not self-merge.
 
 #### p3.5 — Internal accuracy metrics (local, private)
 - **Status:** TODO

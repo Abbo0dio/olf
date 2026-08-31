@@ -204,6 +204,103 @@ void main() {
     expect(p.basedOnCycles, 3);
   });
 
+  group('p3.4 — anti-snowball hardening', () {
+    test('a late period never rolls the expected date forward on its own', () {
+      // Steady 28-day history; ask long after the expected date with no new
+      // period logged. The estimate must stay anchored (v1 behaviour).
+      final gaps = List.filled(10, 28);
+      final cycles = history(gaps);
+      final anchor = cycles.first.periodStart;
+      final upcoming = predictor.predict(
+        cycles: cycles,
+        today: anchor.add(const Duration(days: 1)),
+      )!;
+
+      final overdue = predictor.predict(
+        cycles: cycles,
+        today: anchor.add(const Duration(days: 80)),
+      )!;
+
+      expect(overdue.status, PredictionStatus.overdue);
+      expect(overdue.isOverdue, isTrue);
+      // Same expected date and range as when it was still upcoming — not
+      // advanced by a notional extra cycle.
+      expect(overdue.nextPeriodExpected, upcoming.nextPeriodExpected);
+      expect(overdue.nextPeriod.start, upcoming.nextPeriod.start);
+      expect(overdue.nextPeriod.end, upcoming.nextPeriod.end);
+      expect(
+        overdue.daysPastExpected,
+        daysBetween(
+          overdue.nextPeriodExpected,
+          anchor.add(const Duration(days: 80)),
+        ),
+      );
+    });
+
+    test('a skipped / anovulatory cycle is excluded, not down-weighted', () {
+      // One 78-day interval mid-history (a missed log or an anovulatory
+      // stretch). Its *value* must not reach any estimator: swapping it for a
+      // 120-day interval changes nothing, and the forecast matches the clean
+      // history within the loss of the single real cycle it displaced.
+      final clean = [28, 28, 27, 28, 29, 28, 28, 27, 28];
+      final skip78 = [...clean]..[4] = 78;
+      final skip120 = [...clean]..[4] = 120;
+
+      final p78 = predictFrom(skip78)!;
+      final p120 = predictFrom(skip120)!;
+      final pClean = predictFrom(clean)!;
+
+      // Excluded ⇒ its length is irrelevant.
+      expect(offset(skip78, p78), offset(skip120, p120));
+      expect(p78.nextPeriod.lengthInDays, p120.nextPeriod.lengthInDays);
+      // And it has not dragged the centre or blown out the range.
+      expect(
+        (offset(skip78, p78) - offset(clean, pClean)).abs(),
+        lessThanOrEqualTo(2),
+      );
+      expect(p78.nextPeriod.lengthInDays, lessThanOrEqualTo(7));
+    });
+
+    test(
+      'excluding a mid-history skip does not bias a rising trend downward',
+      () {
+        // A clean rising history vs the same history with one skipped cycle
+        // spliced in. The skip is excluded, but the real cycles behind it keep
+        // their place on the timeline, so the projected trend is unchanged.
+        final rising = [25, 26, 27, 28, 29, 30, 31, 32, 33, 34];
+        final withSkip = [25, 26, 27, 28, 90, 29, 30, 31, 32, 33, 34];
+
+        final pRising = predictFrom(rising)!;
+        final pSkip = predictFrom(withSkip)!;
+
+        expect(
+          (offset(withSkip, pSkip) - offset(rising, pRising)).abs(),
+          lessThanOrEqualTo(2),
+          reason: 'a skip must not pull a rising projection down',
+        );
+      },
+    );
+
+    test('the AR outlier gate is a ramp, not a cliff', () {
+      // Steady 29s, then a moderately long last cycle. The engine may lean a
+      // little toward it; a nearly-2-MAD deviation must be chased *less* than a
+      // ~1-MAD one — no step change at the old hard gate.
+      final base = List.filled(8, 29);
+      final nearMad = predictFrom([...base, 33])!; // ~1 MAD-ish over
+      final farMad = predictFrom([...base, 40])!; // near the 2-MAD gate
+
+      final leanNear = offset([...base, 33], nearMad) - 29;
+      final leanFar = offset([...base, 40], farMad) - 29;
+
+      expect(leanNear, greaterThanOrEqualTo(0));
+      expect(
+        leanFar,
+        lessThanOrEqualTo(leanNear + 1),
+        reason: 'the larger deviation must not be chased harder',
+      );
+    });
+  });
+
   test('deterministic — a pure function of (cycles, today)', () {
     final cycles = history(List.filled(8, 28));
     final today = cycles.first.periodStart.add(const Duration(days: 1));
