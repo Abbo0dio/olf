@@ -92,34 +92,64 @@ class SyntheticHistories {
     seed: seed,
     cycles: cycles,
     start: start,
-    nextLength: (rng, i) => _clampLen(_gaussian(rng, 28, 1.3).round()),
+    nextLength: (rng, i, prev) => _clampLen(_gaussian(rng, 28, 1.3).round()),
   );
 
-  /// High run-to-run variance around a normal mean.
+  /// High run-to-run variance around a normal mean, **lag-1 autocorrelated**.
+  ///
+  /// Real cycle lengths are not memoryless: a long cycle makes the next one more
+  /// likely to be long (within-person autocorrelation is well established in the
+  /// menstrual-cycle literature). The generator is a stationary AR(1) process
+  /// `next = mean + phi·(prev − mean) + noise`, with **phi = 0.3 fixed** as a
+  /// physiologically-motivated modelling choice — it is *not* tuned to any
+  /// predictor. The noise SD is scaled by `sqrt(1 − phi²)` so the marginal
+  /// (stationary) SD still matches the old i.i.d. generator's `6`.
   static SyntheticHistory irregular({
     int seed = 42,
-    int cycles = 24,
+    int cycles = 36,
     DateTime? start,
   }) => _build(
     label: 'irregular',
     seed: seed,
     cycles: cycles,
     start: start,
-    nextLength: (rng, i) => _clampLen(_gaussian(rng, 30, 6).round()),
+    nextLength: (rng, i, prev) {
+      const mean = 30.0;
+      const phi = 0.3;
+      const marginalSd = 6.0;
+      final noiseSd = marginalSd * math.sqrt(1 - phi * phi); // ≈ 5.72
+      final p = (prev ?? mean).toDouble();
+      return _clampLen(
+        (mean + phi * (p - mean) + _gaussian(rng, 0, noiseSd)).round(),
+      );
+    },
   );
 
-  /// PCOS-like: long mean, high variance, and an occasional very long cycle.
+  /// PCOS-like: long mean, high variance, an occasional very long cycle, and
+  /// **lag-1 autocorrelation** (long cycles beget long cycles).
+  ///
+  /// Same stationary AR(1) form as [irregular] with **phi = 0.4 fixed** (a held
+  /// modelling choice, not tuned to the engine) and noise SD scaled by
+  /// `sqrt(1 − phi²)` so the marginal SD matches the old generator's `9`. The
+  /// occasional very-long-cycle spike is kept and, because the spiked length
+  /// feeds the recursion, it decays away over the following cycles rather than
+  /// vanishing instantly.
   static SyntheticHistory pcos({
     int seed = 42,
-    int cycles = 24,
+    int cycles = 36,
     DateTime? start,
   }) => _build(
     label: 'pcos',
     seed: seed,
     cycles: cycles,
     start: start,
-    nextLength: (rng, i) {
-      var len = _gaussian(rng, 37, 9).round();
+    nextLength: (rng, i, prev) {
+      const mean = 37.0;
+      const phi = 0.4;
+      const marginalSd = 9.0;
+      final noiseSd = marginalSd * math.sqrt(1 - phi * phi); // ≈ 8.25
+      final p = (prev ?? mean).toDouble();
+      var len = (mean + phi * (p - mean) + _gaussian(rng, 0, noiseSd)).round();
       if (rng.nextDouble() < 0.15) len += 15 + rng.nextInt(25);
       return _clampLen(len);
     },
@@ -136,7 +166,7 @@ class SyntheticHistories {
     seed: seed,
     cycles: cycles,
     start: start,
-    nextLength: (rng, i) {
+    nextLength: (rng, i, prev) {
       final mean = 27 + 0.6 * i;
       final sd = 2.0 + 0.35 * i;
       var len = _gaussian(rng, mean, sd).round();
@@ -159,7 +189,7 @@ class SyntheticHistories {
     seed: seed,
     cycles: cycles,
     start: start,
-    nextLength: (rng, i) {
+    nextLength: (rng, i, prev) {
       if (i == 0) return _clampLen(60 + rng.nextInt(61));
       final decay = math.max(0.0, 12 - i * 1.6);
       return _clampLen(_gaussian(rng, 28 + decay, 4).round());
@@ -171,7 +201,8 @@ class SyntheticHistories {
     required int seed,
     required int cycles,
     required DateTime? start,
-    required int Function(math.Random rng, int index) nextLength,
+    required int Function(math.Random rng, int index, int? prevLength)
+    nextLength,
     int lutealDays = 14,
     double ovulationNoiseSd = 1.5,
   }) {
@@ -180,8 +211,11 @@ class SyntheticHistories {
     final anchor = dateOnly(start ?? defaultStart);
 
     final starts = <DateTime>[anchor];
+    int? prevLength;
     for (var i = 0; i < cycles; i++) {
-      starts.add(addDays(starts.last, nextLength(rng, i)));
+      final len = nextLength(rng, i, prevLength);
+      starts.add(addDays(starts.last, len));
+      prevLength = len;
     }
 
     // Ovulation truth is drawn afterwards, still from the same seeded stream,

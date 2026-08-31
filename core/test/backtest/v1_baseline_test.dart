@@ -11,13 +11,18 @@ import 'package:test/test.dart';
 /// tolerances absorb unrelated refactors, not a real behaviour change. If the
 /// engine legitimately changes, re-run and update this table in the same PR.
 ///
+/// **p3.2 note.** The `irregular` / `pcos` generators gained lag-1
+/// autocorrelation (AR(1), phi 0.3 / 0.4, fixed before measuring any engine) and
+/// their cycle count went 24 → 36, so their rows below were regenerated. The
+/// other three profiles are unchanged from p3.1.
+///
 /// v1 baseline — period-start error, in days (seed 42):
 ///
 /// | profile        | scored | no-pred | MAE  | median AE | coverage | mean range | ovulation MAE | snowball |
 /// |----------------|:------:|:-------:|:----:|:---------:|:--------:|:----------:|:-------------:|:-------:|
 /// | regular        |   23   |    0    | 0.87 |    1.0    |   0.957  |    3.57    |      1.74     |    –    |
-/// | irregular      |   23   |    0    | 4.39 |    4.0    |   0.739  |   13.96    |      5.00     |    –    |
-/// | pcos           |   23   |    0    | 7.22 |    5.0    |   0.565  |   20.35    |      7.48     |  1.108  |
+/// | irregular      |   35   |    0    | 4.34 |    4.0    |   0.771  |   14.80    |      4.49     |  1.382  |
+/// | pcos           |   35   |    0    | 6.94 |    4.0    |   0.629  |   17.00    |      7.09     |  1.008  |
 /// | perimenopause  |   23   |    0    | 5.91 |    5.0    |   0.609  |   14.04    |      6.04     |  1.071  |
 /// | postpartum     |   16   |    1    | 5.06 |    4.0    |   0.688  |   13.50    |      5.56     |    –    |
 void main() {
@@ -25,10 +30,10 @@ void main() {
 
   const baseline = <String, ({double mae, double medianAe, double coverage})>{
     'regular': (mae: 0.87, medianAe: 1.0, coverage: 0.957),
-    'irregular': (mae: 4.39, medianAe: 4.0, coverage: 0.739),
-    'pcos': (mae: 7.22, medianAe: 5.0, coverage: 0.565),
-    'perimenopause': (mae: 5.91, medianAe: 5.0, coverage: 0.609),
-    'postpartum': (mae: 5.06, medianAe: 4.0, coverage: 0.688),
+    'irregular': (mae: 4.343, medianAe: 4.0, coverage: 0.771),
+    'pcos': (mae: 6.943, medianAe: 4.0, coverage: 0.629),
+    'perimenopause': (mae: 5.913, medianAe: 5.0, coverage: 0.609),
+    'postpartum': (mae: 5.063, medianAe: 4.0, coverage: 0.688),
   };
 
   for (final history in SyntheticHistories.all(seed: seed)) {
