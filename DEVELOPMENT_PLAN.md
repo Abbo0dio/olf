@@ -2398,6 +2398,25 @@ exception says so and is negotiated before code):
     (c) add a correction-response backtest showing v2 visibly reacts to a fix and
     v1 does not. p3.3 narrows to rendering the delta. Plan edited first (this
     row + p3.3 + p3.1 baseline note); build resumed.
+  - 2026-08-31 — **built Option 14; reframed bar still not cleanly met.** Added
+    the AR-outlier gate, `PredictionDelta`, and the correction-response harness.
+    Multi-seed measurement (v2 vs v1, mean over seeds 1–50 / 100–149):
+    | set | MAE Δ | vs reframed bar |
+    |---|--:|---|
+    | regular | +0.7% / −2.8% | parity ✓ |
+    | irregular | −0.0% / −2.6% | **parity — not the "beat" Option 14 assumed** ✗ |
+    | pcos | +2.0% / +1.2% | on the +2% line; worse on ~2/3 of seeds — borderline ✗ |
+    | perimenopause | −0.5% / −0.0% | parity ✓ (bar only asked parity) |
+    | postpartum | −11.0% / −9.8% | **beat** ✓ (the one robust MAE win) |
+    Coverage: v2 ≥ v1 on every set & seed (calibration leg holds), **but the
+    absolute ≥ 0.80 floor is unreachable on pcos/perimenopause** without ±13 d+
+    ranges (below 0.80 on 42–47 of 50 seeds even after widening). Snowball:
+    v2 > v1×1.05 on ~40% of irregular seeds (v2 is structurally more
+    outlier-reactive — p3.4 territory). Correction-response: v2 visible-effect
+    ~1.5–2× v1 on every non-regular set (the §9(1) win), correction non-harmful,
+    **but a 3-day mis-log can swing v2 by 12–16 d** — a discontinuity where a
+    perturbed cycle crosses the 45-day `isLikelyGap` exclusion. WIP committed to
+    the branch (not for merge); reported to orchestrator for a bar decision.
   - 2026-08-31 — v1 baseline regenerated against the AR(1) generators
     (`core/test/backtest/v1_baseline_test.dart`). Before → after (seed 42):
     | set | scored | v1 MAE | v1 coverage | v1 snowball |
