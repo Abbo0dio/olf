@@ -225,3 +225,18 @@ The CI guard requires an entry naming the current phase.
   a table to the encrypted DB (still inside the existing app ↔ DB boundary) and
   must ship a migration — no new boundary, but record it here when it lands. No
   design changes required by this review.
+- **2026-09-01 — Phase 3 closing gate — reviewer: worker: phase3.** All six
+  slices p3.1–p3.6 shipped (PRs #35–#40). The watch item from the opening entry
+  did **not** materialise: nothing in Phase 3 persists model state or a
+  correction-event log. The adaptive engine (p3.2/p3.4) is pure on-device
+  computation, derived-on-read from the same encrypted `olf.db` with no stored
+  parameters; the p3.3 correction loop is in-memory session state only (the
+  "what changed" note is recomputed on each edit — no persistence, **no schema
+  change**); the p3.5 accuracy screen is a read-only backtest replay of the
+  user's own history behind an explicit Settings action, with no network (unit-
+  and scan-asserted) and no fabricated output; p3.6 is a one-line provider swap
+  behind the unchanged `Predictor` seam. **No new asset, adversary, trust
+  boundary, or data flow**; the data-flow diagram, Mitigations table, and
+  Residual risks are unchanged. The Phase 3 `§9` follow-ups are all
+  prediction-quality items, none security-relevant. No design changes required
+  by this review.
