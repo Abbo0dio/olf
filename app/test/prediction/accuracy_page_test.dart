@@ -49,10 +49,12 @@ void main() {
       await seed(db, s);
     }
 
-    // Oracle: the exact numbers the screen should show.
+    // Oracle: the exact numbers the screen should show. p3.6 — the accuracy
+    // screen reads `predictorProvider`, which is `AdaptivePredictor` now, so the
+    // oracle must replay the same engine.
     final run = runBacktest(
       periodStarts: starts,
-      predictor: const RobustPredictor(),
+      predictor: const AdaptivePredictor(),
       minCompletedCycles: 1,
     );
     final m = BacktestMetrics.of(run);

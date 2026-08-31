@@ -2078,7 +2078,7 @@ physical-device smoke table.
 
 ### Phase 3 — Correctable adaptive prediction engine v2
 
-**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 DONE · p3.3 DONE · p3.4 DONE · p3.5 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
+**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 DONE · p3.3 DONE · p3.4 DONE · p3.5 DONE · p3.6 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
 
 **What this phase is.** The v1 predictor (`RobustPredictor`, p1.4) is a correct, humble
 stats projection: median recent cycle length off a fixed anchor, widened to the observed
@@ -2660,8 +2660,8 @@ exception says so and is negotiated before code):
     CI OK).
 
 #### p3.5 — Internal accuracy metrics (local, private)
-- **Status:** IN REVIEW — do not self-merge, do not set DONE.
-- **PR:** [#39](https://github.com/Abbo0dio/olf/pull/39)
+- **Status:** DONE — merged into `main` (squash `12dc0a6`, PR #39).
+- **PR:** [#39](https://github.com/Abbo0dio/olf/pull/39) — merged (squash `12dc0a6`)
 - **Branch / worktree:** `feat/p3.5-accuracy-metrics` / `../olf-wt/p3.5`
 - **Owner:** worker: phase3
 - **Depends on:** p3.1, p3.2
@@ -2722,9 +2722,14 @@ exception says so and is negotiated before code):
   - 2026-08-31 — created.
   - 2026-09-01 — claimed by worker: phase3; worktree `../olf-wt/p3.5`, branch
     `feat/p3.5-accuracy-metrics` off `main` @ `c27b813`. Folded p3.4 → DONE.
+  - 2026-09-01 — **DONE.** Merged into `main` (squash `12dc0a6`, PR #39). CI fully green
+    (format · analyze · test · dependency-audit · apk + ios build · CI OK).
 
 #### p3.6 — Swap `Predictor` to the adaptive engine
-- **Status:** TODO
+- **Status:** IN REVIEW — do not self-merge, do not set DONE.
+- **PR:** [#40](https://github.com/Abbo0dio/olf/pull/40)
+- **Branch / worktree:** `feat/p3.6-swap-predictor` / `../olf-wt/p3.6`
+- **Owner:** worker: phase3
 - **Depends on:** p3.2, p3.4, p3.5
 - **Requirement refs:** §2, §4, Matrix WOW-FACTOR
 - **Goal:** Make the adaptive engine the default `Predictor` with **no call-site change**,
@@ -2737,10 +2742,75 @@ exception says so and is negotiated before code):
   snowball bounds).
 - **Tests required:** full core + app suites green; the exit-gate evidence table reproduced
   from a test.
-- **Notes / detail:** pure swap behind the seam (constraint 4). *(agent fills in the
-  rest.)*
+- **Notes / detail:** pure swap behind the seam (constraint 4) — one production line
+  changes, nothing else in `lib/` moves.
+  - **The swap:** `predictorProvider` (`app/lib/src/prediction/prediction_providers.dart`)
+    `const RobustPredictor()` → `const AdaptivePredictor()`. That is the **only** production
+    wiring change. Every consumer already reads the provider: `predictionProvider` (home /
+    calendar card), the p3.3 correction loop (`period_calendar_page.dart` `_runHistoryEdit`
+    → `ref.read(predictorProvider)`), and the p3.5 accuracy screen
+    (`accuracy_providers.dart` → `ref.watch(predictorProvider)`) — all three move to v2 with
+    no edit. Verified by the existing widget tests for each surface now exercising v2's
+    output. `RobustPredictor` stays in the tree with a **"v1 reference baseline — no longer
+    the production `Predictor` as of p3.6"** doc-comment; still used by `v1_baseline_test`,
+    `v2_vs_v1_test`, `anti_snowball_test`, `correction_response_test`, and the new
+    `phase3_exit_gate_test`. `fertile_window_signal.dart` keeps importing the
+    `fertileDaysAfterOvulation` const from `robust_predictor.dart` — a shared constant, not
+    an engine dependency.
+  - **Existing tests updated (number changed legitimately under v2 — no assertion
+    weakened):**
+    - `app/test/prediction/prediction_card_test.dart` — the `predictionFor` oracle now
+      instantiates `AdaptivePredictor` (it cross-checks rendered text against the engine the
+      screen runs). One fixture (`a regular history renders …`) grew from 4 → 5 metronomic
+      period starts: v2 only calls a forecast **high-confidence** once the effective sample
+      ≥ 3 (≈ 4 completed cycles at `_decayStable` 0.96), where v1 reached `high` at 3. Same
+      intent — a strong regular history renders the confident-estimate path — with one more
+      cycle of evidence so v2 legitimately gets there. Everything else in that file is
+      engine-agnostic (presence/absence of the card, overdue check-in).
+    - `app/test/prediction/correction_notice_test.dart` — same `predictionFor` oracle swap;
+      the delta-reason strings it derives are v2's now. No fixture change needed — the
+      "meaningful correction moves the forecast" and "no-op still speaks" intents hold.
+    - `app/test/prediction/accuracy_page_test.dart` — the in-test `runBacktest` oracle now
+      replays `AdaptivePredictor` (the screen reads `predictorProvider`). Scored-point count
+      (`_expectedScored = 9`) is engine-independent, unchanged.
+    - `core` p1.4 `robust_predictor_test.dart` — **untouched**; it tests v1 directly and v1
+      is frozen.
+  - **Exit-gate evidence — `core/test/backtest/phase3_exit_gate_test.dart` (new):** prints
+    one consolidated table (per profile: v1/v2 MAE, v1/v2 coverage, v1/v2 snowball ratio,
+    v1/v2 mean visible correction effect) for the in-sample (seeds 1–20) **and** held-out
+    (seeds 200–249) ranges, and re-asserts the load-bearing inequality behind each of the
+    three phase claims (measurable improvement / corrections change output / no snowball) so
+    the printed numbers cannot silently drift. The finer per-profile bounds stay in the
+    three source files (`v2_vs_v1_test`, `correction_response_test`, `anti_snowball_test`),
+    which all still pass unchanged. Table is quoted in the PR body.
+  - **Migration UX — deferred to a §9 follow-up (not built this slice).** p3.2 flagged that
+    a PCOS / perimenopause user on unchanged history sees the range widen + confidence drop
+    after the update, which without framing reads as a downgrade. A *good* one-time notice
+    must fire **only** for the users whose forecast actually moved — otherwise the ~80% with
+    steady cycles get a changelog pop-up for a no-op. Deciding "did it move for this user"
+    means running v1 and v2 on their live history and diffing — which is exactly the
+    **v1-vs-v2-on-own-data comparison already deferred out of p3.5** (§9). Bolting an
+    imprecise, fires-for-everyone banner onto a one-line pure-swap slice is the scope creep
+    constraint 4 / the plan's no-silent-expansion rule warn against; a precise notice is a
+    small slice of its own once that comparison exists. Filed in §9. The swap itself is not
+    gated on it.
+  - **Constraints:** no new dependency; no schema change (nothing persisted); `core` stays
+    Flutter-free (only a doc-comment touched there besides the new test); `Predictor` seam
+    signature + `CyclePrediction` shape unchanged; deterministic (`today` still injected, no
+    `DateTime.now()` in the engine). No UI added, so no new dark-mode / a11y surface.
+  - **Files:** `app/lib/src/prediction/prediction_providers.dart` (the swap + doc),
+    `core/lib/src/prediction/robust_predictor.dart` (baseline doc-comment only),
+    `core/test/backtest/phase3_exit_gate_test.dart` (new),
+    `app/test/prediction/{prediction_card,correction_notice,accuracy_page}_test.dart`
+    (oracle → v2; one fixture +1 cycle). Phase 3 close (doc bump + exit-gate paragraph) is a
+    **separate docs PR after merge** — this is the last Phase 3 *build* slice.
 - **Log:**
   - 2026-08-31 — created.
+  - 2026-09-01 — claimed by worker: phase3; worktree `../olf-wt/p3.6`, branch
+    `feat/p3.6-swap-predictor` off `main` @ `12dc0a6`. Folded p3.5 → DONE. Swapped
+    `predictorProvider` to `AdaptivePredictor`; added `phase3_exit_gate_test`; updated three
+    app test oracles to v2 (reasons above). core 407 green, app 129 green, analyze / format
+    / dependency-audit clean. Migration-notice deferred to §9 with rationale.
 
 **Exit gate:** measurable improvement over v1 on the irregular-cycle datasets; corrections
 demonstrably change output; no snowballing in tests.
@@ -3529,6 +3599,20 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   it. (c) The whole-history replay runs on the **main isolate** on screen open — fine for
   realistic histories (tens of cycles) but a candidate for a background isolate if a very
   long history janks the spinner. — noted by worker: phase3 during p3.5.
+- **p3.6 follow-up — v2 migration notice (a one-time "your ranges are calibrated now"
+  note):** p3.6 makes `AdaptivePredictor` the production engine. On unchanged history a
+  PCOS / perimenopause user sees the predicted range widen and confidence drop the first
+  time they open the app after the update; without framing that reads as a regression, not
+  the honesty improvement it is. Deferred from p3.6 because a notice worth showing must fire
+  **only** for users whose forecast materially moved (wider range and/or lower confidence) —
+  a blanket "the engine changed" banner is changelog noise for the majority with steady
+  cycles. The materiality check = run v1 and v2 on the user's live history and diff them,
+  which is the **p3.5 follow-up (a)** v1-vs-v2-on-own-data comparison above; this notice is
+  a thin UI slice on top of it. Build order: that comparison first, then this. Mechanism
+  when built: gate on a new `app_settings` key (e.g. `prediction_engine_v2_seen`, no schema
+  change — reuse `SettingsRepository`), reuse the p3.3 `_CorrectionNotice` dismissible-card
+  pattern on the calendar/home prediction area, set the flag on first view (shown or not) so
+  it never reappears. — noted by worker: phase3 during p3.6.
 - (add more here)
 
 ## 10. Orphaned / cut work

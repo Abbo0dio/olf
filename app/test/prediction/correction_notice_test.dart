@@ -28,9 +28,11 @@ void main() {
       );
 
   /// The engine's prediction for a set of period start dates — the oracle the
-  /// rendered note and card are checked against.
+  /// rendered note and card are checked against. p3.6: production is
+  /// `AdaptivePredictor` now, so the oracle (and the delta reasons derived from
+  /// it) are v2's.
   CyclePrediction? predictionFor(List<DateTime> starts) =>
-      const RobustPredictor().predict(
+      const AdaptivePredictor().predict(
         cycles: deriveCycles([
           for (var i = 0; i < starts.length; i++)
             Period(
