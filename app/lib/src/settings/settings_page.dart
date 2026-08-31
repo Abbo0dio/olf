@@ -5,6 +5,8 @@ import 'package:olf_core/olf_core.dart';
 
 import '../backup/backup_page.dart';
 import '../personalization/personalization_providers.dart';
+import '../prediction/accuracy_format.dart';
+import '../prediction/accuracy_page.dart';
 import '../pregnancy/pregnancy_events_page.dart';
 import '../privacy/privacy_education_content.dart';
 import '../privacy/privacy_education_screen.dart';
@@ -181,6 +183,14 @@ class SettingsPage extends ConsumerWidget {
               MaterialPageRoute<void>(
                 builder: (_) => const PregnancyEventsPage(),
               ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.insights_outlined),
+            title: const Text(accuracySettingsTitle),
+            subtitle: const Text(accuracySettingsSubtitle),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const AccuracyPage()),
             ),
           ),
           const _SectionHeader('Data'),
