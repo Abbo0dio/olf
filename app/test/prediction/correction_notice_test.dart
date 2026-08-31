@@ -185,6 +185,78 @@ void main() {
     },
   );
 
+  testWidgets('logging a new period says "logged", never "corrected"', (
+    tester,
+  ) async {
+    // One period on file → no forecast yet. Logging a second is *adding* data,
+    // not correcting it: the note must use the cyclesAdded wording.
+    final existing = daysAgo(28);
+    final db = memoryDb();
+    await seedStart(db, existing);
+
+    final expected = PredictionDelta.between(
+      before: predictionFor([existing]),
+      after: predictionFor([existing, daysAgo(0)]),
+      context: const PredictionChangeContext(cyclesAdded: 1),
+    );
+    expect(expected.reasons, isNotEmpty);
+    expect(expected.reasons.first, startsWith('You logged another cycle.'));
+
+    await pumpOlf(
+      tester,
+      overrides: [dbOverride(db)],
+      body: () async {
+        expect(find.text('Next period'), findsNothing);
+
+        await tester.tap(find.text('Add a period'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
+
+        for (final reason in expected.reasons) {
+          expect(find.text(reason), findsOneWidget);
+          expect(reason.toLowerCase(), isNot(contains('correct')));
+        }
+        expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+
+        await tester.tap(find.byTooltip('Dismiss'));
+        await tester.pumpAndSettle();
+      },
+    );
+  });
+
+  testWidgets('logging the first-ever period still renders a non-empty note', (
+    tester,
+  ) async {
+    final db = memoryDb();
+
+    final expected = PredictionDelta.between(
+      before: null,
+      after: null,
+      context: const PredictionChangeContext(cyclesAdded: 1),
+    );
+    expect(expected.isMeaningful, isFalse);
+    expect(expected.reasons, isNotEmpty);
+    expect(expected.reasons.single.toLowerCase(), isNot(contains('correct')));
+
+    await pumpOlf(
+      tester,
+      overrides: [dbOverride(db)],
+      body: () async {
+        await tester.tap(find.text('Add a period'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
+
+        expect(find.text(expected.reasons.single), findsOneWidget);
+        expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+
+        await tester.tap(find.byTooltip('Dismiss'));
+        await tester.pumpAndSettle();
+      },
+    );
+  });
+
   testWidgets('the note is a live region and is announced to screen readers', (
     tester,
   ) async {

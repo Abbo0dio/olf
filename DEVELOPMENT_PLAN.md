@@ -2503,10 +2503,13 @@ exception says so and is negotiated before code):
     **from the freshly-written data** — `predictorProvider.predict(cycles: deriveCycles(
     await periodRepo.allPeriods(), pregnancyEvents: await cycleEventRepo.pregnancyEvents()),
     today: …)` — so the delta is real, not fabricated, and does not race the provider
-    stream. Then `PredictionDelta.between(before, after, context:
-    PredictionChangeContext(followedCorrection: true))` and publish it to a new
-    `correctionNoticeProvider` (`NotifierProvider<…, PredictionDelta?>`, in-memory session
-    state only — **no schema change, no correction-event history**).
+    stream. Then `PredictionDelta.between(before, after, context: …)` and publish it to a
+    new `correctionNoticeProvider` (`NotifierProvider<…, PredictionDelta?>`, in-memory
+    session state only — **no schema change, no correction-event history**). Context split:
+    editing / deleting an existing entry passes `PredictionChangeContext(followedCorrection:
+    true)` ("Your correction was applied. …"); adding a fresh period passes
+    `PredictionChangeContext(cyclesAdded: 1)` ("You logged another cycle. …") — logging is
+    not correcting. The note still fires for all four paths; only the lead wording differs.
   - **Where it surfaces:** a `_CorrectionNotice` block on the calendar screen, rendered
     directly where the prediction card is / would be (so a `withdrawn` delta still explains
     why the card vanished). Renders `delta.reasons` verbatim (plain-language, gender-neutral,
@@ -2544,6 +2547,12 @@ exception says so and is negotiated before code):
     clean; dependency audit PASS; `inclusive_language_test` green.
   - 2026-08-31 — PR [#37](https://github.com/Abbo0dio/olf/pull/37) opened into
     `main`; **IN REVIEW**. Do not self-merge.
+  - 2026-08-31 — review pass 1: split the change context — add paths
+    (`_addPeriod`, `_startPeriodOn`) now pass `cyclesAdded: 1` ("You logged
+    another cycle. …") instead of `followedCorrection: true`; edit / delete
+    keep `followedCorrection`. Added two add-path widget tests. core 387 +
+    app 121 green; analyze / format / audit clean. Re-pushed to PR #37,
+    still IN REVIEW.
 
 #### p3.4 — Anti-snowball guarantees
 - **Status:** TODO

@@ -109,32 +109,47 @@ class _LoadedState extends ConsumerState<_Loaded> {
     );
   }
 
-  Future<void> _startPeriodOn(DateTime day) =>
-      _runCorrection(() => showPeriodEditor(context, initialStart: day));
+  // Adding a period is *logging* (`cyclesAdded`); editing or removing an
+  // existing entry is *correcting* (`followedCorrection`). The distinction only
+  // changes the wording of the note — `PredictionDelta` picks the right lead.
+  static const _logging = PredictionChangeContext(cyclesAdded: 1);
+  static const _correcting = PredictionChangeContext(followedCorrection: true);
 
-  Future<void> _addPeriod() => _runCorrection(
-    () => showPeriodEditor(context, initialStart: DateTime.now()),
+  Future<void> _startPeriodOn(DateTime day) => _runHistoryEdit(
+    () => showPeriodEditor(context, initialStart: day),
+    _logging,
   );
 
-  Future<void> _edit(Period period) =>
-      _runCorrection(() => showPeriodEditor(context, existing: period));
+  Future<void> _addPeriod() => _runHistoryEdit(
+    () => showPeriodEditor(context, initialStart: DateTime.now()),
+    _logging,
+  );
+
+  Future<void> _edit(Period period) => _runHistoryEdit(
+    () => showPeriodEditor(context, existing: period),
+    _correcting,
+  );
 
   /// Run a period add / edit, then — if it actually changed something — show
   /// the "what changed" note. The before-prediction is captured *before* the
   /// edit; the after-prediction is recomputed from the freshly written data so
   /// the [PredictionDelta] is real and does not race the provider stream.
-  Future<void> _runCorrection(
+  Future<void> _runHistoryEdit(
     Future<PeriodEditorOutcome?> Function() edit,
+    PredictionChangeContext change,
   ) async {
     final before = ref.read(predictionProvider);
     final outcome = await edit();
     if (!mounted) return;
     _reportOutcome(outcome);
     if (outcome == null) return;
-    await _showCorrectionNotice(before);
+    await _showCorrectionNotice(before, change);
   }
 
-  Future<void> _showCorrectionNotice(CyclePrediction? before) async {
+  Future<void> _showCorrectionNotice(
+    CyclePrediction? before,
+    PredictionChangeContext change,
+  ) async {
     final periods = await ref.read(periodRepositoryProvider).allPeriods();
     final events = await ref
         .read(cycleEventRepositoryProvider)
@@ -152,7 +167,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
           PredictionDelta.between(
             before: before,
             after: after,
-            context: const PredictionChangeContext(followedCorrection: true),
+            context: change,
           ),
         );
   }
@@ -197,7 +212,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
       ),
     );
     if (!mounted) return;
-    await _showCorrectionNotice(before);
+    await _showCorrectionNotice(before, _correcting);
   }
 
   void _reportOutcome(PeriodEditorOutcome? outcome) {
