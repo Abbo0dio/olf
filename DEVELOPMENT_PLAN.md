@@ -2078,7 +2078,7 @@ physical-device smoke table.
 
 ### Phase 3 — Correctable adaptive prediction engine v2
 
-**Status:** `IN PROGRESS` (p3.1 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
+**Status:** `IN PROGRESS` (p3.1 DONE · p3.2 BLOCKED — hard stop, awaiting decision) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
 
 **What this phase is.** The v1 predictor (`RobustPredictor`, p1.4) is a correct, humble
 stats projection: median recent cycle length off a fixed anchor, widened to the observed
@@ -2129,8 +2129,8 @@ exception says so and is negotiated before code):
 7. **No PHI in logs**, crash traces, or any diagnostic output.
 
 #### p3.1 — Backtesting harness
-- **Status:** IN REVIEW
-- **PR:** [#35](https://github.com/Abbo0dio/olf/pull/35)
+- **Status:** DONE
+- **PR:** [#35](https://github.com/Abbo0dio/olf/pull/35) — merged (squash `c63915e`)
 - **Branch / worktree:** `feat/p3.1-backtesting-harness` / `../olf-wt/p3.1`
 - **Owner:** worker: phase3
 - **Depends on:** p1.4 (`Predictor` seam, `RobustPredictor`), p1.3 (`Cycle` / `deriveCycles`)
@@ -2214,9 +2214,20 @@ exception says so and is negotiated before code):
     `threat_model_doc_test` green with the new Phase 3 Review-log entry.
   - 2026-08-31 — PR [#35](https://github.com/Abbo0dio/olf/pull/35) opened into
     `main`; **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+  - 2026-08-31 — **DONE.** Merged into `main` (squash `c63915e`, PR #35).
+  - 2026-08-31 — v1 baseline table **to be regenerated in p3.2** — the
+    irregular/pcos fixtures are gaining lag-1 autocorrelation to match real
+    cycle behaviour (agreed with orchestrator). Regeneration is deferred: p3.2
+    hit a hard stop after the fixture change (the engine still can't beat v1 MAE
+    on pcos/perimenopause), so `core/test/backtest/v1_baseline_test.dart` is not
+    updated until the orchestrator confirms the fixtures stay. See the p3.2 row
+    hard-stop Log entry for the measured before/after.
 
 #### p3.2 — Adaptive prediction engine
-- **Status:** TODO
+- **Status:** BLOCKED — hard stop after the agreed fixture change (see Log 2026-08-31 hard
+  stop). No PR opened. Awaiting orchestrator decision.
+- **Branch / worktree:** `feat/p3.2-adaptive-engine` / `../olf-wt/p3.2`
+- **Owner:** worker: phase3
 - **Depends on:** p3.1
 - **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR
 - **Goal:** A per-user adaptive `Predictor` implementation that beats v1 on the irregular /
@@ -2227,17 +2238,112 @@ exception says so and is negotiated before code):
   margin; conjugate Bayesian update on cycle length so few-cycle histories degrade
   gracefully toward a wide, honest range rather than a fabricated point; explicit
   non-stationarity handling (a detected level shift discounts pre-shift cycles); on the p3.1
-  harness it improves period-start MAE on the non-regular sets by a documented margin and
-  keeps coverage within ±5 pts of nominal; regular-set MAE not worse than v1.
+  harness it improves period-start MAE on the non-regular sets by a documented margin;
+  **observed coverage >= 0.80 for the nominal ~90% next-period range on every synthetic
+  set** (n≈23–35 scored points per set makes a ±5-pt calibration band unrealistic, so the
+  bar is a one-sided floor on the ~90% range); regular-set MAE not worse than v1.
 - **Tests required:** unit tests per estimator; harness comparison test (v2 vs the p3.1 v1
   baseline) asserting the improvement + calibration bounds; property test that adding one
   cycle never widens or shifts the estimate more than a bounded amount (pre-snowball).
-- **Notes / detail:** **plain-Dart statistics only** — if a package looks necessary, STOP
-  and negotiate before writing code (constraint 2). Interface unchanged (constraint 4). If
-  model state must persist → migration + migration test in this PR, negotiated first
-  (constraint 6). *(agent fills in the rest.)*
+- **Notes / detail:** **plain-Dart statistics only** — no package added (constraint 2).
+  Interface unchanged — `AdaptivePredictor implements Predictor`, same `predict({cycles,
+  today})` signature, same `CyclePrediction` shape (constraint 4). No persisted model state:
+  the engine is a pure function of `(cycles, today)`, derived-on-read, no schema change
+  (constraint 6). Deterministic — no `DateTime.now()`, `today` injected (constraint 5). Not
+  wired into the app; `RobustPredictor` stays the production default — the swap is p3.6.
+  - **Estimators (all plain-Dart `dart:math` arithmetic):**
+    1. **Adaptive-memory recency weighting** — geometric decay over cycles newest→oldest;
+       decay `0.96` when the series looks stationary, `0.82` when a level shift is detected,
+       so a regime change short-circuits old memory instead of averaging through it.
+    2. **Robust central estimate** — weighted quantile (weighted median) of recent cycle
+       lengths, nudged toward the shorter side by a bounded skew term (`wMean − wMedian`) so
+       a few very-long PCOS cycles do not drag the point estimate up.
+    3. **Monotone level-shift drift** — split the recent window into thirds, require a
+       strictly monotone lo→mid→hi median progression whose total shift clears a MAD-scaled
+       floor before applying a per-cycle drift term, clamped to ±2.5 d/cycle. Catches the
+       perimenopause ramp without firing on noise.
+    3b. **Lag-1 mean-reversion (AR(1))** — when no trend is detected, estimate the recent
+       lag-1 autocorrelation (`phiHat`, clamped `[0, 0.55]`) and shift the forecast a
+       fraction of the last cycle's deviation from the level, capped at ±6 d. This is the
+       term that is meant to exploit the new autocorrelated fixtures.
+    4. **Weak Bayesian shrinkage** — conjugate-style pull toward a `29 d` prior with prior
+       weight `0.5`, so 1–2-cycle histories degrade toward the prior and a wide range rather
+       than a confident wrong point; the shrinkage also inflates the interval by
+       `sqrt(1 + 2/(priorWeight + nEff))`.
+    5. **Empirical calibrated interval** — half-width is a weighted quantile of absolute
+       deviations from the centre at level `q` targeting the nominal ~90% range, times the
+       thin-history inflation, times a tail-heaviness bump (ratio of the 0.92 to the 0.6
+       deviation quantile) so fat-tailed sets (PCOS) get an honestly wider band. Floored at
+       `minPredictionMarginDays`.
+  - Ovulation / fertile-window derivation and the `status` / `daysPastExpected` logic are
+    identical to v1 (`expected − lutealPhaseDays`, fertile `[ov−5, ov+1]`), so only the
+    next-period centre + range change.
+  - **Files:** `core/lib/src/prediction/adaptive_predictor.dart` (engine + private weighted
+    -stats helpers), exported from `olf_core.dart`. Tests:
+    `core/test/prediction/adaptive_predictor_test.dart` (per-estimator units + edge cases),
+    `core/test/backtest/v2_vs_v1_test.dart` (reproduces the comparison table + coverage
+    floor), `core/test/backtest/adaptive_predictor_property_test.dart` (bounded-response
+    property).
+  - **Edge cases:** empty history → `null`; `cycles.first.isPregnancyGap` → `null` (same as
+    v1); all-gap / all-current history → `null`; single usable cycle → prior-dominated wide
+    range, `low` confidence; pregnancy gap partway through → only the post-gap run is used
+    (`takeWhile(!isPregnancyGap)`); likely-gap cycles (`> 45 d`) excluded from the stats but
+    not treated as regime changes.
+  - **Fixture change (agreed with orchestrator).** p3.1's `irregular` / `pcos` generators
+    drew each cycle length i.i.d. (memoryless), which makes a plain robust median already
+    MAE-optimal — no adaptive engine (ML included) can beat it on point error there. Real
+    cycle lengths are lag-1 autocorrelated (a long cycle makes the next one more likely to
+    be long). The generators now use an AR(1) form `next = mean + phi·(prev − mean) +
+    gaussian`, with **phi fixed BEFORE measuring the engine** — `phi = 0.3` (irregular),
+    `phi = 0.4` (pcos) — as a physiologically-motivated modelling choice, **not tuned to the
+    engine**. Noise SD scaled by `sqrt(1 − phi²)` so the marginal variance matches the old
+    generators; the PCOS occasional-very-long-cycle spike is kept; irregular/pcos cycle
+    count raised 24 → 36 for more scored points; seed stays 42; regular / perimenopause /
+    postpartum generators unchanged. The v1 baseline table in
+    `core/test/backtest/v1_baseline_test.dart` needs regenerating against the new generators
+    (before/after in the hard-stop Log entry) — **not yet done**, pending the decision on
+    whether these fixtures stay.
 - **Log:**
   - 2026-08-31 — created.
+  - 2026-08-31 — claimed by worker: phase3; worktree `../olf-wt/p3.2`, branch
+    `feat/p3.2-adaptive-engine` off `main` @ `c63915e`. Folded p3.1 → DONE
+    (squash `c63915e`, PR #35).
+  - 2026-08-31 — built `AdaptivePredictor` (`core/lib/src/prediction/
+    adaptive_predictor.dart`), exported from `olf_core.dart`. Plain-Dart only,
+    seam unchanged, no persistence, deterministic.
+  - 2026-08-31 — **blocker found + escalated.** Against the i.i.d. p3.1 fixtures
+    the adaptive engine could not beat v1 period-start MAE on `irregular` /
+    `pcos` (a robust median is MAE-optimal for a memoryless series). Stopped;
+    negotiated. Orchestrator approved fixing the fixtures with lag-1
+    autocorrelation (phi fixed before measuring) + a one-sided ≥ 0.80 coverage
+    floor on the ~90% range. Plan edited first (this row + p3.1 baseline Log).
+  - 2026-08-31 — fixtures updated (`synthetic_history.dart`: irregular / pcos now
+    AR(1), phi 0.3 / 0.4 **fixed before measuring**, noise SD × `sqrt(1−phi²)`,
+    pcos spike kept, cycle count 24 → 36, seed 42; other three generators
+    untouched). Added the lag-1 mean-reversion term to `AdaptivePredictor` and
+    set the interval to a nominal ~90% range with a one-sided 0.80 floor.
+  - 2026-08-31 — **HARD STOP (per orchestrator instruction 5).** With phi fixed
+    at 0.3 / 0.4 the engine **still cannot beat v1 period-start MAE** on `pcos`
+    (it is *worse*) or `perimenopause` (parity, not a beat). Real, robust wins
+    only on `postpartum` (~−12%) and `irregular` (~−1 to −3.5%). The coverage
+    floor is also missed on `pcos` and `perimenopause` on ~all seeds. phi 0.3
+    autocorrelation gives only ~0.09·Var MSE headroom; after `phiHat` estimation
+    error and robust-estimator interaction that is within seed noise on
+    irregular/perimenopause and net-negative on pcos (the AR term chases the pcos
+    spikes, then they revert — snowball ratio 1.01 → 1.19). Did **not** raise phi
+    and did **not** tune further. Numbers (seed 42, and mean over seed ranges
+    1–50 / 100–149):
+    | set | v1 MAE @42 | v2 MAE @42 | v2 vs v1 mean (1–50 / 100–149) | v2 worse on | v2 cov<0.80 |
+    |---|--:|--:|--:|--:|--:|
+    | regular | 0.87 | 0.83 | +0.4% / −2.5% | ~21/50, 14/50 | 0–2/50 |
+    | irregular | 4.34 | 4.23 | −0.9% / −3.5% | 22/50, 12/50 | 0/50 |
+    | pcos | 6.94 | 6.83 | **+1.6% / +0.7%** | **31/50, 34/50** | **44–47/50** |
+    | perimenopause | 5.91 | 5.78 | −0.6% / −0.4% | ~25/50 | **46–47/50** |
+    | postpartum | 5.06 | 4.00 | −12.9% / −11.8% | 3–8/50 | 3–4/50 |
+    Reported to orchestrator; awaiting a decision (relax the pcos/perimenopause
+    MAE bar to "not worse", change the fixture differently, or drop the
+    MAE-beat framing for the intrinsically-unpredictable-spike sets). No PR,
+    no `v1_baseline_test.dart` regeneration, no new tests until then.
 
 #### p3.3 — Visible correction loop
 - **Status:** TODO

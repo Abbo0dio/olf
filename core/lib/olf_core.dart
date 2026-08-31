@@ -56,6 +56,7 @@ export 'src/period/drift_period_repository.dart';
 export 'src/period/period_repository.dart';
 export 'src/period/period_validation.dart';
 export 'src/personalization/pronouns.dart';
+export 'src/prediction/adaptive_predictor.dart';
 export 'src/prediction/date_range.dart';
 export 'src/prediction/predictor.dart';
 export 'src/prediction/robust_predictor.dart';
