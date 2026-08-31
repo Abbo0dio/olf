@@ -150,7 +150,7 @@ A task is not `DONE` until **all** of these hold:
 | **0** | Repo, workflow, CI, app-runs-and-does-one-real-thing | `DONE` | CI green; a build installs; one real slice merged |
 | **1** | MVP core tracking — free, un-paywalled | `DONE` | Core tracking usable end-to-end; correction loop works; backup/restore works |
 | **2** | Privacy & security hardening | `DONE` | Lock + decoy + auto-delete + masking shipped and tested; standalone policy live; threat model committed; audit gate enforced as a release blocker |
-| **3** | Correctable adaptive prediction engine v2 | `TODO` | Handles irregular cycles; backtesting harness + accuracy metrics; corrections visibly improve output |
+| **3** | Correctable adaptive prediction engine v2 | `IN PROGRESS` | Handles irregular cycles; backtesting harness + accuracy metrics; corrections visibly improve output |
 | **4** | Notifications & reminders | `TODO` | Per-category controls; humane copy; quiet hours; "stop asking" control |
 | **5** | Accessibility & design polish | `TODO` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
 | **6** | Health-platform interop & doctor export | `TODO` | Two-way Apple Health / Health Connect sync; doctor-ready PDF |
@@ -2078,19 +2078,245 @@ physical-device smoke table.
 
 ### Phase 3 — Correctable adaptive prediction engine v2
 
-**Status:** `TODO` · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR. Slices:
+**Status:** `IN PROGRESS` (p3.1 IN REVIEW) · **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR.
 
-- **p3.1** Backtesting harness — replay historical data, measure period-start and ovulation-day
-  error; synthetic irregular/PCOS/perimenopause/postpartum datasets + opt-in real data.
-- **p3.2** Adaptive model — per-user, handles irregular and non-stationary cycles; outputs
-  calibrated confidence ranges; degrades gracefully with little data.
-- **p3.3** Visible correction loop — when the user fixes a prediction, show that it was
-  incorporated and that confidence/behaviour changed ("your correction updated this").
-- **p3.4** Anti-snowball guarantees — one bad month cannot poison subsequent months; explicit
-  handling of skipped/late/anovulatory cycles.
-- **p3.5** Internal accuracy dashboard / metrics (local, private) to track model quality over
-  releases. Marketing claims must be substantiable (§6, ASA precedent).
-- **p3.6** Swap the `Predictor` implementation from p1.4; keep the interface stable.
+**What this phase is.** The v1 predictor (`RobustPredictor`, p1.4) is a correct, humble
+stats projection: median recent cycle length off a fixed anchor, widened to the observed
+range. It does not adapt to the individual, does not handle non-stationary cycles
+(perimenopause, postpartum, PCOS drift), and has no evidence base for how accurate it is.
+Phase 3 replaces it — behind the **unchanged `Predictor` seam** — with an *adaptive,
+backtested* engine, and proves the improvement with numbers. It is grounded in
+`requirements.md`:
+
+- **§2** — predictions the user can **correct** to improve accuracy; adaptive to irregular
+  cycles from day one.
+- **§4 "Accuracy with humility"** — always show *ranges*, let users correct wrong
+  predictions to train the model, and **never let a bad prediction snowball** into later
+  months. Only 6.4% of users say their app *always* gets the period start date right.
+- **§9(1)** — uncorrectable predictions / auto-logging is the single top anger source; Flo's
+  own help centre admits "cycle settings don't influence the predictions directly". A
+  correction that visibly does nothing is worse than no correction UI.
+- **§9(2)** — incumbents handle irregular / PCOS / perimenopause / postpartum cycles
+  poorly, which is "where users need the apps most".
+- **Matrix WOW-FACTOR** — "fully correctable / self-learning prediction engine that visibly
+  improves when users fix it".
+
+**Phase-wide hard constraints** (every p3.x row inherits these; a row that needs an
+exception says so and is negotiated before code):
+
+1. **`core` stays Flutter-free.** The engine, the backtesting harness, the metrics, and the
+   synthetic dataset generators are all pure Dart under `core/lib/src/`. No Flutter import,
+   no platform channel.
+2. **No ML-runtime / stats dependency without prior sign-off.** No TFLite, no bundled model
+   file, no third-party statistics package. The "adaptive model" is **explainable
+   plain-Dart arithmetic** — recency-weighted robust estimators (median / MAD / trimmed
+   mean), conjugate Bayesian updating on cycle length, and explicit changepoint /
+   non-stationarity handling. If p3.2 genuinely cannot be done without a package, that row
+   **STOPS and negotiates** (skill §5) and the plan row is edited before any code.
+3. **No backend, no network, no analytics/telemetry — ever.** p3.5's accuracy metrics are
+   computed and shown **on-device**; nothing leaves the device. The opt-in real-data
+   backtest path (p3.1) runs against the user's own DB behind an explicit action and its
+   results never leave the device. CI exercises **synthetic fixtures only**.
+4. **The `Predictor` seam stays stable.** p3.6 swaps the implementation with **no call-site
+   change**. Any interface change must be *additive* and negotiated first — a breaking
+   change to `predict({cycles, today})` is not in scope.
+5. **Determinism.** `predict({cycles, today})` takes `today` injected; **no `DateTime.now()`
+   in engine or harness code**, so the backtester is fully reproducible. Seeded RNG for all
+   synthetic data.
+6. **Derived-on-read stays the default.** There is no stored prediction today. If p3.2 /
+   p3.3 need to persist model state or correction events, that is a **schema change** →
+   migration + migration test **in the same PR**, and negotiated first.
+7. **No PHI in logs**, crash traces, or any diagnostic output.
+
+#### p3.1 — Backtesting harness
+- **Status:** IN REVIEW
+- **PR:** [#35](https://github.com/Abbo0dio/olf/pull/35)
+- **Branch / worktree:** `feat/p3.1-backtesting-harness` / `../olf-wt/p3.1`
+- **Owner:** worker: phase3
+- **Depends on:** p1.4 (`Predictor` seam, `RobustPredictor`), p1.3 (`Cycle` / `deriveCycles`)
+- **Requirement refs:** §2, §4, §9(2)
+- **Goal:** A reusable, deterministic backtesting harness in `core/` that replays a cycle
+  history chronologically, calls a `Predictor` at each historical decision point with only
+  the data known by then, and scores the forecast against what actually happened — so p3.2+
+  can be measured, not asserted. Establish the **v1 baseline** (`RobustPredictor` through
+  the harness) as a fixed regression reference.
+- **Acceptance criteria:**
+  - `core/lib/src/backtest/` is a real library (not test-only) — usable by the p3.1 tests
+    **and** by p3.5's on-device dashboard.
+  - Given a `List<Cycle>` history and a cutoff, the harness replays start-to-start: at each
+    completed cycle boundary it builds the sub-history known up to that point, calls
+    `Predictor.predict(cycles:, today:)` with `today` = the day after the previous period
+    started (the realistic "ask me now" moment), and records predicted next-period window +
+    midpoint vs the actual next period start.
+  - Metrics computed over a run: period-start **MAE** and **median AE** (days); **coverage**
+    = % of actual starts that landed inside the predicted range (calibration); **ovulation
+    MAE** where a truth signal is supplied (BBT thermal shift / peak-mucus day) — optional,
+    synthetic sets may omit it; a **snowball metric** — mean error on the N cycles *after*
+    an outlier cycle vs the run-wide baseline error (ratio > 1 means the outlier degraded
+    later predictions).
+  - Deterministic seeded synthetic generators for: **regular** (~28 d, low variance),
+    **irregular** (high variance), **PCOS-like** (long mean + high variance + occasional
+    very long), **perimenopause** (rising mean + rising variance + occasional skipped
+    cycle), **postpartum** (one long gap then a gradual return toward baseline). Same seed →
+    byte-identical history.
+  - Opt-in real-data path: the harness *can* run over the user's own on-device history, but
+    only behind an explicit caller action; results stay on device. Nothing in `core`
+    reaches for the DB on its own; CI never runs this path.
+  - The `RobustPredictor` v1 numbers on each synthetic dataset are recorded in the PR and
+    **asserted in a test** (with a tolerance) as the fixed reference the exit gate compares
+    against.
+- **Tests required:** generator determinism (same seed → identical `List<Cycle>`; different
+  seed → different); metric math unit tests on hand-checked tiny inputs (MAE, median AE,
+  coverage, snowball ratio); the v1 baseline assertion test; a harness smoke test that a
+  `Predictor` returning `null` (thin history) is scored as "no prediction", not a crash.
+- **Notes / detail:**
+  - **No new dependency. No schema change** (reads the existing `Cycle` model via
+    `deriveCycles`). **`core` stays Flutter-free** — `dart:math` only.
+  - **Library shape (`core/lib/src/backtest/`):** `synthetic_history.dart` (seeded
+    generators → `List<Period>` / `List<Cycle>`), `backtest_harness.dart` (the replay +
+    per-decision-point records), `backtest_metrics.dart` (MAE / median AE / coverage /
+    snowball from the records). Exported from `olf_core.dart`.
+  - **Replay contract:** the harness never lets a `Predictor` see a cycle it could not have
+    known — it slices `cycles` to those with `periodStart` ≤ the decision point. `today` is
+    injected (constraint 5), so a fixed history yields a fixed score.
+  - **Baseline is a floor, not a target:** the assertion uses a tolerance band so unrelated
+    refactors do not break it, but a real regression in `RobustPredictor` will. p3.2 must
+    beat these numbers on the irregular / PCOS / perimenopause sets to satisfy the exit
+    gate.
+  - v1 baseline numbers produced by this slice are recorded in the Log line below and in
+    the PR body.
+- **Log:**
+  - 2026-08-31 — created; Phase 3 slice-list expanded into rows p3.1–p3.6.
+  - 2026-08-31 — claimed by worker: phase3; worktree `../olf-wt/p3.1`, branch
+    `feat/p3.1-backtesting-harness` off `main` @ `b0e753e`. Built
+    `core/lib/src/backtest/` — `synthetic_history.dart` (5 seeded generators),
+    `backtest_harness.dart` (chronological replay → `BacktestPoint`s),
+    `backtest_metrics.dart` (MAE / median AE / coverage / range width /
+    ovulation MAE / snowball ratio). Exported from `olf_core.dart`. No new
+    dependency, no schema change, `core` stays Flutter-free (`dart:math` only).
+    Added the Phase 3 opening entry to the `docs/threat-model.md` Review log
+    (required by the p2.8 CI guard once Phase 3 opened; no boundary/flow
+    changes).
+  - 2026-08-31 — **v1 baseline** (`RobustPredictor` through the harness, seed
+    42), period-start error in days — asserted in
+    `core/test/backtest/v1_baseline_test.dart` as the fixed reference p3.2 must
+    beat on the non-regular profiles:
+    | profile | scored | no-pred | MAE | median AE | coverage | mean range | ovulation MAE | snowball |
+    |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+    | regular | 23 | 0 | 0.87 | 1.0 | 0.957 | 3.57 | 1.74 | – |
+    | irregular | 23 | 0 | 4.39 | 4.0 | 0.739 | 13.96 | 5.00 | – |
+    | pcos | 23 | 0 | 7.22 | 5.0 | 0.565 | 20.35 | 7.48 | 1.108 |
+    | perimenopause | 23 | 0 | 5.91 | 5.0 | 0.609 | 14.04 | 6.04 | 1.071 |
+    | postpartum | 16 | 1 | 5.06 | 4.0 | 0.688 | 13.50 | 5.56 | – |
+  - 2026-08-31 — built. core 350 / app 116 green; analyze `--fatal-infos
+    --fatal-warnings` clean (core + app + audit script); `dart format` clean;
+    drift codegen unchanged; dependency audit PASS; no `pubspec.lock` drift;
+    `threat_model_doc_test` green with the new Phase 3 Review-log entry.
+  - 2026-08-31 — PR [#35](https://github.com/Abbo0dio/olf/pull/35) opened into
+    `main`; **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+
+#### p3.2 — Adaptive prediction engine
+- **Status:** TODO
+- **Depends on:** p3.1
+- **Requirement refs:** §2, §4, §9(1)(2), Matrix WOW-FACTOR
+- **Goal:** A per-user adaptive `Predictor` implementation that beats v1 on the irregular /
+  PCOS / perimenopause / postpartum backtest sets while never regressing on the regular set,
+  and outputs **calibrated** confidence ranges (stated coverage ≈ observed coverage).
+- **Acceptance criteria:** recency-weighted robust central estimate (more weight to recent
+  cycles); interval width driven by recent dispersion (MAD / trimmed spread), not a fixed
+  margin; conjugate Bayesian update on cycle length so few-cycle histories degrade
+  gracefully toward a wide, honest range rather than a fabricated point; explicit
+  non-stationarity handling (a detected level shift discounts pre-shift cycles); on the p3.1
+  harness it improves period-start MAE on the non-regular sets by a documented margin and
+  keeps coverage within ±5 pts of nominal; regular-set MAE not worse than v1.
+- **Tests required:** unit tests per estimator; harness comparison test (v2 vs the p3.1 v1
+  baseline) asserting the improvement + calibration bounds; property test that adding one
+  cycle never widens or shifts the estimate more than a bounded amount (pre-snowball).
+- **Notes / detail:** **plain-Dart statistics only** — if a package looks necessary, STOP
+  and negotiate before writing code (constraint 2). Interface unchanged (constraint 4). If
+  model state must persist → migration + migration test in this PR, negotiated first
+  (constraint 6). *(agent fills in the rest.)*
+- **Log:**
+  - 2026-08-31 — created.
+
+#### p3.3 — Visible correction loop
+- **Status:** TODO
+- **Depends on:** p3.2
+- **Requirement refs:** §2, §4, §9(1)
+- **Goal:** When the user corrects a prediction (fixes a wrong period start, adjusts a
+  logged date), the app **shows** that the correction was taken into account and what
+  changed — directly answering the §9(1) complaint that corrections silently do nothing.
+- **Acceptance criteria:** after a correction the prediction card surfaces a plain-language
+  "your correction updated this — expected date moved from X to Y / range narrowed" note;
+  the change is real (the engine re-runs on the corrected history); no correction is ever
+  silently discarded; the note is gender-neutral and non-alarming.
+- **Tests required:** widget test — correct a date, assert the card shows the before→after
+  and that the new prediction matches the engine on the corrected history; unit test that a
+  correction always changes *or explicitly confirms* the output.
+- **Notes / detail:** corrections are already just edits to logged periods (derived-on-read
+  picks them up). This slice is mostly the *explanation* layer; a persisted "correction
+  event" log is only needed if p3.3 wants history of corrections → schema change + migration
+  test + negotiate first (constraint 6). *(agent fills in the rest.)*
+- **Log:**
+  - 2026-08-31 — created.
+
+#### p3.4 — Anti-snowball guarantees
+- **Status:** TODO
+- **Depends on:** p3.2
+- **Requirement refs:** §4, §9(2)
+- **Goal:** Guarantee — with tests — that one anomalous cycle (a skipped period, a very late
+  period, an anovulatory month, a mis-logged date later corrected) cannot poison subsequent
+  predictions.
+- **Acceptance criteria:** the p3.1 snowball metric (post-outlier error ÷ baseline error)
+  stays ≤ a documented bound on every synthetic set; an injected single outlier decays out
+  of the estimate within a bounded number of cycles; skipped / likely-gap / pregnancy-gap
+  cycles are explicitly excluded from the adaptive update, not just down-weighted; a
+  late-but-not-yet-started period never rolls the expected date forward on its own (v1
+  behaviour preserved).
+- **Tests required:** harness snowball-metric assertions per dataset; targeted "inject one
+  outlier, measure recovery" tests; regression test for the late-period no-rollforward
+  rule.
+- **Notes / detail:** builds on the p3.2 non-stationarity logic; no new deps, interface
+  unchanged. *(agent fills in the rest.)*
+- **Log:**
+  - 2026-08-31 — created.
+
+#### p3.5 — Internal accuracy metrics (local, private)
+- **Status:** TODO
+- **Depends on:** p3.1, p3.2
+- **Requirement refs:** §3, §4, §6 (substantiable claims — ASA precedent)
+- **Goal:** An on-device, private view of prediction quality over the user's own history —
+  so model changes can be judged release to release and any public accuracy claim is backed
+  by a reproducible number, not marketing.
+- **Acceptance criteria:** reuses the p3.1 harness against the user's own DB behind an
+  explicit action; shows period-start MAE / median AE / coverage and a trend; **nothing
+  leaves the device**, no analytics call, no network; the screen states the sample size and
+  that it is the user's own data only; copy is non-alarming.
+- **Tests required:** widget test (renders the metrics from a seeded in-memory DB; empty /
+  thin-history state); a test asserting no network client is constructed on this path.
+- **Notes / detail:** presentation layer in `app/`; all computation stays in the `core`
+  harness. No new deps. *(agent fills in the rest.)*
+- **Log:**
+  - 2026-08-31 — created.
+
+#### p3.6 — Swap `Predictor` to the adaptive engine
+- **Status:** TODO
+- **Depends on:** p3.2, p3.4, p3.5
+- **Requirement refs:** §2, §4, Matrix WOW-FACTOR
+- **Goal:** Make the adaptive engine the default `Predictor` with **no call-site change**,
+  and retire `RobustPredictor` to a clearly-labelled baseline used only by the harness.
+- **Acceptance criteria:** the app wires the new implementation through the existing
+  provider; every existing predictor/widget test still passes (or is updated only where the
+  *number* legitimately changed, with the reason noted); `RobustPredictor` stays in the
+  tree, referenced by the p3.1 baseline test, marked as the v1 reference; the Phase 3 exit
+  gate is demonstrated in the PR (v2 vs v1 harness table, correction-changes-output test,
+  snowball bounds).
+- **Tests required:** full core + app suites green; the exit-gate evidence table reproduced
+  from a test.
+- **Notes / detail:** pure swap behind the seam (constraint 4). *(agent fills in the
+  rest.)*
+- **Log:**
+  - 2026-08-31 — created.
 
 **Exit gate:** measurable improvement over v1 on the irregular-cycle datasets; corrections
 demonstrably change output; no snowballing in tests.
