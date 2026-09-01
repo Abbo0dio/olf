@@ -517,7 +517,7 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     automated emulator + simulator coverage is in place.
 
 #### p0.6 — Android release workflow (signed APK in GitHub Releases)
-- **Status:** IN REVIEW — do not self-merge, do not set DONE.
+- **Status:** DONE (2026-09-01) — PR [#43](https://github.com/Abbo0dio/olf/pull/43) squash-merged `460b71f`.
 - **PR:** [#43](https://github.com/Abbo0dio/olf/pull/43)
 - **Branch / worktree:** `ci/android-release-workflow` / `../olf-wt/release-apk`
 - **Owner:** worker: phase0 (CI slice — sibling to p0.3 / p0.5, not part of a numbered phase's build)
@@ -588,6 +588,10 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     dependency-audit PASS (manifest untouched); no `pubspec.lock` drift. **The first real
     release needs the maintainer to have set the four `ANDROID_*` repo secrets** — until then
     a `v*` tag fails loudly at the guard step by design.
+  - 2026-09-01 — reviewed + squash-merged as `460b71f` (PR #43). All 8 CI checks green
+    (analyze / format / test / dependency-audit / apk build / ios build / CI OK). Branch
+    `ci/android-release-workflow` deleted. Row set DONE directly (no next slice queued —
+    Phase 4 not yet started). Maintainer keystore/secrets setup still outstanding.
 
 **Phase 0 exit gate:** CI enforces the worktree→PR→merge workflow (required `CI OK` check);
 every PR builds a debug APK (Ubuntu) and an unsigned iOS build (macOS); p0.4 merged and the app
