@@ -2966,7 +2966,7 @@ the v1-vs-v2-on-own-data comparison above).
 
 ### Phase 4 — Notifications & reminders
 
-**Status:** IN PROGRESS (p4.4) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
+**Status:** IN PROGRESS (p4.5) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
 
 **Phase-wide constraints:** no new runtime dependency (the p1.7 notification stack — `flutter_local_notifications` + `flutter_timezone` + `timezone` — covers all of Phase 4); no schema change (new `ReminderKind` values are additive text in `reminders.kind`; app-wide prefs use the `app_settings` KV store); notifications stay **inexact** — no exact-alarm permission, manifest untouched; no new CI workflow.
 
@@ -3105,8 +3105,9 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — review PASS. Merged as `d18dff2` (squash). DONE.
 
 #### p4.4 — Quiet hours / do-not-disturb window
-- **Status:** IN REVIEW — PR [#48](https://github.com/Abbo0dio/olf/pull/48). Do not self-merge, do not set DONE.
-- **Branch / worktree:** `feat/p4.4-quiet-hours` / `../olf-wt/p4.4` off `main` @ `d18dff2`.
+- **Status:** DONE (2026-09-02)
+- **PR:** [#48](https://github.com/Abbo0dio/olf/pull/48) · squash `4f612b3`
+- **Branch / worktree:** `feat/p4.4-quiet-hours` / `../olf-wt/p4.4` (removed)
 - **Owner:** worker: phase4 · **Depends on:** p4.1
 - **Requirement refs:** §7, §8
 - **Goal:** A single app-wide quiet window (default off) during which no olf notification is delivered; anything that would fire inside the window is shifted to the window's end (not dropped).
@@ -3129,9 +3130,11 @@ the v1-vs-v2-on-own-data comparison above).
 - **Log:**
   - 2026-09-02 — claimed by worker: phase4; worktree `../olf-wt/p4.4`, branch `feat/p4.4-quiet-hours` off `main` @ `d18dff2`. Folded p4.3 → DONE (PR #47, squash `d18dff2`); bumped the Phase 4 header note to `IN PROGRESS (p4.4)`. Set IN PROGRESS.
   - 2026-09-02 — built to DoD §1.4. `core/quiet_hours.dart` (`QuietHours` value + `kDefaultQuietHours` disabled + pure `applyQuietHours`, wall-clock, midnight-wrap, half-open); `SettingKeys.quietHours` KV key (no schema change); app `quiet_hours_providers.dart` (encode/decode with malformed→default, DB-gated stream, controller); `applyQuietHours` threaded through `ReminderController._apply` (event-relative + daily hour:minute shift) and `ReminderSync.replan`, after p4.2's learned hour; Settings → Notifications quiet-hours switch + Start/End pickers. core (459) + app (171) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#48](https://github.com/Abbo0dio/olf/pull/48) opened; set IN REVIEW.
+  - 2026-09-02 — review PASS. Merged as `4f612b3` (squash). DONE.
 
 #### p4.5 — Permanent "stop asking me to subscribe" control
-- **Status:** TODO
+- **Status:** IN REVIEW — PR [#49](https://github.com/Abbo0dio/olf/pull/49). Do not self-merge, do not set DONE.
+- **Branch / worktree:** `feat/p4.5-subscription-prompt-control` / `../olf-wt/p4.5` off `main` @ `4f612b3`.
 - **Owner:** worker: phase4 · **Depends on:** —
 - **Requirement refs:** §7 ("easy stop asking me to subscribe" control), §9(4)
 - **Goal:** Establish now, as an enforceable principle, a single persistent switch that permanently silences subscription/upsell prompting, so Phase 10's paid tier already has a suppression path to honour. No upsell UI exists yet.
@@ -3142,6 +3145,17 @@ the v1-vs-v2-on-own-data comparison above).
   - No schema change, no dependency.
 - **Tests required:** KV round-trip; `subscription_prompt_policy_test.dart` (default allows; set → suppressed; survives reload); Settings widget test (toggle both ways, no confirmation dialog).
 - **Notes:** principle-only now; add a Phase 10 backlog line pointing back here.
+- **Build detail (worker: phase4):**
+  - **`core/lib/src/settings/settings_repository.dart`** — added `SettingKeys.suppressSubscriptionPrompts = 'suppress_subscription_prompts'` (KV store; **no schema change**) + a pure top-level helper `bool subscriptionPromptsAllowed(String? rawSetting) => rawSetting != 'true'`. Only the exact string `'true'` suppresses; absent / `'false'` / any malformed value ⇒ allowed (fails toward the user's likely intent, matching "absent = allowed"). Already re-exported via `olf_core.dart` — no barrel change.
+  - **`app/lib/src/monetization/subscription_prompt_providers.dart`** (new) — `subscriptionPromptsAllowedProvider` (`StreamProvider<bool>`, default `true`; `true` until the DB gate opens, then `settingsRepository.watch(SettingKeys.suppressSubscriptionPrompts).map(subscriptionPromptsAllowed)`) + `setSubscriptionPromptsSuppressed(ref, suppressed:)` writing `'true'` / `'false'`. Mirrors the p2.5 `privacy_providers.dart` opt-in pattern.
+  - **`app/lib/src/settings/settings_page.dart`** — a standalone **Subscriptions** section with one `SwitchListTile` **"Don't show subscription offers"**. `value` = suppressed; `onChanged` writes immediately with **no confirmation dialog, no FOMO copy, no re-prompt**. Turning it back off is one tap.
+  - **`docs/monetization-principles.md`** (new) — the contract: every subscription / upsell / paid-tier prompt added in Phase 10+ MUST check `subscriptionPromptsAllowedProvider` (or the `subscriptionPromptsAllowed` core helper) and render nothing when it is `false`. A hard gate, not a "show it less often". Free core features are never gated by this — it only ever hides *offers*.
+  - **§9 backlog** — added a Phase 10 line pointing back to this control as the gate Phase 10 must honour.
+  - **Tests:** `core/test/settings/subscription_prompts_test.dart` (`subscriptionPromptsAllowed`: absent → true, `'false'` → true, `'true'` → false, garbage → true). `app/test/monetization/subscription_prompt_policy_test.dart` (provider default allows; set suppressed → provider reports `false`; a fresh container re-reads `false` from the repo). `app/test/settings/settings_page_test.dart` +1 (toggle the switch both ways → the setting is written and **no** `AlertDialog` appears).
+  - No new dependency, no schema change, no CI change, no notification behaviour touched.
+- **Log:**
+  - 2026-09-02 — claimed by worker: phase4; worktree `../olf-wt/p4.5`, branch `feat/p4.5-subscription-prompt-control` off `main` @ `4f612b3`. Folded p4.4 → DONE (PR #48, squash `4f612b3`); bumped the Phase 4 header note to `IN PROGRESS (p4.5)`. Set IN PROGRESS.
+  - 2026-09-02 — built to DoD §1.4. `SettingKeys.suppressSubscriptionPrompts` + pure `subscriptionPromptsAllowed(String?)` helper (only `'true'` suppresses; absent/malformed → allowed) in core; app `subscription_prompt_providers.dart` (`subscriptionPromptsAllowedProvider` default `true`, `setSubscriptionPromptsSuppressed`); Settings → Subscriptions → "Don't show subscription offers" switch (immediate, no dialog, no re-prompt); `docs/monetization-principles.md` hard-gate contract + §9 Phase 10 backlog line. No schema/dependency/CI change. core (463) + app (177) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#49](https://github.com/Abbo0dio/olf/pull/49) opened; set IN REVIEW.
 
 #### p4.6 — Fold the p1.7 medication reminder into the unified system
 - **Status:** TODO
@@ -3950,6 +3964,15 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   `olf_daily_reminder` channel** — p4.1 deletes it on `ensureInitialized()` for upgraded
   installs; if that cleanup is ever removed, it must be replaced with an equivalent so the
   orphaned system-Settings entry does not return. — noted by worker: phase4 during p4.1.
+- **Phase 10 gate — subscription-prompt suppression (from p4.5).** The
+  "Don't show subscription offers" switch (`SettingKeys.suppressSubscriptionPrompts`,
+  `subscriptionPromptsAllowedProvider`, core helper `subscriptionPromptsAllowed`)
+  exists now with no upsell surface behind it. When Phase 10 adds the paid tier,
+  **every** subscription / upsell / "upgrade" prompt it introduces MUST gate on
+  this and render nothing when suppression is on — a hard gate, contract in
+  [`docs/monetization-principles.md`](docs/monetization-principles.md). Add a
+  suppression check to the Phase 10 exit-gate audit. — noted by worker: phase4
+  during p4.5.
 - (add more here)
 
 ## 10. Orphaned / cut work

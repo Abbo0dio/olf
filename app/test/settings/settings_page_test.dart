@@ -173,6 +173,58 @@ void main() {
     },
   );
 
+  testWidgets(
+    "toggle \"Don't show subscription offers\" both ways → written, no dialog",
+    (tester) async {
+      final db = memoryDb();
+      final settings = DriftSettingsRepository(db);
+
+      await pumpOlf(
+        tester,
+        overrides: [dbOverride(db)],
+        body: () async {
+          await openSettings(tester);
+
+          final offerSwitch = find.widgetWithText(
+            SwitchListTile,
+            "Don't show subscription offers",
+          );
+          await tester.scrollUntilVisible(
+            offerSwitch,
+            240,
+            scrollable: find.descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            ),
+          );
+
+          // Default: prompts allowed, so the "hide" switch is off.
+          expect(tester.widget<SwitchListTile>(offerSwitch).value, isFalse);
+
+          // Turn it on — immediate, no confirmation.
+          await tester.tap(offerSwitch);
+          await flush(tester, 20);
+          expect(find.byType(AlertDialog), findsNothing);
+          expect(
+            await settings.get(SettingKeys.suppressSubscriptionPrompts),
+            'true',
+          );
+          expect(tester.widget<SwitchListTile>(offerSwitch).value, isTrue);
+
+          // Turn it back off — one tap, still no confirmation.
+          await tester.tap(offerSwitch);
+          await flush(tester, 20);
+          expect(find.byType(AlertDialog), findsNothing);
+          expect(
+            await settings.get(SettingKeys.suppressSubscriptionPrompts),
+            'false',
+          );
+          expect(tester.widget<SwitchListTile>(offerSwitch).value, isFalse);
+        },
+      );
+    },
+  );
+
   testWidgets('no biometric hardware → the switch is present but disabled', (
     tester,
   ) async {
