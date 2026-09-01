@@ -151,7 +151,7 @@ A task is not `DONE` until **all** of these hold:
 | **1** | MVP core tracking — free, un-paywalled | `DONE` | Core tracking usable end-to-end; correction loop works; backup/restore works |
 | **2** | Privacy & security hardening | `DONE` | Lock + decoy + auto-delete + masking shipped and tested; standalone policy live; threat model committed; audit gate enforced as a release blocker |
 | **3** | Correctable adaptive prediction engine v2 | `DONE` | v2 shipped behind the unchanged seam: MAE beat on PCOS/postpartum + large calibration gains on every fat-tailed profile (the honest headline is "stops the false precision", per §4); corrections move v2 ~1.7–2.2× v1; no snowballing in-sample or held-out |
-| **4** | Notifications & reminders | `TODO` | Per-category controls; humane copy; quiet hours; "stop asking" control |
+| **4** | Notifications & reminders | `DONE` | Per-category channels each independently toggleable; on-device behaviour-timed delivery with a safe fallback, nothing stored; all copy reviewed + locked behind a content test, no PHI; a quiet-hours window that shifts rather than drops; a permanent "stop asking to subscribe" control gated for Phase 10; the p1.7 medication reminder folded onto the one unified path |
 | **5** | Accessibility & design polish | `TODO` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
 | **6** | Health-platform interop & doctor export | `TODO` | Two-way Apple Health / Health Connect sync; doctor-ready PDF |
 | **7** | Life-stage & condition modes | `TODO` | Pregnancy, loss/birth, postpartum, PCOS, endo, PMDD, perimenopause modes shipped |
@@ -2966,7 +2966,7 @@ the v1-vs-v2-on-own-data comparison above).
 
 ### Phase 4 — Notifications & reminders
 
-**Status:** IN PROGRESS (p4.6) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
+**Status:** `DONE` (2026-09-02) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
 
 **Phase-wide constraints:** no new runtime dependency (the p1.7 notification stack — `flutter_local_notifications` + `flutter_timezone` + `timezone` — covers all of Phase 4); no schema change (new `ReminderKind` values are additive text in `reminders.kind`; app-wide prefs use the `app_settings` KV store); notifications stay **inexact** — no exact-alarm permission, manifest untouched; no new CI workflow.
 
@@ -3160,8 +3160,9 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — review PASS. Merged as `d0501f2` (squash). DONE.
 
 #### p4.6 — Fold the p1.7 medication reminder into the unified system
-- **Status:** IN REVIEW — PR [#50](https://github.com/Abbo0dio/olf/pull/50). Do not self-merge, do not set DONE.
-- **Branch / worktree:** `feat/p4.6-fold-med-reminder` / `../olf-wt/p4.6` off `main` @ `d0501f2`.
+- **Status:** DONE (2026-09-02)
+- **PR:** [#50](https://github.com/Abbo0dio/olf/pull/50) · squash `c560f6a`
+- **Branch / worktree:** `feat/p4.6-fold-med-reminder` / `../olf-wt/p4.6` (removed)
 - **Owner:** worker: phase4 · **Depends on:** p4.1, p4.3, p4.4
 - **Requirement refs:** §7, §1.4 (one code path, no dead parallel system)
 - **Goal:** Remove the standalone p1.7 medication-reminder UI + bespoke provider so the `medication` category is managed only through the Phase 4 Settings → Notifications section, on the same controller / scheduler / planning path as every other category. No data migration — same row, same `kind`.
@@ -3183,8 +3184,57 @@ the v1-vs-v2-on-own-data comparison above).
 - **Log:**
   - 2026-09-02 — claimed by worker: phase4; worktree `../olf-wt/p4.6`, branch `feat/p4.6-fold-med-reminder` off `main` @ `d0501f2`. Folded p4.5 → DONE (PR #49, squash `d0501f2`); bumped the Phase 4 header note to `IN PROGRESS (p4.6)`. Set IN PROGRESS.
   - 2026-09-02 — built to DoD §1.4. Removed `_ReminderSection` from `meds_page.dart` (page is Birth control + Medications; title `Medications`); **deleted** `medicationReminderProvider` (no alias, no ripple past the meds page); refreshed the `ReminderController` doc-comment; manifest audit comments updated for the renamed screen (audit PASS). No data migration, no schema change. Added a p1.7-upgrade regression (pre-stored enabled `medication` row schedules through the unified controller + surfaces on in Settings → Notifications); `meds_page` / `theme_render` finders updated; deleted the standalone-path meds test. core (463) + app (179) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#50](https://github.com/Abbo0dio/olf/pull/50) opened; set IN REVIEW.
+  - 2026-09-02 — review PASS. Merged as `c560f6a` (squash). DONE.
 
 **Exit gate:** every notification type separately controllable (p4.1); delivery behaviour-timed with a safe fallback (p4.2); all copy reviewed and locked behind a content test with no PHI (p4.3); a quiet-hours window that shifts rather than drops (p4.4); a permanent "stop asking to subscribe" control, documented as a Phase 10 gate (p4.5); the p1.7 medication reminder on the one unified path (p4.6).
+
+**Exit-gate status — MET (2026-09-02).** All six build slices p4.1–p4.6 merged to
+`main` (PRs [#45](https://github.com/Abbo0dio/olf/pull/45)–[#50](https://github.com/Abbo0dio/olf/pull/50))
+with CI green; each slice's acceptance criteria were verified in its PR. Each gate
+clause maps to the slice that satisfies it:
+
+- **Every notification type separately controllable** → **p4.1** (#45, `ef50695`) —
+  one Android channel per `ReminderKind` (`olf_reminder_<kind>`, `visibility: private`)
+  and an independent enable switch + time control per category in Settings →
+  Notifications; toggling one never touches another.
+- **Behaviour-timed delivery with a safe fallback** → **p4.2** (#46, `19c2258`) —
+  `learnPreferredHour` derives the user's usual logging hour on-device from
+  `createdAt` timestamps already in the encrypted DB (circular mean, `now`
+  injected), applied to the three cycle-event kinds; below `minSamples` or with no
+  history it returns `null` and delivery falls back to the stored / 09:00 time.
+  The hour is recomputed every read, **never stored or transmitted**.
+- **Copy reviewed, no PHI** → **p4.3** (#47, `d18dff2`) — every notification
+  title/body is a named `const` in `notification_copy.dart`; the title is the bare
+  app name `olf` for every kind (a per-kind title would itself leak health state on
+  a lock screen); `notification_copy_test.dart` locks a denylist (method/device
+  names, cycle-phase / symptom / diagnosis words, `pregnan…`, scold / urgency
+  patterns, `?` / `!`, gendered terms) and the p1.9 inclusive-language lint picks
+  the file up automatically.
+- **Quiet hours that shift rather than drop** → **p4.4** (#48, `4f612b3`) — pure
+  `applyQuietHours` moves any fire instant inside the window to the window's end
+  (half-open; midnight-wrap safe; seconds zeroed); default **off**; a daily
+  fixed-time kind inside the window fires at window-end every day with its stored
+  time untouched.
+- **"Stop asking to subscribe"** → **p4.5** (#49, `d0501f2`) — a single persistent
+  `SettingKeys.suppressSubscriptionPrompts` switch (immediate, no confirmation, no
+  re-prompt) plus `docs/monetization-principles.md`: a hard-gate contract that
+  every Phase 10+ upsell prompt must check `subscriptionPromptsAllowedProvider`
+  (or the `subscriptionPromptsAllowed` core helper) and render nothing when
+  suppressed.
+- **p1.7 medication reminder unified** → **p4.6** (#50, `c560f6a`) — the standalone
+  `_ReminderSection` UI and `medicationReminderProvider` are removed; `medication`
+  is now a plain fixed-time category on the same `ReminderController` / scheduler /
+  planning path as every other kind. Same DB row, same `kind`, no migration.
+
+**Phase 4 shipped with zero new runtime dependencies and zero schema changes** —
+the p1.7 notification stack (`flutter_local_notifications` + `flutter_timezone` +
+`timezone`) covered the whole phase, new `ReminderKind` values are additive text in
+the existing `reminders.kind` column, and every app-wide preference (learned hour,
+quiet-hours window, subscription-prompt suppression) is either recomputed in memory
+or an opaque string in the existing `app_settings` KV store. Notifications remain
+**inexact by design** (`AndroidScheduleMode.inexactAllowWhileIdle`, no exact-alarm
+permission, manifest untouched) — a nudge does not need to hit the minute; an
+exact-alarm path is backlog (§9), not a gate.
 
 ---
 
@@ -3986,6 +4036,18 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   [`docs/monetization-principles.md`](docs/monetization-principles.md). Add a
   suppression check to the Phase 10 exit-gate audit. — noted by worker: phase4
   during p4.5.
+- **p4.4 follow-ups:** (a) **No per-category quiet-hours exemption.** The quiet-hours
+  window is app-wide, so a fixed `medication` time that falls inside it is shifted to
+  the window end like every other kind — a user who deliberately set a 06:30 med
+  reminder inside a 22:00–07:00 quiet window gets it at 07:00. A per-category "ignore
+  quiet hours" opt-out (or exempting fixed-time kinds by default) is unbuilt; acceptable
+  for now because the window defaults off and the shift is forward, never a drop.
+  (b) **Daily-kind shift recomputes only at re-arm.** `applyQuietHours` for a daily kind
+  is applied when the reminder is (re)armed — on enable, time change, or a sync pass —
+  not continuously; if the quiet window is edited while a daily reminder is already
+  scheduled, the new window only takes effect the next time that reminder is armed.
+  Event-relative kinds are unaffected (the sync layer re-arms them on every forecast
+  move). — noted by worker: phase4 during the Phase 4 close.
 - (add more here)
 
 ## 10. Orphaned / cut work
