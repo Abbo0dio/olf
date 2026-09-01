@@ -158,6 +158,42 @@ void main() {
   });
 
   testWidgets(
+    'a medication reminder enabled before p4.6 surfaces here, on, at its '
+    'stored time (upgrade path)',
+    (tester) async {
+      // A row exactly as a p1.7 install would have left it.
+      await repo.save(
+        const ReminderSchedule(
+          kind: ReminderKind.medication,
+          hour: 7,
+          minute: 30,
+          enabled: true,
+        ),
+      );
+
+      await pumpPage(tester, forecast: prediction);
+
+      final medSwitch = find.widgetWithText(
+        SwitchListTile,
+        reminderCategoryTitle(ReminderKind.medication),
+      );
+      expect(tester.widget<SwitchListTile>(medSwitch).value, isTrue);
+      expect(find.widgetWithText(ListTile, 'Time'), findsOneWidget);
+      expect(
+        find.text(
+          const TimeOfDay(
+            hour: 7,
+            minute: 30,
+          ).format(tester.element(find.byType(NotificationsPage))),
+        ),
+        findsOneWidget,
+      );
+
+      await disposeTree(tester);
+    },
+  );
+
+  testWidgets(
     'an event-relative category with a learned hour shows the effective time '
     'read-only, no picker (p4.2)',
     (tester) async {

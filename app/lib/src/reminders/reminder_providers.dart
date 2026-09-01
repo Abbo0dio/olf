@@ -54,12 +54,6 @@ final reminderScheduleProvider = StreamProvider.family
       return ref.watch(reminderRepositoryProvider).watch(kind);
     });
 
-/// The stored daily medication reminder, live. p1.7's meds page still listens to
-/// this; it is folded away in p4.6.
-final medicationReminderProvider = StreamProvider<ReminderSchedule?>((ref) {
-  return ref.watch(reminderRepositoryProvider).watch(ReminderKind.medication);
-});
-
 /// Keeps a stored reminder and its OS notification in step, for any kind.
 final reminderControllerProvider = Provider<ReminderController>((ref) {
   return ReminderController(

@@ -8,9 +8,9 @@ import '../support/harness.dart';
 
 void main() {
   Future<void> openMeds(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Medications & reminders'));
+    await tester.tap(find.byTooltip('Medications'));
     await tester.pumpAndSettle();
-    expect(find.text('Medications & reminders'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Medications'), findsOneWidget);
   }
 
   testWidgets('add a medication → it shows in the list and is stored', (
@@ -72,32 +72,31 @@ void main() {
     );
   });
 
-  testWidgets('turning the reminder on schedules it and persists', (
-    tester,
-  ) async {
-    final db = memoryDb();
-    final fake = FakeReminderScheduler();
+  testWidgets(
+    'the daily-reminder controls have moved out — no reminder UI here (p4.6)',
+    (tester) async {
+      final db = memoryDb();
+      final fake = FakeReminderScheduler();
 
-    await pumpOlf(
-      tester,
-      overrides: [
-        dbOverride(db),
-        reminderSchedulerProvider.overrideWithValue(fake),
-      ],
-      body: () async {
-        await openMeds(tester);
+      await pumpOlf(
+        tester,
+        overrides: [
+          dbOverride(db),
+          reminderSchedulerProvider.overrideWithValue(fake),
+        ],
+        body: () async {
+          await openMeds(tester);
 
-        await tester.tap(find.byType(SwitchListTile));
-        await tester.pumpAndSettle();
-
-        expect(fake.scheduled, isNotEmpty);
-        expect(fake.scheduled.last.enabled, isTrue);
-
-        final stored = await DriftReminderRepository(
-          db,
-        ).get(ReminderKind.medication);
-        expect(stored!.enabled, isTrue);
-      },
-    );
-  });
+          // The p1.7 "Daily reminder" section is gone; it lives in
+          // Settings → Notifications now.
+          expect(find.text('Daily reminder'), findsNothing);
+          expect(find.text('Remind me once a day'), findsNothing);
+          expect(find.byType(SwitchListTile), findsNothing);
+          // The other sections still render.
+          expect(find.text('Birth control'), findsOneWidget);
+          expect(find.text('Add medication'), findsOneWidget);
+        },
+      );
+    },
+  );
 }

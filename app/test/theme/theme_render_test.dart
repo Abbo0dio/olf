@@ -60,10 +60,10 @@ void main() {
           await tester.tapAt(const Offset(20, 20)); // dismiss the sheet
           await tester.pumpAndSettle();
 
-          // Meds & reminders.
-          await tester.tap(find.byTooltip('Medications & reminders'));
+          // Medications.
+          await tester.tap(find.byTooltip('Medications'));
           await tester.pumpAndSettle();
-          expect(find.text('Medications & reminders'), findsOneWidget);
+          expect(find.widgetWithText(AppBar, 'Medications'), findsOneWidget);
           expectRenderedAt(tester, brightness);
         },
       );
