@@ -287,7 +287,8 @@ Requirement refs: §3 ("blur when backgrounded"), §7.
   reliable app-switcher mask; the Flutter `PrivacyShield` is the cross-platform
   secondary.
 - **Lock-screen hygiene.** The one reminder notification already uses fixed
-  generic copy (`reminderNotificationTitle` / `Body`, p1.7). p2.4 adds
+  generic copy (p1.7; strings consolidated into `notification_copy.dart` in p4.3).
+  p2.4 adds
   `visibility: NotificationVisibility.private` (redacts on a secure lock screen)
   and broadens the "no health details" content test to ~25 banned terms.
 
