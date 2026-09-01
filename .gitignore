@@ -27,4 +27,8 @@ pubspec.lock
 *.env
 *.keystore
 *.jks
+# Android release signing (p0.6): keystore + credentials are CI secrets, never committed.
+app/android/key.properties
+app/android/app/*.jks
+app/android/app/*.keystore
 ios/Flutter/flutter_export_environment.sh

@@ -36,6 +36,26 @@ be waived in CI.
 - [ ] Privacy policy [`privacy-and-lock.md`](privacy-and-lock.md) and the
       in-app policy screen still match what the build actually does.
 
+## Cutting the release (Android)
+
+Once the blockers and checks above are green:
+
+1. Bump `app/pubspec.yaml` `version:` and merge that to `main`.
+2. Tag the release commit on `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`
+   (`X.Y.Z` must match `app/pubspec.yaml` — the workflow emits a `::warning::` on
+   mismatch, it does not hard-fail).
+3. `.github/workflows/release.yml` (`on: push: tags: ['v*']`) runs
+   `flutter build apk --release` **signed** with the upload keystore and
+   publishes `app-release.apk` to a new GitHub Release with generated notes.
+
+**One-time setup** — the workflow needs four repository secrets or it fails
+loudly instead of shipping an unsigned APK: `ANDROID_KEYSTORE_BASE64` (base64 of
+the `.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`,
+`ANDROID_KEY_ALIAS`. Back the keystore file up offline — losing it means a new
+signing identity.
+
+iOS is not distributed this way yet (Apple signing / TestFlight is later work).
+
 ## Who signs off
 
 For now the maintainer holds every role. Where an item above asks for

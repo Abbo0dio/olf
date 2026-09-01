@@ -40,7 +40,16 @@ mise exec -- dart format core app
 ```
 
 CI (`.github/workflows/ci.yml`) runs format, analyze, test, dependency-audit and build on every
-PR into `main`.
+PR into `main`. Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`, which builds a
+signed Android APK and attaches it to a GitHub Release.
+
+## Install (Android)
+
+Grab `app-release.apk` from the [Releases page](https://github.com/Abbo0dio/olf/releases). It is
+a **signed release build** produced by CI from a tagged commit. To sideload: enable "install
+unknown apps" for your browser or file manager, open the APK, and confirm.
+
+iOS builds are not distributed this way yet — Apple code signing / TestFlight is future work.
 
 ## License
 
