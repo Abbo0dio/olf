@@ -3019,8 +3019,8 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-01 — review pass (2 doc-only follow-ups: §9 p4.1 bullet + delete the orphaned `olf_daily_reminder` channel on init). Merged as squash `ef50695` (PR #45). Set DONE.
 
 #### p4.2 — Behaviour-timed delivery
-- **Status:** IN PROGRESS — do not self-merge, do not set DONE.
-- **PR:** _(fill in)_
+- **Status:** IN REVIEW — do not self-merge, do not set DONE.
+- **PR:** [#46](https://github.com/Abbo0dio/olf/pull/46)
 - **Branch / worktree:** `feat/p4.2-behaviour-timed` / `../olf-wt/p4.2`
 - **Owner:** worker: phase4 · **Depends on:** p4.1
 - **Requirement refs:** §7 (behavior-timed reminders — send when the user typically logs)
@@ -3066,6 +3066,7 @@ the v1-vs-v2-on-own-data comparison above).
   - No `app_settings` key, no toggle, no schema change, no new dependency. If the drift `UNION ALL` turns out to need a raw `customSelect` that reads awkwardly, prefer five typed queries merged in Dart — clarity over one query.
 - **Log:**
   - 2026-09-01 — claimed by worker: phase4; worktree `../olf-wt/p4.2`, branch `feat/p4.2-behaviour-timed` off `main` @ `ef50695`. Folded p4.1 → DONE; bumped the Phase 4 header note to `IN PROGRESS (p4.2)`. Set IN PROGRESS.
+  - 2026-09-01 — built to DoD §1.4. `learnPreferredHour` (circular-mean, `now`-injected) + `LoggingActivityRepository` (five-table `createdAt` merge, no schema change) + `nextFireTime` `overrideHour` seam; app `preferredHourProvider` (recomputed, never stored) threaded through `ReminderController` and `ReminderSync`. threat-model watch item resolved. core (441) + app (146) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#46](https://github.com/Abbo0dio/olf/pull/46) opened; set IN REVIEW.
 
 #### p4.3 — Sensitive notification copy
 - **Status:** TODO
