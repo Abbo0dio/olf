@@ -2972,7 +2972,7 @@ the v1-vs-v2-on-own-data comparison above).
 
 #### p4.1 — Per-category notification channels, each independently toggleable
 - **Status:** IN REVIEW — do not self-merge, do not set DONE.
-- **PR:** _(fill in)_
+- **PR:** [#45](https://github.com/Abbo0dio/olf/pull/45)
 - **Branch / worktree:** `feat/p4.1-notification-categories` / `../olf-wt/p4.1`
 - **Owner:** worker: phase4
 - **Depends on:** p1.7 (reminder stack + seams), p3.6 (`predictorProvider` for event-relative categories)
