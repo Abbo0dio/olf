@@ -198,4 +198,89 @@ void main() {
     expect(isEventRelativeReminder(ReminderKind.fertileWindow), isTrue);
     expect(isEventRelativeReminder(ReminderKind.latePeriodCheckIn), isTrue);
   });
+
+  group('overrideHour (p4.2 learned logging hour)', () {
+    final prediction = predictionWith(
+      expected: DateTime(2026, 3, 20),
+      fertileStart: DateTime(2026, 3, 6),
+    );
+
+    test('replaces the scheduled time for an event-relative kind, minutes '
+        'zeroed', () {
+      final when = nextFireTime(
+        kind: ReminderKind.upcomingPeriod,
+        schedule: at(ReminderKind.upcomingPeriod, 9, 45),
+        prediction: prediction,
+        today: DateTime(2026, 3, 1),
+        overrideHour: 7,
+      );
+      expect(when, DateTime(2026, 3, 18, 7, 0));
+    });
+
+    test('applies to fertileWindow and latePeriodCheckIn too', () {
+      expect(
+        nextFireTime(
+          kind: ReminderKind.fertileWindow,
+          schedule: at(ReminderKind.fertileWindow, 9, 0),
+          prediction: prediction,
+          today: DateTime(2026, 3, 1),
+          overrideHour: 20,
+        ),
+        DateTime(2026, 3, 6, 20, 0),
+      );
+      expect(
+        nextFireTime(
+          kind: ReminderKind.latePeriodCheckIn,
+          schedule: at(ReminderKind.latePeriodCheckIn, 18, 0),
+          prediction: prediction,
+          today: DateTime(2026, 3, 22, 23, 0),
+          overrideHour: 8,
+        ),
+        DateTime(2026, 3, 22, 8, 0),
+      );
+    });
+
+    test('is ignored for the fixed daily kinds', () {
+      for (final kind in const [
+        ReminderKind.medication,
+        ReminderKind.bbtPrompt,
+      ]) {
+        final when = nextFireTime(
+          kind: kind,
+          schedule: at(kind, 9, 0),
+          prediction: null,
+          today: DateTime(2026, 3, 10, 6, 0),
+          overrideHour: 3,
+        );
+        expect(when, DateTime(2026, 3, 10, 9, 0), reason: '$kind ignores it');
+      }
+    });
+
+    test('null overrideHour is exactly the p4.1 behaviour', () {
+      DateTime? call({int? overrideHour}) => nextFireTime(
+        kind: ReminderKind.upcomingPeriod,
+        schedule: at(ReminderKind.upcomingPeriod, 8, 30),
+        prediction: prediction,
+        today: DateTime(2026, 3, 1),
+        overrideHour: overrideHour,
+      );
+      expect(call(), DateTime(2026, 3, 18, 8, 30));
+      expect(call(overrideHour: null), call());
+    });
+
+    test('the override can move the fire time into the past → null', () {
+      // Window start is 2026-03-06; today is the 6th at 08:00. A scheduled
+      // 09:00 would still be ahead, but a learned 06:00 is already behind.
+      expect(
+        nextFireTime(
+          kind: ReminderKind.fertileWindow,
+          schedule: at(ReminderKind.fertileWindow, 9, 0),
+          prediction: prediction,
+          today: DateTime(2026, 3, 6, 8, 0),
+          overrideHour: 6,
+        ),
+        isNull,
+      );
+    });
+  });
 }

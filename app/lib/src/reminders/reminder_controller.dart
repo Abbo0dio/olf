@@ -20,18 +20,27 @@ class ReminderController {
     this._repository,
     this._scheduler, {
     required CyclePrediction? Function() prediction,
+    Future<int?> Function() preferredHour = _noPreferredHour,
     DateTime Function() now = DateTime.now,
   }) : _prediction = prediction,
+       _preferredHour = preferredHour,
        _now = now;
+
+  static Future<int?> _noPreferredHour() async => null;
 
   final ReminderRepository _repository;
   final ReminderScheduler _scheduler;
   final CyclePrediction? Function() _prediction;
+
+  /// The on-device learned "hour the user usually logs" (p4.2), or `null` when
+  /// history is thin. Applied to the event-relative kinds only; recomputed on
+  /// each call, never stored.
+  final Future<int?> Function() _preferredHour;
   final DateTime Function() _now;
 
-  /// Used the first time a fixed-time reminder is turned on without a picked
-  /// time — a neutral mid-morning default. Forecast-anchored kinds also default
-  /// here until p4.2's learned hour.
+  /// Used the first time a reminder is turned on without a picked time — a
+  /// neutral mid-morning default. Event-relative kinds prefer p4.2's learned
+  /// hour when there is one, then fall back to this.
   static const int defaultHour = 9;
   static const int defaultMinute = 0;
 
@@ -86,6 +95,7 @@ class ReminderController {
       schedule: schedule,
       prediction: _prediction(),
       today: _now(),
+      overrideHour: await _preferredHour(),
     );
     if (when != null) {
       await _scheduler.scheduleAt(schedule.kind, when);
