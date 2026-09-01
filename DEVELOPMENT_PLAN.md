@@ -2966,14 +2966,14 @@ the v1-vs-v2-on-own-data comparison above).
 
 ### Phase 4 — Notifications & reminders
 
-**Status:** IN PROGRESS (p4.1) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
+**Status:** IN PROGRESS (p4.2) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
 
 **Phase-wide constraints:** no new runtime dependency (the p1.7 notification stack — `flutter_local_notifications` + `flutter_timezone` + `timezone` — covers all of Phase 4); no schema change (new `ReminderKind` values are additive text in `reminders.kind`; app-wide prefs use the `app_settings` KV store); notifications stay **inexact** — no exact-alarm permission, manifest untouched; no new CI workflow.
 
 #### p4.1 — Per-category notification channels, each independently toggleable
-- **Status:** IN REVIEW — do not self-merge, do not set DONE.
-- **PR:** [#45](https://github.com/Abbo0dio/olf/pull/45)
-- **Branch / worktree:** `feat/p4.1-notification-categories` / `../olf-wt/p4.1`
+- **Status:** DONE (2026-09-01)
+- **PR:** [#45](https://github.com/Abbo0dio/olf/pull/45) · squash `ef50695`
+- **Branch / worktree:** `feat/p4.1-notification-categories` / `../olf-wt/p4.1` (removed)
 - **Owner:** worker: phase4
 - **Depends on:** p1.7 (reminder stack + seams), p3.6 (`predictorProvider` for event-relative categories)
 - **Requirement refs:** §7 (granular category controls — the #1 notification complaint), §9(6)
@@ -3016,9 +3016,12 @@ the v1-vs-v2-on-own-data comparison above).
 - **Log:**
   - 2026-09-01 — claimed by worker: phase4; worktree `../olf-wt/p4.1`, branch `feat/p4.1-notification-categories` off `main` @ `b5c3e81`. Set IN PROGRESS. Wrote the expanded Phase 4 section.
   - 2026-09-01 — built to DoD §1.4. core + app suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR opened; set IN REVIEW.
+  - 2026-09-01 — review pass (2 doc-only follow-ups: §9 p4.1 bullet + delete the orphaned `olf_daily_reminder` channel on init). Merged as squash `ef50695` (PR #45). Set DONE.
 
 #### p4.2 — Behaviour-timed delivery
-- **Status:** TODO
+- **Status:** IN REVIEW — do not self-merge, do not set DONE.
+- **PR:** [#46](https://github.com/Abbo0dio/olf/pull/46)
+- **Branch / worktree:** `feat/p4.2-behaviour-timed` / `../olf-wt/p4.2`
 - **Owner:** worker: phase4 · **Depends on:** p4.1
 - **Requirement refs:** §7 (behavior-timed reminders — send when the user typically logs)
 - **Goal:** The three cycle-event categories (`upcomingPeriod`, `fertileWindow`, `latePeriodCheckIn`) fire at the hour the user actually tends to log, learned on-device, with a clean fallback to the chosen/09:00 time when history is thin. `medication` and `bbtPrompt` stay fixed-time (clock-anchored by nature).
@@ -3029,6 +3032,42 @@ the v1-vs-v2-on-own-data comparison above).
   - Add one line to `docs/threat-model.md`: the usual-logging-hour is derived and used only on-device, never stored or transmitted.
   - No toggle, no schema change, no dependency.
 - **Tests required:** `learnPreferredHour` units (empty / thin / clear-mode / bimodal / all-same-hour / midnight wrap); a `LoggingActivityRepository` drift test; a planning test that an established logging hour overrides the default for `upcomingPeriod` but not `medication`; threat-model guard test passes.
+- **Build detail (worker: phase4):**
+  - **`core/lib/src/reminders/preferred_hour.dart`** (new) — `int? learnPreferredHour({required List<DateTime> logTimestamps, required DateTime now, int recentWindow = kPreferredHourRecentWindow, int minSamples = kPreferredHourMinSamples})`.
+    - Filter `logTimestamps` to those within `recentWindow` days of `now` (`!ts.isBefore(now.subtract(Duration(days: recentWindow)))`); `now` injected, no `DateTime.now()`.
+    - `< minSamples` after filtering → `null`.
+    - Otherwise return the **circular mean hour** of the samples (each `ts.hour` as an angle `2π·h/24`, average the unit vectors, convert back, round to `0..23`, `24 → 0`). Circular so 23:00 + 01:00 average to midnight, not noon. Deterministic; ties broken toward the lower hour via a fixed epsilon nudge documented in code.
+    - Named consts `kPreferredHourRecentWindow = 30`, `kPreferredHourMinSamples = 8`. Exported from `olf_core.dart`. Pure Dart, no Flutter, no `DateTime.now()`.
+  - **`core/lib/src/reminders/logging_activity_repository.dart`** (new) — `abstract interface class LoggingActivityRepository { Future<List<DateTime>> recentLogTimestamps({required DateTime since, int limit = kPreferredHourQueryLimit}); }` (`kPreferredHourQueryLimit = 200`, generous headroom over `recentWindow`).
+  - **`core/lib/src/reminders/drift_logging_activity_repository.dart`** (new) — reads `createdAt` (all five tables already have it: `Periods`, `DailyFlows`, `DailySymptomEntries`, `BbtEntries`, `CervicalMucusEntries`) with `createdAt >= since`, `UNION ALL` via five typed `selectOnly` queries (or five `select().get()` merged in Dart — whichever keeps it simple and Flutter-free), sorted desc, capped at `limit`. **Read-only, existing columns, no schema change, no migration.**
+  - **`core`: `nextFireTime` seam** — add an optional `int? overrideHour` param to `nextFireTime` (defaults `null`). When non-null and `kind` is event-relative, the computed instant uses `overrideHour:00` instead of `schedule.hour:minute`. Keeps `nextFireTime` pure (no repo, no learning inside it); the caller decides the hour. Fixed kinds ignore `overrideHour`.
+  - **`app`: `loggingActivityRepositoryProvider`** — `Provider<LoggingActivityRepository>` over `appDatabaseProvider.requireValue` (same gated pattern as `reminderRepositoryProvider`).
+  - **`app`: `preferredHourProvider`** — `FutureProvider<int?>` (autoDispose): reads `loggingActivityRepositoryProvider.recentLogTimestamps(since: now − 30d)`, returns `learnPreferredHour(logTimestamps: …, now: DateTime.now())`. Recomputed on demand, **never written to `app_settings` or anywhere else**.
+  - **`app`: two call sites** pass the learned hour to `nextFireTime` for event-relative kinds only:
+    - `ReminderController._apply` — take `preferredHour` from a new `int? Function() preferredHour` ctor param (mirrors the existing `prediction` / `now` injection); default `() => null`. `reminderControllerProvider` wires `() => ref.read(preferredHourProvider).value`.
+    - `ReminderSync.replan` — read `ref.read(preferredHourProvider).value` (or accept it as a `replan([prediction, preferredHour])` arg for the fireImmediately path) and pass to `nextFireTime`.
+  - Fallback chain: learned hour → else the category's stored `schedule.hour:minute` → else `ReminderController.defaultHour` (09:00). `minSamples` not met or no history ⇒ learned hour is `null` ⇒ stored time, exactly as p4.1.
+  - **`app`: `notifications_page.dart` stays honest** (review follow-up) — for the three event-relative kinds, when the learned hour is present the row shows a **read-only** "Around _h:mm_" line + "Timed to when you usually log" (no picker, since the learned hour wins regardless); when it is `null` the manual picker stays, captioned "Until you've logged enough, we'll send these around this time." `medication` / `bbtPrompt` keep the plain picker.
+  - **`docs/threat-model.md`** — append one sentence to the existing **Phase 4 opening gate** Review-log entry (resolving its own watch item): the usual-logging-hour is computed in memory from `createdAt` timestamps already in the encrypted DB, used only to pick a notification time on-device, and is never stored or transmitted.
+- **Edge cases:**
+  - Empty list, all-same-hour (circular mean = that hour), two tight clusters (bimodal — circular mean lands between; acceptable, it is still "when they tend to log"), samples spanning midnight (23/0/1 → ~0, not ~12), exactly `minSamples`, `recentWindow` boundary (a timestamp exactly `recentWindow` days old is included).
+  - DST: `learnPreferredHour` works on wall-clock `.hour` only — no timezone maths, matches `nextFireTime` / `nextOccurrence`.
+  - `preferredHourProvider` in the DB-error / decoy branch: `loggingActivityRepositoryProvider` is gated on `appDatabaseProvider` `AsyncData` like every other repo; the FutureProvider just yields `null` → stored time.
+- **Test plan:**
+  - `core/test/reminders/preferred_hour_test.dart` — empty → null; 7 samples → null (below `minSamples`); 8+ tightly at 21:00 → 21; clear single mode with noise → that hour; bimodal 8:00/20:00 → 14 (documented midpoint); all identical → that hour; samples at 23:00/00:00/01:00 → 0 (midnight-wrap); a sample exactly 30 days old is counted, 31 days is not; `now` injected, asserted no `DateTime.now()` by the no-`DateTime.now()` core guard already in CI.
+  - `core/test/reminders/drift_logging_activity_repository_test.dart` — seed rows across all five tables with mixed `createdAt`; assert the merged list is every row `>= since`, newest first, capped at `limit`; a table with no rows contributes nothing; `since` in the future → empty.
+  - `core/test/reminders/reminder_planning_test.dart` (extend) — `nextFireTime(..., overrideHour: 7)` puts an `upcomingPeriod` fire at 07:00 not the schedule's time; `overrideHour` ignored for `medication` / `bbtPrompt`; `overrideHour: null` == p4.1 behaviour.
+  - `app/test/reminders/reminder_controller_test.dart` (extend) — with a fake preferred hour of 6, enabling `upcomingPeriod` arms a one-shot at 06:00; enabling `medication` still uses its stored/09:00; preferred hour `null` ⇒ stored time.
+  - `app/test/reminders/preferred_hour_provider_test.dart` — repo returns 10 timestamps clustered at 20:00 ⇒ provider yields 20; returns 3 ⇒ yields `null`; DB-error branch ⇒ `null`.
+  - `app/test/reminders/reminder_sync_test.dart` (extend) — an established logging hour re-plans `upcomingPeriod` at that hour; `medication` never touched.
+  - `docs` guard: `core/test/threat_model_doc_test.dart` still green (Phase 4 entry now has the extra sentence).
+  - Full `core` + `app` suites + `analyze --fatal-infos` + `format` + `dependency-audit` + `build_runner` (no `.g.dart` drift) green.
+- **Notes / risks:**
+  - `learnPreferredHour` is deliberately **independent of the p1.3 regularity heuristics** (different "recent window" meaning — logging cadence, not cycle spread). If a shared notion ever emerges, note it in §9; do not unify here.
+  - No `app_settings` key, no toggle, no schema change, no new dependency. If the drift `UNION ALL` turns out to need a raw `customSelect` that reads awkwardly, prefer five typed queries merged in Dart — clarity over one query.
+- **Log:**
+  - 2026-09-01 — claimed by worker: phase4; worktree `../olf-wt/p4.2`, branch `feat/p4.2-behaviour-timed` off `main` @ `ef50695`. Folded p4.1 → DONE; bumped the Phase 4 header note to `IN PROGRESS (p4.2)`. Set IN PROGRESS.
+  - 2026-09-01 — built to DoD §1.4. `learnPreferredHour` (circular-mean, `now`-injected) + `LoggingActivityRepository` (five-table `createdAt` merge, no schema change) + `nextFireTime` `overrideHour` seam; app `preferredHourProvider` (recomputed, never stored) threaded through `ReminderController` and `ReminderSync`. threat-model watch item resolved. core (441) + app (146) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#46](https://github.com/Abbo0dio/olf/pull/46) opened; set IN REVIEW.
 
 #### p4.3 — Sensitive notification copy
 - **Status:** TODO

@@ -23,13 +23,16 @@ void main() {
     daysPastExpected: null,
   );
 
-  ReminderController controllerWith({CyclePrediction? forecast}) =>
-      ReminderController(
-        repo,
-        scheduler,
-        prediction: () => forecast,
-        now: () => DateTime(2026, 3, 1, 8, 0),
-      );
+  ReminderController controllerWith({
+    CyclePrediction? forecast,
+    int? preferredHour,
+  }) => ReminderController(
+    repo,
+    scheduler,
+    prediction: () => forecast,
+    preferredHour: () async => preferredHour,
+    now: () => DateTime(2026, 3, 1, 8, 0),
+  );
 
   setUp(() {
     db = AppDatabase(NativeDatabase.memory());
@@ -126,6 +129,48 @@ void main() {
       expect(scheduler.cancelled, contains(ReminderKind.fertileWindow));
       expect((await repo.get(ReminderKind.fertileWindow))!.enabled, isFalse);
     });
+  });
+
+  group('learned logging hour (p4.2)', () {
+    test('an established logging hour overrides the default for an '
+        'event-relative kind', () async {
+      final controller = controllerWith(forecast: prediction, preferredHour: 6);
+
+      await controller.setEnabled(ReminderKind.upcomingPeriod, enabled: true);
+
+      // 2 days before the 20th, at the learned 06:00 — not the 09:00 default.
+      expect(scheduler.oneShots.single.when, DateTime(2026, 3, 18, 6, 0));
+    });
+
+    test('the learned hour does NOT move a fixed-time kind', () async {
+      final controller = controllerWith(forecast: prediction, preferredHour: 6);
+
+      await controller.setEnabled(ReminderKind.medication, enabled: true);
+
+      expect(scheduler.oneShots, isEmpty);
+      final daily = scheduler.scheduled.single;
+      expect(
+        (daily.hour, daily.minute),
+        (ReminderController.defaultHour, ReminderController.defaultMinute),
+      );
+    });
+
+    test(
+      'a null learned hour falls back to the stored / default time',
+      () async {
+        final controller = controllerWith(
+          forecast: prediction,
+          preferredHour: null,
+        );
+
+        await controller.setEnabled(ReminderKind.upcomingPeriod, enabled: true);
+
+        expect(
+          scheduler.oneShots.single.when,
+          DateTime(2026, 3, 18, ReminderController.defaultHour, 0),
+        );
+      },
+    );
   });
 
   test('enabling a kind never schedules or cancels another kind', () async {

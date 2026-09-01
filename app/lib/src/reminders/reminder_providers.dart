@@ -20,6 +20,33 @@ final reminderRepositoryProvider = Provider<ReminderRepository>((ref) {
   return DriftReminderRepository(db);
 });
 
+/// Read-only "when did the user last log anything" access (p4.2). Only valid
+/// inside the `data` branch of the database gate.
+final loggingActivityRepositoryProvider = Provider<LoggingActivityRepository>((
+  ref,
+) {
+  final db = ref.watch(appDatabaseProvider).requireValue;
+  return DriftLoggingActivityRepository(db);
+});
+
+/// The on-device learned "hour the user usually logs" (p4.2), or `null` when
+/// there is not enough recent history. **Recomputed every read, never
+/// persisted** — no `app_settings` key, no toggle. Callers pass it to
+/// `nextFireTime` for the event-relative reminder kinds only.
+final preferredHourProvider = FutureProvider.autoDispose<int?>((ref) async {
+  if (ref.watch(appDatabaseProvider) is! AsyncData) return null;
+  final now = DateTime.now();
+  final since = DateTime(
+    now.year,
+    now.month,
+    now.day - kPreferredHourRecentWindow,
+  );
+  final stamps = await ref
+      .watch(loggingActivityRepositoryProvider)
+      .recentLogTimestamps(since: since);
+  return learnPreferredHour(logTimestamps: stamps, now: now);
+});
+
 /// The stored schedule for one [ReminderKind], live (`null` until first set).
 final reminderScheduleProvider = StreamProvider.family
     .autoDispose<ReminderSchedule?, ReminderKind>((ref, kind) {
@@ -38,6 +65,7 @@ final reminderControllerProvider = Provider<ReminderController>((ref) {
     ref.watch(reminderRepositoryProvider),
     ref.watch(reminderSchedulerProvider),
     prediction: () => ref.read(predictionProvider),
+    preferredHour: () => ref.read(preferredHourProvider.future),
   );
 });
 
@@ -47,7 +75,8 @@ final reminderControllerProvider = Provider<ReminderController>((ref) {
 /// Watched by `HomePage` so it lives for the whole data session. Logging or
 /// editing a period changes [predictionProvider], which re-fires the listener
 /// and re-arms `upcomingPeriod` / `fertileWindow` / `latePeriodCheckIn` with no
-/// user action. Fixed-time kinds are never touched here.
+/// user action. Each re-plan also picks up the current [preferredHourProvider]
+/// value (p4.2). Fixed-time kinds are never touched here.
 class ReminderSync {
   ReminderSync(this._ref);
 
@@ -61,6 +90,7 @@ class ReminderSync {
 
   Future<void> replan([CyclePrediction? prediction]) async {
     final forecast = prediction ?? _ref.read(predictionProvider);
+    final preferredHour = await _ref.read(preferredHourProvider.future);
     final repo = _ref.read(reminderRepositoryProvider);
     final scheduler = _ref.read(reminderSchedulerProvider);
 
@@ -72,6 +102,7 @@ class ReminderSync {
         schedule: schedule,
         prediction: forecast,
         today: DateTime.now(),
+        overrideHour: preferredHour,
       );
       if (when != null) {
         await scheduler.scheduleAt(kind, when);

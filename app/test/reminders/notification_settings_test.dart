@@ -35,6 +35,7 @@ void main() {
   Future<void> pumpPage(
     WidgetTester tester, {
     CyclePrediction? forecast,
+    int? learnedHour,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -42,6 +43,7 @@ void main() {
           reminderRepositoryProvider.overrideWithValue(repo),
           reminderSchedulerProvider.overrideWithValue(scheduler),
           predictionProvider.overrideWithValue(forecast),
+          preferredHourProvider.overrideWith((ref) async => learnedHour),
         ],
         child: const MaterialApp(home: NotificationsPage()),
       ),
@@ -143,4 +145,55 @@ void main() {
 
     await disposeTree(tester);
   });
+
+  testWidgets(
+    'an event-relative category with a learned hour shows the effective time '
+    'read-only, no picker (p4.2)',
+    (tester) async {
+      await pumpPage(tester, forecast: prediction, learnedHour: 14);
+
+      await tester.tap(
+        find.widgetWithText(
+          SwitchListTile,
+          reminderCategoryTitle(ReminderKind.upcomingPeriod),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 20));
+
+      // The effective learned time is shown, and it is not the manual picker.
+      final effective = const TimeOfDay(
+        hour: 14,
+        minute: 0,
+      ).format(tester.element(find.byType(NotificationsPage)));
+      expect(find.text('Around $effective'), findsOneWidget);
+      expect(find.text('Timed to when you usually log'), findsOneWidget);
+      expect(find.widgetWithText(ListTile, 'Time'), findsNothing);
+
+      await disposeTree(tester);
+    },
+  );
+
+  testWidgets(
+    'an event-relative category with no learned hour keeps a picker + interim '
+    'caption (p4.2)',
+    (tester) async {
+      await pumpPage(tester, forecast: prediction); // learnedHour == null
+
+      await tester.tap(
+        find.widgetWithText(
+          SwitchListTile,
+          reminderCategoryTitle(ReminderKind.fertileWindow),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 20));
+
+      expect(find.widgetWithText(ListTile, 'Time'), findsOneWidget);
+      expect(find.textContaining("logged enough"), findsOneWidget);
+      expect(find.text('Timed to when you usually log'), findsNothing);
+
+      await disposeTree(tester);
+    },
+  );
 }

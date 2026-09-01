@@ -265,3 +265,9 @@ The CI guard requires an entry naming the current phase.
   the user's usual logging hour on-device to time reminders — it must stay a
   recomputed-in-memory value, never stored or transmitted; record it here when
   it lands. No design changes required by this review.
+  **p4.2 update (2026-09-01) — watch item resolved:** `learnPreferredHour`
+  computes the usual logging hour in memory from `createdAt` timestamps already
+  held in the encrypted `olf.db` (periods / flow / symptoms / BBT / mucus),
+  uses it only to choose a local notification time on-device, and **never
+  writes it anywhere or transmits it** — no `app_settings` key, no new column,
+  no network. Still no new asset, boundary, or data flow.

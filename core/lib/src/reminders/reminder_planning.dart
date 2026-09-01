@@ -27,6 +27,11 @@ bool isEventRelativeReminder(ReminderKind kind) =>
 /// stored [schedule] (time-of-day + on/off is not consulted here — callers only
 /// plan enabled reminders), the current [prediction], and [today].
 ///
+/// [overrideHour] (p4.2) is the on-device learned "hour the user usually logs".
+/// When non-null it replaces the scheduled time for the **event-relative** kinds
+/// only — they fire at `overrideHour:00`; the fixed daily kinds ignore it. Pass
+/// `null` for the p4.1 behaviour (`schedule.hour:minute`).
+///
 /// Pure wall-clock arithmetic — no `DateTime.now()`, no time zones, DST-agnostic
 /// (mirrors [nextOccurrence]). Returns `null` when there is nothing to schedule
 /// yet:
@@ -35,12 +40,12 @@ bool isEventRelativeReminder(ReminderKind kind) =>
 ///    occurrence of `schedule.hour:minute` at or after [today]
 ///    (via [nextOccurrence]); never `null`.
 ///  * [ReminderKind.upcomingPeriod] — [kUpcomingPeriodLeadDays] before
-///    `prediction.nextPeriodExpected`, at the scheduled time; `null` if there is
+///    `prediction.nextPeriodExpected`, at the effective time; `null` if there is
 ///    no prediction or that instant is already before [today].
 ///  * [ReminderKind.fertileWindow] — `prediction.fertileWindow.start` at the
-///    scheduled time; `null` if there is no prediction or it is already past.
+///    effective time; `null` if there is no prediction or it is already past.
 ///  * [ReminderKind.latePeriodCheckIn] — [kLateCheckInGraceDays] after
-///    `prediction.nextPeriodExpected`, at the scheduled time; `null` unless
+///    `prediction.nextPeriodExpected`, at the effective time; `null` unless
 ///    [today] is already at or after that instant (only nudge once genuinely
 ///    late) or there is no prediction.
 DateTime? nextFireTime({
@@ -48,6 +53,7 @@ DateTime? nextFireTime({
   required ReminderSchedule schedule,
   required CyclePrediction? prediction,
   required DateTime today,
+  int? overrideHour,
 }) {
   switch (kind) {
     case ReminderKind.medication:
@@ -56,31 +62,47 @@ DateTime? nextFireTime({
 
     case ReminderKind.upcomingPeriod:
       if (prediction == null) return null;
-      final at = _atScheduledTime(
+      final at = _atEffectiveTime(
         _addDays(prediction.nextPeriodExpected, -kUpcomingPeriodLeadDays),
         schedule,
+        overrideHour,
       );
       return at.isBefore(today) ? null : at;
 
     case ReminderKind.fertileWindow:
       if (prediction == null) return null;
-      final at = _atScheduledTime(prediction.fertileWindow.start, schedule);
+      final at = _atEffectiveTime(
+        prediction.fertileWindow.start,
+        schedule,
+        overrideHour,
+      );
       return at.isBefore(today) ? null : at;
 
     case ReminderKind.latePeriodCheckIn:
       if (prediction == null) return null;
-      final at = _atScheduledTime(
+      final at = _atEffectiveTime(
         _addDays(prediction.nextPeriodExpected, kLateCheckInGraceDays),
         schedule,
+        overrideHour,
       );
       return today.isBefore(at) ? null : at;
   }
 }
 
-/// [day] with the time-of-day replaced by [schedule]'s `hour:minute`
-/// (seconds/millis zeroed).
-DateTime _atScheduledTime(DateTime day, ReminderSchedule schedule) =>
-    DateTime(day.year, day.month, day.day, schedule.hour, schedule.minute);
+/// [day] at the effective time-of-day: [overrideHour]`:00` when a learned hour
+/// is supplied (it is hour-granular), otherwise [schedule]'s `hour:minute`.
+/// Seconds/millis zeroed.
+DateTime _atEffectiveTime(
+  DateTime day,
+  ReminderSchedule schedule,
+  int? overrideHour,
+) => DateTime(
+  day.year,
+  day.month,
+  day.day,
+  overrideHour ?? schedule.hour,
+  overrideHour == null ? schedule.minute : 0,
+);
 
 /// Calendar-day shift that stays on the same wall-clock date arithmetic as the
 /// rest of the module (no `Duration`, so a DST boundary can't drift the day).
