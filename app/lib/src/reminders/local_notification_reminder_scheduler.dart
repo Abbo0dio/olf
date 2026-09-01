@@ -5,7 +5,7 @@ import 'package:olf_core/olf_core.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-import 'reminder_copy.dart';
+import 'notification_copy.dart';
 import 'reminder_scheduler.dart';
 
 /// One Android channel per reminder kind. All `private` visibility (redacted on

@@ -1,17 +1,5 @@
 import 'package:olf_core/olf_core.dart';
 
-/// p1.7's fixed wording — the title every kind still uses, and the medication
-/// body (kept verbatim so that path is byte-identical). p4.1's per-kind bodies
-/// live in `reminder_copy.dart` (`notificationCopyFor`); all follow the same
-/// rule this comment states.
-///
-/// Deliberately generic: it names no medication, dosage, birth-control method
-/// or symptom, and never will — it has to be safe sitting on a lock screen.
-/// The "reminder text contains no health details" criterion is asserted in
-/// `reminder_controller_test.dart` and `notification_copy_test.dart`.
-const String reminderNotificationTitle = 'olf';
-const String reminderNotificationBody = 'Time for your daily check-in.';
-
 /// Schedules and cancels the per-category local reminders.
 ///
 /// This is the seam the "test around the notification scheduling wrapper"

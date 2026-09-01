@@ -1,8 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olf_app/src/reminders/reminder_controller.dart';
-import 'package:olf_app/src/reminders/reminder_copy.dart';
-import 'package:olf_app/src/reminders/reminder_scheduler.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../support/fake_reminder_scheduler.dart';
@@ -212,52 +210,4 @@ void main() {
       expect(scheduler.scheduled, isEmpty);
     },
   );
-
-  // p2.4 lock-in: reminder text sits on a lock screen, so no kind's wording may
-  // carry a health detail. Extends the p1.7 check to every category.
-  test('no notification body for any kind carries a health detail', () {
-    const banned = [
-      'medication',
-      'med ',
-      'pill',
-      'patch',
-      'ring',
-      'injection',
-      'dose',
-      'dosage',
-      'birth control',
-      'contracept',
-      'iud',
-      'implant',
-      'period',
-      'menstru',
-      'cycle',
-      'ovulat',
-      'fertil',
-      'flow',
-      'bleed',
-      'spotting',
-      'cramp',
-      'symptom',
-      'mood',
-      'pregnan',
-      'temperature',
-      'bbt',
-      'mucus',
-    ];
-    for (final kind in ReminderKind.values) {
-      final copy = notificationCopyFor(kind);
-      final text = '${copy.title} ${copy.body}'.toLowerCase();
-      expect(copy.body, isNotEmpty, reason: '$kind has an empty body');
-      for (final word in banned) {
-        expect(text, isNot(contains(word)), reason: '$kind leaks "$word"');
-      }
-    }
-    // p1.7's exact strings are unchanged.
-    expect(reminderNotificationBody, 'Time for your daily check-in.');
-    expect(
-      notificationCopyFor(ReminderKind.medication).body,
-      reminderNotificationBody,
-    );
-  });
 }

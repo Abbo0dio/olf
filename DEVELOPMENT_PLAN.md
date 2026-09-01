@@ -1752,7 +1752,7 @@ threat model committed.
     app-switcher mask on iOS (the Flutter `PrivacyShield` is the cross-platform secondary).
     No scene manifest in `Info.plist`, so the app-delegate lifecycle hooks fire.
   - **Lock-screen hygiene.** The reminder wording is already fixed generic copy
-    (`reminderNotificationTitle` / `Body`, p1.7). p2.4 adds
+    (p1.7; strings consolidated into `notification_copy.dart` in p4.3). p2.4 adds
     `visibility: NotificationVisibility.private` to the Android notification (redacts on a
     secure lock screen) and **broadens** the "no health details" content test to ~25 banned
     terms (period, cycle, ovulation, fertility, flow, BBT, mucus, pregnancy, mood, every
@@ -2966,7 +2966,7 @@ the v1-vs-v2-on-own-data comparison above).
 
 ### Phase 4 — Notifications & reminders
 
-**Status:** IN PROGRESS (p4.2) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
+**Status:** IN PROGRESS (p4.3) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
 
 **Phase-wide constraints:** no new runtime dependency (the p1.7 notification stack — `flutter_local_notifications` + `flutter_timezone` + `timezone` — covers all of Phase 4); no schema change (new `ReminderKind` values are additive text in `reminders.kind`; app-wide prefs use the `app_settings` KV store); notifications stay **inexact** — no exact-alarm permission, manifest untouched; no new CI workflow.
 
@@ -3019,9 +3019,9 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-01 — review pass (2 doc-only follow-ups: §9 p4.1 bullet + delete the orphaned `olf_daily_reminder` channel on init). Merged as squash `ef50695` (PR #45). Set DONE.
 
 #### p4.2 — Behaviour-timed delivery
-- **Status:** IN REVIEW — do not self-merge, do not set DONE.
-- **PR:** [#46](https://github.com/Abbo0dio/olf/pull/46)
-- **Branch / worktree:** `feat/p4.2-behaviour-timed` / `../olf-wt/p4.2`
+- **Status:** DONE (2026-09-01)
+- **PR:** [#46](https://github.com/Abbo0dio/olf/pull/46) · squash `19c2258`
+- **Branch / worktree:** `feat/p4.2-behaviour-timed` / `../olf-wt/p4.2` (removed)
 - **Owner:** worker: phase4 · **Depends on:** p4.1
 - **Requirement refs:** §7 (behavior-timed reminders — send when the user typically logs)
 - **Goal:** The three cycle-event categories (`upcomingPeriod`, `fertileWindow`, `latePeriodCheckIn`) fire at the hour the user actually tends to log, learned on-device, with a clean fallback to the chosen/09:00 time when history is thin. `medication` and `bbtPrompt` stay fixed-time (clock-anchored by nature).
@@ -3068,9 +3068,11 @@ the v1-vs-v2-on-own-data comparison above).
 - **Log:**
   - 2026-09-01 — claimed by worker: phase4; worktree `../olf-wt/p4.2`, branch `feat/p4.2-behaviour-timed` off `main` @ `ef50695`. Folded p4.1 → DONE; bumped the Phase 4 header note to `IN PROGRESS (p4.2)`. Set IN PROGRESS.
   - 2026-09-01 — built to DoD §1.4. `learnPreferredHour` (circular-mean, `now`-injected) + `LoggingActivityRepository` (five-table `createdAt` merge, no schema change) + `nextFireTime` `overrideHour` seam; app `preferredHourProvider` (recomputed, never stored) threaded through `ReminderController` and `ReminderSync`. threat-model watch item resolved. core (441) + app (146) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#46](https://github.com/Abbo0dio/olf/pull/46) opened; set IN REVIEW.
+  - 2026-09-01 — review PASS + one fix (`notifications_page.dart` showed a time the reminder would not use for the learned-hour kinds — split into read-only "Around _h:mm_" vs. captioned picker). Merged as `19c2258` (squash). DONE.
 
 #### p4.3 — Sensitive notification copy
-- **Status:** TODO
+- **Status:** IN REVIEW — PR [#47](https://github.com/Abbo0dio/olf/pull/47). Do not self-merge, do not set DONE.
+- **Branch / worktree:** `feat/p4.3-notification-copy` / `../olf-wt/p4.3` off `main` @ `19c2258`.
 - **Owner:** worker: phase4 · **Depends on:** p4.1
 - **Requirement refs:** §7 (no PHI in notification text; late-period check-in worded sensitively — avoid the "teacher collecting homework" pattern), §9(6), §9(7)
 - **Goal:** Every notification string is deliberately written, reviewed, and locked behind a content test: non-alarming, non-clinical, gender-neutral, nothing that reads as surveillance or a demand, nothing that exposes health state on a lock screen.
@@ -3082,6 +3084,23 @@ the v1-vs-v2-on-own-data comparison above).
   - PR description reviews each category's copy against §7's examples.
 - **Tests required:** the content test; inclusive-language lint; final strings snapshotted in the plan log.
 - **Notes:** strings only, no behaviour change. Any string needing pronouns uses the p1.9 `formsFor` seam, not a literal.
+- **Build detail (worker: phase4):**
+  - **`app/lib/src/reminders/notification_copy.dart`** (new) — the single home for every string that can reach an OS notification: `const String notificationTitle = 'olf'` (same for every kind — a per-kind title would itself expose health state on a lock screen) + five per-kind body `const`s + `({String title, String body}) notificationCopyFor(ReminderKind)`. Doc comment states the lock-screen rules the content test enforces.
+  - **`app/lib/src/reminders/reminder_copy.dart`** — reduced to the **Settings-facing** labels only (`reminderCategoryTitle` / `reminderCategorySubtitle` / `reminderCategoryOrder`), shown only inside the unlocked app. The notification strings and `notificationCopyFor` moved to `notification_copy.dart`; dropped the `reminder_scheduler.dart` import.
+  - **`app/lib/src/reminders/reminder_scheduler.dart`** — removed the p1.7 `reminderNotificationTitle` / `reminderNotificationBody` consts (now in `notification_copy.dart`); the interface is unchanged.
+  - **`app/lib/src/reminders/local_notification_reminder_scheduler.dart`** — import swapped `reminder_copy.dart` → `notification_copy.dart` (only user of `notificationCopyFor`); no behaviour change.
+  - **Final copy** (title is `olf` for all five):
+    - `medication` — `Time for your daily check-in.` (byte-identical to p1.7; the medication path is unchanged).
+    - `bbtPrompt` — `A gentle nudge for your morning note.`
+    - `upcomingPeriod` — `A quick heads-up for the days ahead.`
+    - `fertileWindow` — `A gentle check-in — open olf whenever you have a moment.`
+    - `latePeriodCheckIn` — `When you're ready, you can open olf to update your dates.` (invitational, not interrogative — no "has your period started?", no "log it now").
+  - **`app/test/reminders/notification_copy_test.dart`** (new) — every `ReminderKind` has a non-empty title + body; title is always the bare app name; medication body byte-identical to p1.7; denylists for medication/method/device names, cycle-phase / symptom / health-state words, diagnosis words + "pregnan…", imperative-scold / urgency patterns, `?` / `!`, gendered second-person terms; every body ≤ 90 chars; the late check-in body invites ("when you…") and never interrogates.
+  - **`app/test/reminders/reminder_controller_test.dart`** — dropped the p2.4 lock-in test (moved to `notification_copy_test.dart`) and its now-unused `reminder_copy.dart` import.
+  - No schema change, no dependency, no behaviour change; the p1.9 `inclusive_language_test` picks up `notification_copy.dart` automatically (it scans all of `lib`).
+- **Log:**
+  - 2026-09-01 — claimed by worker: phase4; worktree `../olf-wt/p4.3`, branch `feat/p4.3-notification-copy` off `main` @ `19c2258`. Folded p4.2 → DONE (PR #46, squash `19c2258`); bumped the Phase 4 header note to `IN PROGRESS (p4.3)`. Set IN PROGRESS.
+  - 2026-09-01 — built to DoD §1.4. All five notification titles/bodies consolidated into `notification_copy.dart` as named `const`s (title `olf` for every kind; `latePeriodCheckIn` invitational not interrogative; `medication` body byte-identical to p1.7); `reminder_copy.dart` reduced to Settings-facing labels; p1.7 `reminderNotification*` consts removed from `reminder_scheduler.dart`. `notification_copy_test.dart` locks the content rules; p2.4 health-word check moved there; p1.9 `inclusive_language_test` picks up the new file automatically. Strings only — no behaviour/schema/dependency change. core (441) + app (158) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#47](https://github.com/Abbo0dio/olf/pull/47) opened; set IN REVIEW.
 
 #### p4.4 — Quiet hours / do-not-disturb window
 - **Status:** TODO
