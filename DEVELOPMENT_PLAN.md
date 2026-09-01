@@ -3071,7 +3071,8 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-01 — review PASS + one fix (`notifications_page.dart` showed a time the reminder would not use for the learned-hour kinds — split into read-only "Around _h:mm_" vs. captioned picker). Merged as `19c2258` (squash). DONE.
 
 #### p4.3 — Sensitive notification copy
-- **Status:** IN PROGRESS — worker: phase4; worktree `../olf-wt/p4.3`, branch `feat/p4.3-notification-copy` off `main` @ `19c2258`.
+- **Status:** IN REVIEW — PR [#47](https://github.com/Abbo0dio/olf/pull/47). Do not self-merge, do not set DONE.
+- **Branch / worktree:** `feat/p4.3-notification-copy` / `../olf-wt/p4.3` off `main` @ `19c2258`.
 - **Owner:** worker: phase4 · **Depends on:** p4.1
 - **Requirement refs:** §7 (no PHI in notification text; late-period check-in worded sensitively — avoid the "teacher collecting homework" pattern), §9(6), §9(7)
 - **Goal:** Every notification string is deliberately written, reviewed, and locked behind a content test: non-alarming, non-clinical, gender-neutral, nothing that reads as surveillance or a demand, nothing that exposes health state on a lock screen.
@@ -3099,6 +3100,7 @@ the v1-vs-v2-on-own-data comparison above).
   - No schema change, no dependency, no behaviour change; the p1.9 `inclusive_language_test` picks up `notification_copy.dart` automatically (it scans all of `lib`).
 - **Log:**
   - 2026-09-01 — claimed by worker: phase4; worktree `../olf-wt/p4.3`, branch `feat/p4.3-notification-copy` off `main` @ `19c2258`. Folded p4.2 → DONE (PR #46, squash `19c2258`); bumped the Phase 4 header note to `IN PROGRESS (p4.3)`. Set IN PROGRESS.
+  - 2026-09-01 — built to DoD §1.4. All five notification titles/bodies consolidated into `notification_copy.dart` as named `const`s (title `olf` for every kind; `latePeriodCheckIn` invitational not interrogative; `medication` body byte-identical to p1.7); `reminder_copy.dart` reduced to Settings-facing labels; p1.7 `reminderNotification*` consts removed from `reminder_scheduler.dart`. `notification_copy_test.dart` locks the content rules; p2.4 health-word check moved there; p1.9 `inclusive_language_test` picks up the new file automatically. Strings only — no behaviour/schema/dependency change. core (441) + app (158) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#47](https://github.com/Abbo0dio/olf/pull/47) opened; set IN REVIEW.
 
 #### p4.4 — Quiet hours / do-not-disturb window
 - **Status:** TODO
