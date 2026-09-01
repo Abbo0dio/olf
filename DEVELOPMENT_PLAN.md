@@ -518,7 +518,7 @@ builds and does exactly one real thing so Phase 1 has something to grow.
 
 #### p0.6 — Android release workflow (signed APK in GitHub Releases)
 - **Status:** IN REVIEW — do not self-merge, do not set DONE.
-- **PR:** [#42](https://github.com/Abbo0dio/olf/pull/42)
+- **PR:** [#43](https://github.com/Abbo0dio/olf/pull/43)
 - **Branch / worktree:** `ci/android-release-workflow` / `../olf-wt/release-apk`
 - **Owner:** worker: phase0 (CI slice — sibling to p0.3 / p0.5, not part of a numbered phase's build)
 - **Depends on:** p0.3 (CI gates), p0.4 (the app builds an APK)
