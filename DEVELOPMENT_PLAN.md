@@ -3105,7 +3105,8 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — review PASS. Merged as `d18dff2` (squash). DONE.
 
 #### p4.4 — Quiet hours / do-not-disturb window
-- **Status:** IN PROGRESS — worker: phase4; worktree `../olf-wt/p4.4`, branch `feat/p4.4-quiet-hours` off `main` @ `d18dff2`.
+- **Status:** IN REVIEW — PR [#48](https://github.com/Abbo0dio/olf/pull/48). Do not self-merge, do not set DONE.
+- **Branch / worktree:** `feat/p4.4-quiet-hours` / `../olf-wt/p4.4` off `main` @ `d18dff2`.
 - **Owner:** worker: phase4 · **Depends on:** p4.1
 - **Requirement refs:** §7, §8
 - **Goal:** A single app-wide quiet window (default off) during which no olf notification is delivered; anything that would fire inside the window is shifted to the window's end (not dropped).
@@ -3127,6 +3128,7 @@ the v1-vs-v2-on-own-data comparison above).
   - No new dependency, no schema change, no CI change; notifications stay inexact.
 - **Log:**
   - 2026-09-02 — claimed by worker: phase4; worktree `../olf-wt/p4.4`, branch `feat/p4.4-quiet-hours` off `main` @ `d18dff2`. Folded p4.3 → DONE (PR #47, squash `d18dff2`); bumped the Phase 4 header note to `IN PROGRESS (p4.4)`. Set IN PROGRESS.
+  - 2026-09-02 — built to DoD §1.4. `core/quiet_hours.dart` (`QuietHours` value + `kDefaultQuietHours` disabled + pure `applyQuietHours`, wall-clock, midnight-wrap, half-open); `SettingKeys.quietHours` KV key (no schema change); app `quiet_hours_providers.dart` (encode/decode with malformed→default, DB-gated stream, controller); `applyQuietHours` threaded through `ReminderController._apply` (event-relative + daily hour:minute shift) and `ReminderSync.replan`, after p4.2's learned hour; Settings → Notifications quiet-hours switch + Start/End pickers. core (459) + app (171) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#48](https://github.com/Abbo0dio/olf/pull/48) opened; set IN REVIEW.
 
 #### p4.5 — Permanent "stop asking me to subscribe" control
 - **Status:** TODO
