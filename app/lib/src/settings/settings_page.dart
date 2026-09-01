@@ -13,6 +13,7 @@ import '../privacy/privacy_education_screen.dart';
 import '../privacy/privacy_policy_content.dart';
 import '../privacy/privacy_policy_screen.dart';
 import '../providers.dart';
+import '../reminders/notifications_page.dart';
 import '../retention/retention_providers.dart';
 import '../security/biometric_providers.dart';
 import '../security/pin_providers.dart';
@@ -191,6 +192,19 @@ class SettingsPage extends ConsumerWidget {
             subtitle: const Text(accuracySettingsSubtitle),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const AccuracyPage()),
+            ),
+          ),
+          const _SectionHeader('Notifications'),
+          ListTile(
+            leading: const Icon(Icons.notifications_none),
+            title: const Text('Notifications'),
+            subtitle: const Text(
+              'Choose which reminders you get, each on its own schedule.',
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const NotificationsPage(),
+              ),
             ),
           ),
           const _SectionHeader('Data'),

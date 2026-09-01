@@ -83,7 +83,10 @@ class _ReminderSection extends ConsumerWidget {
           ),
           onChanged: async.isLoading
               ? null
-              : (value) => controller.setEnabled(enabled: value),
+              : (value) => controller.setEnabled(
+                  ReminderKind.medication,
+                  enabled: value,
+                ),
         ),
         ListTile(
           leading: const Icon(Icons.schedule),
@@ -98,6 +101,7 @@ class _ReminderSection extends ConsumerWidget {
                   );
                   if (picked != null) {
                     await controller.setTime(
+                      ReminderKind.medication,
                       hour: picked.hour,
                       minute: picked.minute,
                     );

@@ -2966,20 +2966,125 @@ the v1-vs-v2-on-own-data comparison above).
 
 ### Phase 4 — Notifications & reminders
 
-**Status:** `TODO` · **Requirement refs:** §7, §9(6). Slices:
+**Status:** IN PROGRESS (p4.1) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
 
-- **p4.1** Per-category notification channels: upcoming period, fertile window, medication/BC,
-  BBT-logging prompt, late-period check-in, (later) content, (later) subscription. Each
-  independently toggleable.
-- **p4.2** Behavior-timed delivery — learn when the user usually logs and send then.
-- **p4.3** Sensitive copy — late-period check-in worded with care; no "homework collection" tone;
-  no PHI in any notification body.
-- **p4.4** Quiet hours / do-not-disturb window.
-- **p4.5** A permanent, easy "stop asking me to subscribe" control (principle now, enforced in
-  Phase 10).
-- **p4.6** Generalise the p1.7 medication reminder into this system.
+**Phase-wide constraints:** no new runtime dependency (the p1.7 notification stack — `flutter_local_notifications` + `flutter_timezone` + `timezone` — covers all of Phase 4); no schema change (new `ReminderKind` values are additive text in `reminders.kind`; app-wide prefs use the `app_settings` KV store); notifications stay **inexact** — no exact-alarm permission, manifest untouched; no new CI workflow.
 
-**Exit gate:** every notification type is separately controllable; copy reviewed; quiet hours work.
+#### p4.1 — Per-category notification channels, each independently toggleable
+- **Status:** IN REVIEW — do not self-merge, do not set DONE.
+- **PR:** [#45](https://github.com/Abbo0dio/olf/pull/45)
+- **Branch / worktree:** `feat/p4.1-notification-categories` / `../olf-wt/p4.1`
+- **Owner:** worker: phase4
+- **Depends on:** p1.7 (reminder stack + seams), p3.6 (`predictorProvider` for event-relative categories)
+- **Requirement refs:** §7 (granular category controls — the #1 notification complaint), §9(6)
+- **Goal:** Replace p1.7's single `ReminderKind.medication` daily reminder with the full set of independently-controllable reminder categories, each with its own OS channel, its own stored on/off + timing, and its own row in a Settings → Notifications section. Turning one category on or off never touches another.
+- **Categories (this slice):** `upcomingPeriod`, `fertileWindow`, `medication`, `bbtPrompt`, `latePeriodCheckIn`. Content and subscription reminder types are **not** created here (no such subsystems exist; p4.5 establishes the "stop asking to subscribe" control as principle).
+- **Acceptance criteria:**
+  - `core`: `ReminderKind` gains `upcomingPeriod`, `fertileWindow`, `bbtPrompt`, `latePeriodCheckIn` (keep `medication`). **No `Reminders` table change, no migration** — values store as text in the existing `kind` column.
+  - `core`: new pure module (`reminder_planning.dart` or your naming) exposing `DateTime? nextFireTime({required ReminderKind kind, required ReminderSchedule schedule, required CyclePrediction? prediction, required DateTime today})`. Rules:
+    - `medication` / `bbtPrompt` → next daily occurrence via the existing `nextOccurrence(schedule, from: today)` (don't duplicate the roll-to-tomorrow logic).
+    - `upcomingPeriod` → `prediction.nextPeriodExpected` minus `kUpcomingPeriodLeadDays` (2), at the schedule's `hour:minute`; `null` if `prediction == null` or that instant is already before `today`.
+    - `fertileWindow` → `prediction.fertileWindow.start` at the schedule's time; `null` if no prediction / already past.
+    - `latePeriodCheckIn` → `prediction.nextPeriodExpected` plus `kLateCheckInGraceDays` (2) at the schedule's time; `null` unless `today` is already at/after that instant (only nudge once actually late).
+    - All thresholds named consts; `today` injected; no `DateTime.now()`; no Flutter import.
+  - `app`: `ReminderScheduler` seam generalises — keep `scheduleDaily` for the fixed-time daily kinds; add a way to schedule an event-relative one-shot at a computed instant (shape is yours; `scheduleAt(ReminderKind kind, DateTime when)` with a plain `zonedSchedule` and no `matchDateTimeComponents` is a fine default). `cancel(kind)` / `ensurePermission()` unchanged.
+  - `app`: **one Android channel per kind** (`olf_reminder_<kindName>`, distinct human name + description each, all `visibility: private`, `defaultImportance`); **one stable notification id per kind** (extend `_idFor` with a distinct constant per kind — no collisions with p1.7's 1001).
+  - `app`: per-kind generic body text via a lookup (`notificationCopyFor(kind)`), fixed and lock-screen-safe — no medication/method/diagnosis words, passes the p1.9 inclusive-language lint and a no-PHI check. (Full copy audit is p4.3; safe placeholders are enough here.)
+  - `app`: `ReminderController` drops the hard-coded `ReminderKind.medication`; `setEnabled(kind, enabled:)` / `setTime(kind, hour:, minute:)` for any kind. Enable → permission, write row, schedule via the planning module (daily vs one-shot). Disable → write row, cancel that kind only.
+  - `app`: a `reminderSyncProvider` (your shape) that watches `cyclesProvider` / `predictionProvider` and re-plans the event-relative categories (`upcomingPeriod` / `fertileWindow` / `latePeriodCheckIn`) whenever the forecast moves — logging a period reschedules the next-period nudge with no user action. Fixed-time kinds untouched. Also re-plan on app resume / start-up.
+  - `app`: Settings gains a **Notifications** section — one `SwitchListTile` + time control per category, each reading/writing only its own row, with an honest one-line sub-label ("About 2 days before your predicted start"; "Around when your fertile window is estimated to begin"; "Every day at a time you choose"; "If your period hasn't been logged 2 days after it was expected"). Dark mode + gender-neutral copy.
+  - p1.7's medication reminder keeps working with its existing stored row untouched. The standalone meds-page reminder UI stays in place and functional this slice (both it and the new Settings row drive the same `medication` row) — it's removed in **p4.6**.
+  - No new dependency; no schema change; manifest untouched; `core` Flutter-free; no `DateTime.now()` in `core`.
+- **Tests required:**
+  - `core/test/reminders/reminder_planning_test.dart` — every kind's `nextFireTime`: daily kinds roll to tomorrow; `upcomingPeriod` lands lead-days early at the chosen time; `fertileWindow` anchors on window start; `latePeriodCheckIn` is `null` until overdue then fires; every event-relative kind is `null` when `prediction == null`; pure wall-clock maths (DST-agnostic, mirrors `nextOccurrence`).
+  - `app/test/reminders/reminder_controller_test.dart` — extended: enabling each kind schedules exactly that kind (fake scheduler records `(kind, when)`); disabling cancels exactly that kind; no cross-talk.
+  - `app/test/reminders/notification_settings_test.dart` — five independent switches; toggling one leaves the others' stored rows unchanged; a category with no prediction shows its row with an "available once there's enough history" affordance, not a broken time.
+  - `app/test/reminders/reminder_sync_test.dart` — adding/editing a period re-plans `upcomingPeriod` (fake scheduler sees a new one-shot at the shifted instant) and does NOT reschedule `medication`.
+  - Full `core` + `app` suites + analyze + format + dependency-audit stay green.
+- **Notes / detail:**
+  - One-shot reminders must be re-armed after firing (no OS "repeat every cycle"). The sync-provider re-plan on prediction change + a start-up/resume pass are the re-arm paths. A fired-but-not-yet-re-armed reminder is acceptable degradation for this slice — log any gap.
+  - Behaviour-timed delivery (learned logging hour) is **p4.2** — here event-relative categories fire at the user's chosen time, default 09:00.
+  - Quiet-hours suppression is **p4.4** — none in this slice.
+  - **As built (worker: phase4):**
+    - `core`: `ReminderKind` expanded (additive `EnumNameConverter`, `.g.dart` byte-identical — verified with `build_runner`, no migration). New `core/lib/src/reminders/reminder_planning.dart` — `nextFireTime(...)` + `isEventRelativeReminder` + `eventRelativeReminderKinds` + named consts `kUpcomingPeriodLeadDays`/`kLateCheckInGraceDays`; pure, `DateTime`-injected, uses `nextOccurrence` for the daily kinds. Exported from `olf_core.dart`.
+    - `app`: `ReminderScheduler` gains `scheduleAt(kind, when)` (one-shot, no `matchDateTimeComponents`, past instant → `now + 1min`). `local_notification_reminder_scheduler.dart` — `_channelFor(kind)` (one `olf_reminder_<name>` channel each, `private`/default), `_idFor` 1001–1005, `_detailsFor`, `notificationCopyFor` bodies; `ensureInitialized()` also deletes p1.7's orphaned `olf_daily_reminder` channel on upgraded installs. New `reminder_copy.dart` — per-kind notification bodies (medication body kept verbatim = p1.7's) + Settings titles/sub-labels + `reminderCategoryOrder`.
+    - `app`: `ReminderController` is now kind-generic and takes `prediction: () => ...` + `now`; `_apply` sends fixed kinds to `scheduleDaily` and event-relative kinds to `scheduleAt` (or `cancel` when `nextFireTime` is `null`). `reminder_providers.dart` — `reminderScheduleProvider` (`.family` per kind), `reminderControllerProvider` wired to `predictionProvider`, `medicationReminderProvider` kept for the p1.7 meds page (folded in p4.6), and `reminderSyncProvider` → a `ReminderSync` that `ref.listen`s `predictionProvider` (`fireImmediately`) and re-arms the three event-relative kinds. `HomePage` watches `reminderSyncProvider` (same fire-and-forget pattern as the p2.3 retention sweep) — that is the start-up + forecast-change re-plan path.
+    - `app`: new `notifications_page.dart` — `Settings → Notifications` (a `_SectionHeader('Notifications')` + one `ListTile` opening `NotificationsPage`). The page renders `reminderCategoryOrder`: a `SwitchListTile` per kind (own row only) + a `Time` `ListTile` when enabled; an event-relative kind with no forecast shows *"Available once there's enough logged history to predict."* instead of a time. `meds_page.dart` `_ReminderSection` updated to the new controller signature and still drives the same `medication` row.
+    - **Gap logged (§9 — p4.1 follow-ups (a)):** a dedicated `AppLifecycleState.resumed` re-plan was **not** added — start-up (`fireImmediately`) + every forecast change are covered via the `HomePage`-watched `reminderSyncProvider`; a resume with no data change relies on the next `HomePage` rebuild. A `resumed` re-arm hook in `AppGate` is a small p4.x follow-up. Per the dispatch, a fired-but-not-yet-re-armed reminder is acceptable degradation for this slice.
+    - **Interpretation note:** the "Settings → Notifications **section**" is one nav row opening a dedicated `NotificationsPage` holding the five category controls — consistent with the Pregnancy / Accuracy / Backup rows, and keeps the main settings list scannable. The five switches themselves are the section.
+  - **Files:** `core/lib/src/db/tables.dart` (enum + docs), `core/lib/src/reminders/reminder_planning.dart` (new), `core/lib/olf_core.dart` (export), `core/test/reminders/reminder_planning_test.dart` (new); `app/lib/src/reminders/{reminder_scheduler,local_notification_reminder_scheduler,reminder_controller,reminder_providers,meds/meds_page}.dart`, `app/lib/src/reminders/{reminder_copy,notifications_page}.dart` (new), `app/lib/src/settings/settings_page.dart` (+ Notifications section), `app/lib/src/home_page.dart` (+ `reminderSyncProvider` watch); `app/test/support/fake_reminder_scheduler.dart` (+ `scheduleAt` / `oneShotFor`), `app/test/reminders/{reminder_controller_test,notification_settings_test,reminder_sync_test}.dart`.
+- **Log:**
+  - 2026-09-01 — claimed by worker: phase4; worktree `../olf-wt/p4.1`, branch `feat/p4.1-notification-categories` off `main` @ `b5c3e81`. Set IN PROGRESS. Wrote the expanded Phase 4 section.
+  - 2026-09-01 — built to DoD §1.4. core + app suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR opened; set IN REVIEW.
+
+#### p4.2 — Behaviour-timed delivery
+- **Status:** TODO
+- **Owner:** worker: phase4 · **Depends on:** p4.1
+- **Requirement refs:** §7 (behavior-timed reminders — send when the user typically logs)
+- **Goal:** The three cycle-event categories (`upcomingPeriod`, `fertileWindow`, `latePeriodCheckIn`) fire at the hour the user actually tends to log, learned on-device, with a clean fallback to the chosen/09:00 time when history is thin. `medication` and `bbtPrompt` stay fixed-time (clock-anchored by nature).
+- **Acceptance criteria:**
+  - `core`: pure `learnPreferredHour({required List<DateTime> logTimestamps, required DateTime now, int recentWindow = 30, int minSamples = 8}) → int?` — representative hour (median / circular-mode) of the most recent `recentWindow` logging events, or `null` below `minSamples`. Deterministic, no `DateTime.now()`, named consts.
+  - `core`: a `LoggingActivityRepository` seam + drift impl returning recent `createdAt` across the user-logging tables (`periods`, `daily_flows`, `daily_symptom_entries`, `bbt_entries`, `cervical_mucus_entries`) — read-only, existing columns, no schema change.
+  - `app`: planning-module callers pass the learned hour for the three cycle-event kinds; `null` → stored/09:00. The hour is recomputed, never stored.
+  - Add one line to `docs/threat-model.md`: the usual-logging-hour is derived and used only on-device, never stored or transmitted.
+  - No toggle, no schema change, no dependency.
+- **Tests required:** `learnPreferredHour` units (empty / thin / clear-mode / bimodal / all-same-hour / midnight wrap); a `LoggingActivityRepository` drift test; a planning test that an established logging hour overrides the default for `upcomingPeriod` but not `medication`; threat-model guard test passes.
+
+#### p4.3 — Sensitive notification copy
+- **Status:** TODO
+- **Owner:** worker: phase4 · **Depends on:** p4.1
+- **Requirement refs:** §7 (no PHI in notification text; late-period check-in worded sensitively — avoid the "teacher collecting homework" pattern), §9(6), §9(7)
+- **Goal:** Every notification string is deliberately written, reviewed, and locked behind a content test: non-alarming, non-clinical, gender-neutral, nothing that reads as surveillance or a demand, nothing that exposes health state on a lock screen.
+- **Acceptance criteria:**
+  - All notification titles/bodies consolidated in one `notification_copy.dart` (app layer) as named `const`s — mirrors the p1.9 named-constant-copy + content-test pattern.
+  - `latePeriodCheckIn` body is invitational, not interrogative ("When you're ready, you can update your dates" — not "Has your period started? Log it now.").
+  - No body contains: a medication/method name (keep as a test anyway), a diagnosis word, "pregnan*", an imperative scold, a gendered second-person term, or exclamation-mark urgency.
+  - `notification_copy_test.dart` — every `ReminderKind` has a non-empty title + body; denylist; lock-screen-reasonable length; the p1.9 `inclusive_language_test` picks up the new consts automatically.
+  - PR description reviews each category's copy against §7's examples.
+- **Tests required:** the content test; inclusive-language lint; final strings snapshotted in the plan log.
+- **Notes:** strings only, no behaviour change. Any string needing pronouns uses the p1.9 `formsFor` seam, not a literal.
+
+#### p4.4 — Quiet hours / do-not-disturb window
+- **Status:** TODO
+- **Owner:** worker: phase4 · **Depends on:** p4.1
+- **Requirement refs:** §7, §8
+- **Goal:** A single app-wide quiet window (default off) during which no olf notification is delivered; anything that would fire inside the window is shifted to the window's end (not dropped).
+- **Acceptance criteria:**
+  - `core`: pure `quiet_hours.dart` — `QuietHours({int startHour, startMinute, endHour, endMinute, bool enabled})` + `DateTime applyQuietHours(DateTime candidate, QuietHours q)`: `candidate` unchanged when disabled or outside the window, else the next instant at window end. Handles wrap past midnight (22:00 → 07:00). Deterministic.
+  - Storage: one `app_settings` KV key (`SettingKeys.quietHours`, encoded string). No schema change.
+  - `app`: `QuietHoursRepository` over the KV store; a Settings → Notifications row (enable + start/end pickers); every scheduling path runs its computed instant through `applyQuietHours` before the OS hand-off.
+  - A daily kind whose only slot is inside the window fires at window end that day.
+- **Tests required:** `core/test/reminders/quiet_hours_test.dart` — disabled passthrough; before/inside/at both boundaries/after; midnight-wrap; candidate exactly at end. `app` — Settings widget test; controller test that 23:30 with a 22:00–07:00 window reschedules to 07:00.
+- **Notes:** apply p4.2's learned hour first, then quiet hours.
+
+#### p4.5 — Permanent "stop asking me to subscribe" control
+- **Status:** TODO
+- **Owner:** worker: phase4 · **Depends on:** —
+- **Requirement refs:** §7 ("easy stop asking me to subscribe" control), §9(4)
+- **Goal:** Establish now, as an enforceable principle, a single persistent switch that permanently silences subscription/upsell prompting, so Phase 10's paid tier already has a suppression path to honour. No upsell UI exists yet.
+- **Acceptance criteria:**
+  - `core`: `SettingKeys.suppressSubscriptionPrompts` KV key (absent/`'false'` = allowed; `'true'` = permanently suppressed). A tiny helper/provider `bool get subscriptionPromptsAllowed`.
+  - `app`: a Settings row "Don't show subscription offers". On → stays on, no re-prompt / "are you sure you'll miss out" pattern; off again is one tap.
+  - A contract note in `docs/` (or a prominent doc-comment) that ALL future upsell paths (Phase 10) MUST check `subscriptionPromptsAllowed` and no-op when false — with a test locking default + suppression.
+  - No schema change, no dependency.
+- **Tests required:** KV round-trip; `subscription_prompt_policy_test.dart` (default allows; set → suppressed; survives reload); Settings widget test (toggle both ways, no confirmation dialog).
+- **Notes:** principle-only now; add a Phase 10 backlog line pointing back here.
+
+#### p4.6 — Fold the p1.7 medication reminder into the unified system
+- **Status:** TODO
+- **Owner:** worker: phase4 · **Depends on:** p4.1, p4.3, p4.4
+- **Requirement refs:** §7, §1.4 (one code path, no dead parallel system)
+- **Goal:** Remove the standalone p1.7 medication-reminder UI + bespoke provider so the `medication` category is managed only through the Phase 4 Settings → Notifications section, on the same controller / scheduler / planning path as every other category. No data migration — same row, same `kind`.
+- **Acceptance criteria:**
+  - `meds_page.dart` loses `_ReminderSection` + its `_SectionHeader('Daily reminder')`; page is now medications + birth control only; doc-comment updated.
+  - `medicationReminderProvider` removed (or a thin alias of the generic per-kind provider) — nothing reads a medication-specific reminder provider.
+  - `reminder_controller.dart` / `reminder_scheduler.dart` lose lingering `ReminderKind.medication` special-casing and single-reminder assumptions; keep `ReminderController.defaultHour/Minute` as the shared fixed-kind default.
+  - An existing enabled `medication` row keeps firing unchanged after the refactor (test).
+  - Still-relevant p1.7 `reminder_controller_test.dart` assertions migrate into the unified suites; dead tests deleted.
+- **Tests required:** regression test that a pre-existing enabled medication schedule still schedules post-refactor; `meds_page` widget test updated (no reminder section); unified notification-settings test exercises the `medication` row; full suites green.
+- **Notes:** pure consolidation, no new capability. If removing `medicationReminderProvider` ripples past the meds page, stop and flag scope.
+
+**Exit gate:** every notification type separately controllable (p4.1); delivery behaviour-timed with a safe fallback (p4.2); all copy reviewed and locked behind a content test with no PHI (p4.3); a quiet-hours window that shifts rather than drops (p4.4); a permanent "stop asking to subscribe" control, documented as a Phase 10 gate (p4.5); the p1.7 medication reminder on the one unified path (p4.6).
 
 ---
 
@@ -3760,6 +3865,18 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   change — reuse `SettingsRepository`), reuse the p3.3 `_CorrectionNotice` dismissible-card
   pattern on the calendar/home prediction area, set the flag on first view (shown or not) so
   it never reappears. — noted by worker: phase3 during p3.6.
+- **p4.1 follow-ups:** (a) **No `AppLifecycleState.resumed` re-plan hook.** The
+  forecast-anchored reminders (`upcomingPeriod` / `fertileWindow` / `latePeriodCheckIn`) are
+  re-armed on the start-up pass (`reminderSyncProvider` with `fireImmediately`) and on every
+  forecast change (`ref.listen(predictionProvider)`), both via the `HomePage`-watched
+  provider. A resume with **no** data change (app backgrounded for days, then reopened
+  straight past `HomePage` because it was already mounted) relies on the next `HomePage`
+  rebuild to re-plan — a fired one-shot that has not been re-armed yet is the acceptable
+  degradation called out in the p4.1 dispatch. Fix is a small `WidgetsBindingObserver` in
+  `AppGate` that calls `reminderSyncProvider`'s `replan()` on `resumed`. (b) **p1.7's
+  `olf_daily_reminder` channel** — p4.1 deletes it on `ensureInitialized()` for upgraded
+  installs; if that cleanup is ever removed, it must be replaced with an equivalent so the
+  orphaned system-Settings entry does not return. — noted by worker: phase4 during p4.1.
 - (add more here)
 
 ## 10. Orphaned / cut work

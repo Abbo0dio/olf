@@ -5,6 +5,7 @@ import 'package:olf_core/olf_core.dart';
 import 'meds/meds_page.dart';
 import 'period/period_calendar_page.dart';
 import 'providers.dart';
+import 'reminders/reminder_providers.dart';
 import 'retention/retention_providers.dart';
 import 'settings/settings_page.dart';
 
@@ -20,6 +21,10 @@ class HomePage extends ConsumerWidget {
     // Fire-and-forget — a no-op unless a retention window is set on the real
     // vault. Kept here so it never runs behind the lock or first-run screens.
     ref.watch(retentionStartupSweepProvider);
+    // p4.1: keep the forecast-anchored reminders re-armed. Watching here does
+    // the start-up pass and re-plans whenever the forecast moves (e.g. a period
+    // is logged). Never runs behind the lock or first-run screens.
+    ref.watch(reminderSyncProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('olf'),
