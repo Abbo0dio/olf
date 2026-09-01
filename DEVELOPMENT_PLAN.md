@@ -516,13 +516,87 @@ builds and does exactly one real thing so Phase 1 has something to grow.
     open item: the manual physical-device smoke table above — not a Phase 0 blocker,
     automated emulator + simulator coverage is in place.
 
+#### p0.6 — Android release workflow (signed APK in GitHub Releases)
+- **Status:** IN REVIEW — do not self-merge, do not set DONE.
+- **PR:** [#42](https://github.com/Abbo0dio/olf/pull/42)
+- **Branch / worktree:** `ci/android-release-workflow` / `../olf-wt/release-apk`
+- **Owner:** worker: phase0 (CI slice — sibling to p0.3 / p0.5, not part of a numbered phase's build)
+- **Depends on:** p0.3 (CI gates), p0.4 (the app builds an APK)
+- **Requirement refs:** requirements.md §3 (distribution), §6 (release discipline)
+- **Goal:** Turn a `vX.Y.Z` tag on `main` into a published, **signed** Android release APK on
+  the GitHub Releases page — a real install path for testers without a Play listing, with no
+  manual build step and no chance of shipping a debug/unsigned artifact by accident.
+- **Acceptance criteria:**
+  - New `.github/workflows/release.yml`, `on: push: tags: ['v*']`, `permissions: contents:
+    write`, single `ubuntu-latest` job, `working-directory: app`, using only the two actions
+    already in `ci.yml` (`actions/checkout@v7`, `subosito/flutter-action@v2` @ `FLUTTER_VERSION
+    3.35.5`).
+  - Decodes `secrets.ANDROID_KEYSTORE_BASE64` → `app/android/app/upload.jks` and writes
+    `app/android/key.properties` from `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_PASSWORD` /
+    `ANDROID_KEY_ALIAS` (`storeFile=upload.jks`).
+  - **Fails loudly** (guard step → `exit 1`) if `ANDROID_KEYSTORE_BASE64` is empty — a
+    workflow named *Release* never emits an unsigned or debug-signed APK.
+  - `flutter build apk --release` then `gh release create "$TAG" --generate-notes
+    app/build/app/outputs/flutter-apk/app-release.apk` (built-in `gh`, `GH_TOKEN:
+    github.token` — no new publishing action).
+  - `app/android/app/build.gradle.kts` gains a `signingConfigs.release` that reads
+    `key.properties` when present and points `buildTypes.release` at it; when `key.properties`
+    is absent (local dev) the release build falls back to debug signing exactly as before, so
+    `flutter run --release` still works with zero setup.
+  - `.gitignore` covers `app/android/key.properties` and `app/android/app/*.jks` / `*.keystore`.
+  - `docs/release-checklist.md` gains the tag→publish step; `README.md` gains a short
+    *Install (Android)* section (Releases link, signed build, sideload via "install unknown
+    apps"; one line that iOS is not distributed this way yet).
+  - Non-hard-fail step: warn (`::warning::`) if the tag (minus leading `v`) ≠
+    `app/pubspec.yaml` `version:`.
+  - No new GitHub Action beyond checkout + flutter-action; **no new runtime dependency; no new
+    Android permission** (the manifest is untouched, so `dependency-audit` stays green); `core`
+    untouched; `ci.yml`'s existing jobs untouched.
+- **Tests required:** `flutter build apk --release` locally with a throwaway keystore +
+  `key.properties` produces a **signed** APK (the Gradle config compiles and signs; verified
+  with `apksigner verify` / `keytool`); `release.yml` is well-formed YAML; full `core` + `app`
+  suites + analyze + format + dependency-audit still green.
+- **Notes / detail:**
+  - The workflow is **separate from `ci.yml`** — tag-triggered only, not in `ci-ok`'s
+    `needs:`, so it can never affect a PR's required check.
+  - The four `ANDROID_*` secrets are created by the maintainer out of band; this slice only
+    *consumes* them. Until they are set, the first tag push will fail at the guard step by
+    design (loud, not silent).
+  - `key.properties` / `*.jks` are git-ignored; the keystore only ever exists on the CI runner
+    for the length of one job.
+  - iOS release signing (Apple certs / provisioning / TestFlight) is deliberately **out of
+    scope** — noted for a later CI slice.
+  - **`GeneratedPluginRegistrant.java` is generated, not committed** (`git ls-files` confirms
+    it is untracked). Flutter 3.35.5 correctly omits the `integration_test` dev-dependency
+    plugin from a **freshly** generated release registrant, so `flutter build apk --release`
+    succeeds on a clean checkout (which is what the runner has). A *stale* registrant from a
+    prior debug/`flutter test integration_test/` run in the same tree does still break
+    `--release` locally with `package dev.flutter.plugins.integration_test does not exist` —
+    `flutter clean` fixes it. Not a workflow problem; recorded here so the next person who
+    hits it locally knows why.
+- **Log:**
+  - 2026-09-01 — claimed by worker: phase0; worktree `../olf-wt/release-apk`, branch
+    `ci/android-release-workflow` off `main` @ `6141ea4`. Set IN PROGRESS.
+  - 2026-09-01 — built. Verified locally with a JDK 21 + Android SDK (cmdline-tools,
+    platform-36, build-tools 36) provisioned for the check and a throwaway RSA keystore:
+    `flutter build apk --release` **with** `key.properties` → `app-release.apk` signed by
+    `CN=olf release test` (APK Signature Scheme v2, `apksigner verify` → *Verifies*), i.e. the
+    new Gradle `signingConfigs.release` picks up the keystore; **without** `key.properties` →
+    same build succeeds, signed `CN=Android Debug` (the unchanged fallback, so local
+    `flutter run --release` still works). `release.yml` + `ci.yml` parse as YAML. core 407 /
+    app 129 tests green; analyze `--fatal-infos` clean (core + app); `dart format` clean;
+    dependency-audit PASS (manifest untouched); no `pubspec.lock` drift. **The first real
+    release needs the maintainer to have set the four `ANDROID_*` repo secrets** — until then
+    a `v*` tag fails loudly at the guard step by design.
+
 **Phase 0 exit gate:** CI enforces the worktree→PR→merge workflow (required `CI OK` check);
 every PR builds a debug APK (Ubuntu) and an unsigned iOS build (macOS); p0.4 merged and the app
 does one real thing (log a period, encrypted, "Day N", delete). p0.5 adds a nightly
 `integration_test` run on a real Android emulator + iOS simulator (SQLCipher + key store
 exercised for real). **Remaining caveat:** one-time manual install+launch on a physical Android
 and physical iOS device is still open (p0.5 table above). Gate considered met for the purpose of
-starting Phase 1.
+starting Phase 1. *(p0.6 — signed-APK release workflow — added later as a Phase 0 CI-family
+sibling; not a gate item.)*
 
 ---
 
