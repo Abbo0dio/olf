@@ -110,6 +110,17 @@ class LocalNotificationReminderScheduler implements ReminderScheduler {
       ),
     );
     await _plugin.initialize(settings: settings);
+
+    // p4.1: p1.7 registered a single 'olf_daily_reminder' channel; medication
+    // now lives on 'olf_reminder_medication'. Android never removes a channel on
+    // its own, so an upgraded install would keep an orphaned, empty entry in
+    // system Settings — delete it here. No-op on a fresh install or non-Android.
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.deleteNotificationChannel(channelId: 'olf_daily_reminder');
+
     _ready = true;
   }
 

@@ -3007,10 +3007,10 @@ the v1-vs-v2-on-own-data comparison above).
   - Quiet-hours suppression is **p4.4** — none in this slice.
   - **As built (worker: phase4):**
     - `core`: `ReminderKind` expanded (additive `EnumNameConverter`, `.g.dart` byte-identical — verified with `build_runner`, no migration). New `core/lib/src/reminders/reminder_planning.dart` — `nextFireTime(...)` + `isEventRelativeReminder` + `eventRelativeReminderKinds` + named consts `kUpcomingPeriodLeadDays`/`kLateCheckInGraceDays`; pure, `DateTime`-injected, uses `nextOccurrence` for the daily kinds. Exported from `olf_core.dart`.
-    - `app`: `ReminderScheduler` gains `scheduleAt(kind, when)` (one-shot, no `matchDateTimeComponents`, past instant → `now + 1min`). `local_notification_reminder_scheduler.dart` — `_channelFor(kind)` (one `olf_reminder_<name>` channel each, `private`/default), `_idFor` 1001–1005, `_detailsFor`, `notificationCopyFor` bodies. New `reminder_copy.dart` — per-kind notification bodies (medication body kept verbatim = p1.7's) + Settings titles/sub-labels + `reminderCategoryOrder`.
+    - `app`: `ReminderScheduler` gains `scheduleAt(kind, when)` (one-shot, no `matchDateTimeComponents`, past instant → `now + 1min`). `local_notification_reminder_scheduler.dart` — `_channelFor(kind)` (one `olf_reminder_<name>` channel each, `private`/default), `_idFor` 1001–1005, `_detailsFor`, `notificationCopyFor` bodies; `ensureInitialized()` also deletes p1.7's orphaned `olf_daily_reminder` channel on upgraded installs. New `reminder_copy.dart` — per-kind notification bodies (medication body kept verbatim = p1.7's) + Settings titles/sub-labels + `reminderCategoryOrder`.
     - `app`: `ReminderController` is now kind-generic and takes `prediction: () => ...` + `now`; `_apply` sends fixed kinds to `scheduleDaily` and event-relative kinds to `scheduleAt` (or `cancel` when `nextFireTime` is `null`). `reminder_providers.dart` — `reminderScheduleProvider` (`.family` per kind), `reminderControllerProvider` wired to `predictionProvider`, `medicationReminderProvider` kept for the p1.7 meds page (folded in p4.6), and `reminderSyncProvider` → a `ReminderSync` that `ref.listen`s `predictionProvider` (`fireImmediately`) and re-arms the three event-relative kinds. `HomePage` watches `reminderSyncProvider` (same fire-and-forget pattern as the p2.3 retention sweep) — that is the start-up + forecast-change re-plan path.
     - `app`: new `notifications_page.dart` — `Settings → Notifications` (a `_SectionHeader('Notifications')` + one `ListTile` opening `NotificationsPage`). The page renders `reminderCategoryOrder`: a `SwitchListTile` per kind (own row only) + a `Time` `ListTile` when enabled; an event-relative kind with no forecast shows *"Available once there's enough logged history to predict."* instead of a time. `meds_page.dart` `_ReminderSection` updated to the new controller signature and still drives the same `medication` row.
-    - **Gap logged:** a dedicated `AppLifecycleState.resumed` re-plan was **not** added — start-up (`fireImmediately`) + every forecast change are covered via the `HomePage`-watched `reminderSyncProvider`; a resume with no data change relies on the next `HomePage` rebuild. A `resumed` re-arm hook in `AppGate` is a small p4.x follow-up (added to §9).
+    - **Gap logged (§9 — p4.1 follow-ups (a)):** a dedicated `AppLifecycleState.resumed` re-plan was **not** added — start-up (`fireImmediately`) + every forecast change are covered via the `HomePage`-watched `reminderSyncProvider`; a resume with no data change relies on the next `HomePage` rebuild. A `resumed` re-arm hook in `AppGate` is a small p4.x follow-up. Per the dispatch, a fired-but-not-yet-re-armed reminder is acceptable degradation for this slice.
     - **Interpretation note:** the "Settings → Notifications **section**" is one nav row opening a dedicated `NotificationsPage` holding the five category controls — consistent with the Pregnancy / Accuracy / Backup rows, and keeps the main settings list scannable. The five switches themselves are the section.
   - **Files:** `core/lib/src/db/tables.dart` (enum + docs), `core/lib/src/reminders/reminder_planning.dart` (new), `core/lib/olf_core.dart` (export), `core/test/reminders/reminder_planning_test.dart` (new); `app/lib/src/reminders/{reminder_scheduler,local_notification_reminder_scheduler,reminder_controller,reminder_providers,meds/meds_page}.dart`, `app/lib/src/reminders/{reminder_copy,notifications_page}.dart` (new), `app/lib/src/settings/settings_page.dart` (+ Notifications section), `app/lib/src/home_page.dart` (+ `reminderSyncProvider` watch); `app/test/support/fake_reminder_scheduler.dart` (+ `scheduleAt` / `oneShotFor`), `app/test/reminders/{reminder_controller_test,notification_settings_test,reminder_sync_test}.dart`.
 - **Log:**
@@ -3865,6 +3865,18 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   change — reuse `SettingsRepository`), reuse the p3.3 `_CorrectionNotice` dismissible-card
   pattern on the calendar/home prediction area, set the flag on first view (shown or not) so
   it never reappears. — noted by worker: phase3 during p3.6.
+- **p4.1 follow-ups:** (a) **No `AppLifecycleState.resumed` re-plan hook.** The
+  forecast-anchored reminders (`upcomingPeriod` / `fertileWindow` / `latePeriodCheckIn`) are
+  re-armed on the start-up pass (`reminderSyncProvider` with `fireImmediately`) and on every
+  forecast change (`ref.listen(predictionProvider)`), both via the `HomePage`-watched
+  provider. A resume with **no** data change (app backgrounded for days, then reopened
+  straight past `HomePage` because it was already mounted) relies on the next `HomePage`
+  rebuild to re-plan — a fired one-shot that has not been re-armed yet is the acceptable
+  degradation called out in the p4.1 dispatch. Fix is a small `WidgetsBindingObserver` in
+  `AppGate` that calls `reminderSyncProvider`'s `replan()` on `resumed`. (b) **p1.7's
+  `olf_daily_reminder` channel** — p4.1 deletes it on `ensureInitialized()` for upgraded
+  installs; if that cleanup is ever removed, it must be replaced with an equivalent so the
+  orphaned system-Settings entry does not return. — noted by worker: phase4 during p4.1.
 - (add more here)
 
 ## 10. Orphaned / cut work
