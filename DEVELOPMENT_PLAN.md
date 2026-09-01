@@ -2966,7 +2966,7 @@ the v1-vs-v2-on-own-data comparison above).
 
 ### Phase 4 — Notifications & reminders
 
-**Status:** IN PROGRESS (p4.3) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
+**Status:** IN PROGRESS (p4.4) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
 
 **Phase-wide constraints:** no new runtime dependency (the p1.7 notification stack — `flutter_local_notifications` + `flutter_timezone` + `timezone` — covers all of Phase 4); no schema change (new `ReminderKind` values are additive text in `reminders.kind`; app-wide prefs use the `app_settings` KV store); notifications stay **inexact** — no exact-alarm permission, manifest untouched; no new CI workflow.
 
@@ -3071,8 +3071,9 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-01 — review PASS + one fix (`notifications_page.dart` showed a time the reminder would not use for the learned-hour kinds — split into read-only "Around _h:mm_" vs. captioned picker). Merged as `19c2258` (squash). DONE.
 
 #### p4.3 — Sensitive notification copy
-- **Status:** IN REVIEW — PR [#47](https://github.com/Abbo0dio/olf/pull/47). Do not self-merge, do not set DONE.
-- **Branch / worktree:** `feat/p4.3-notification-copy` / `../olf-wt/p4.3` off `main` @ `19c2258`.
+- **Status:** DONE (2026-09-02)
+- **PR:** [#47](https://github.com/Abbo0dio/olf/pull/47) · squash `d18dff2`
+- **Branch / worktree:** `feat/p4.3-notification-copy` / `../olf-wt/p4.3` (removed)
 - **Owner:** worker: phase4 · **Depends on:** p4.1
 - **Requirement refs:** §7 (no PHI in notification text; late-period check-in worded sensitively — avoid the "teacher collecting homework" pattern), §9(6), §9(7)
 - **Goal:** Every notification string is deliberately written, reviewed, and locked behind a content test: non-alarming, non-clinical, gender-neutral, nothing that reads as surveillance or a demand, nothing that exposes health state on a lock screen.
@@ -3101,9 +3102,11 @@ the v1-vs-v2-on-own-data comparison above).
 - **Log:**
   - 2026-09-01 — claimed by worker: phase4; worktree `../olf-wt/p4.3`, branch `feat/p4.3-notification-copy` off `main` @ `19c2258`. Folded p4.2 → DONE (PR #46, squash `19c2258`); bumped the Phase 4 header note to `IN PROGRESS (p4.3)`. Set IN PROGRESS.
   - 2026-09-01 — built to DoD §1.4. All five notification titles/bodies consolidated into `notification_copy.dart` as named `const`s (title `olf` for every kind; `latePeriodCheckIn` invitational not interrogative; `medication` body byte-identical to p1.7); `reminder_copy.dart` reduced to Settings-facing labels; p1.7 `reminderNotification*` consts removed from `reminder_scheduler.dart`. `notification_copy_test.dart` locks the content rules; p2.4 health-word check moved there; p1.9 `inclusive_language_test` picks up the new file automatically. Strings only — no behaviour/schema/dependency change. core (441) + app (158) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#47](https://github.com/Abbo0dio/olf/pull/47) opened; set IN REVIEW.
+  - 2026-09-02 — review PASS. Merged as `d18dff2` (squash). DONE.
 
 #### p4.4 — Quiet hours / do-not-disturb window
-- **Status:** TODO
+- **Status:** IN REVIEW — PR [#48](https://github.com/Abbo0dio/olf/pull/48). Do not self-merge, do not set DONE.
+- **Branch / worktree:** `feat/p4.4-quiet-hours` / `../olf-wt/p4.4` off `main` @ `d18dff2`.
 - **Owner:** worker: phase4 · **Depends on:** p4.1
 - **Requirement refs:** §7, §8
 - **Goal:** A single app-wide quiet window (default off) during which no olf notification is delivered; anything that would fire inside the window is shifted to the window's end (not dropped).
@@ -3114,6 +3117,18 @@ the v1-vs-v2-on-own-data comparison above).
   - A daily kind whose only slot is inside the window fires at window end that day.
 - **Tests required:** `core/test/reminders/quiet_hours_test.dart` — disabled passthrough; before/inside/at both boundaries/after; midnight-wrap; candidate exactly at end. `app` — Settings widget test; controller test that 23:30 with a 22:00–07:00 window reschedules to 07:00.
 - **Notes:** apply p4.2's learned hour first, then quiet hours.
+- **Build detail (worker: phase4):**
+  - **`core/lib/src/reminders/quiet_hours.dart`** (new) — `class QuietHours({int startHour, startMinute, endHour, endMinute, bool enabled})` value (`copyWith` / `==` / `hashCode` / `toString`, matching `ReminderSchedule`) + `const kDefaultQuietHours` (22:00–07:00, **disabled**) + `DateTime applyQuietHours(DateTime candidate, QuietHours q)`. Pure, wall-clock only, no `DateTime.now()`. Half-open window (candidate exactly at start = inside, exactly at end = outside); `end <= start` wraps past midnight — a pre-midnight candidate shifts to the window end on the **next** day, a post-midnight one to the **same** day; `start == end` (zero-width) and `!enabled` are pass-throughs. Result has seconds/millis zeroed. Exported from `olf_core.dart`.
+  - **`core/lib/src/settings/settings_repository.dart`** — added `SettingKeys.quietHours = 'quiet_hours'`. KV store only; **no schema change** (the `app_settings` table already exists).
+  - **`app/lib/src/reminders/quiet_hours_providers.dart`** (new) — `encodeQuietHours` / `decodeQuietHours` (format `enabled;startH:startM;endH:endM`; any malformed/absent value → `kDefaultQuietHours`, so a bad string never bricks reminders); `quietHoursProvider` (`StreamProvider<QuietHours>` — `kDefaultQuietHours` until the DB gate opens, then `settingsRepository.watch(SettingKeys.quietHours).map(decodeQuietHours)`); `quietHoursControllerProvider` + `QuietHoursController.save(QuietHours)`.
+  - **`app/lib/src/reminders/reminder_controller.dart`** — new ctor seam `Future<QuietHours> Function() quietHours` (default `() async => kDefaultQuietHours`). In `_apply`, applied **after** p4.2's learned hour: the event-relative branch wraps `nextFireTime`'s instant in `applyQuietHours` before `scheduleAt`; the fixed-time branch builds today's `hour:minute` slot, runs it through `applyQuietHours`, and — only if it moved — hands `scheduleDaily` a `schedule.copyWith(hour:, minute:)` at the window end (a daily reminder then lands at window-end every day; the stored preference is untouched). A slot outside the window is a no-op.
+  - **`app/lib/src/reminders/reminder_providers.dart`** — `reminderControllerProvider` wires `quietHours: () => ref.read(quietHoursProvider.future)`; `ReminderSync.replan` reads `quietHoursProvider.future` once per pass and wraps each event-relative instant in `applyQuietHours`.
+  - **`app/lib/src/reminders/notifications_page.dart`** — a `_QuietHoursSection` at the foot of Settings → Notifications: an enable switch (default off) and, when on, Start / End `showTimePicker` rows. Writes go through `QuietHoursController`.
+  - **Tests:** `core/test/reminders/quiet_hours_test.dart` (disabled/zero-width pass-through; non-wrap 13:00–14:00 before/at-start/inside/at-end/after; midnight-wrap 22:00–07:00 at 22:00/23:30/03:00/06:59/07:00/12:00 + a month-boundary shift; value semantics). `app/test/reminders/quiet_hours_providers_test.dart` (encode/decode round-trip both ends + malformed→default; `QuietHoursController` persistence). `reminder_controller_test.dart` +group (event-relative inside→window end, outside→untouched; daily inside→window end with the stored time kept, daily outside→kept; disabled window→no shift). `reminder_sync_test.dart` +1 (start-up re-plan pushes a 23:00 learned-hour instant to 07:00). `notification_settings_test.dart` +group (off by default; enabling persists + reveals both ends; a row opens a real picker wired to the store) and the switch-count assertion bumped by one.
+  - No new dependency, no schema change, no CI change; notifications stay inexact.
+- **Log:**
+  - 2026-09-02 — claimed by worker: phase4; worktree `../olf-wt/p4.4`, branch `feat/p4.4-quiet-hours` off `main` @ `d18dff2`. Folded p4.3 → DONE (PR #47, squash `d18dff2`); bumped the Phase 4 header note to `IN PROGRESS (p4.4)`. Set IN PROGRESS.
+  - 2026-09-02 — built to DoD §1.4. `core/quiet_hours.dart` (`QuietHours` value + `kDefaultQuietHours` disabled + pure `applyQuietHours`, wall-clock, midnight-wrap, half-open); `SettingKeys.quietHours` KV key (no schema change); app `quiet_hours_providers.dart` (encode/decode with malformed→default, DB-gated stream, controller); `applyQuietHours` threaded through `ReminderController._apply` (event-relative + daily hour:minute shift) and `ReminderSync.replan`, after p4.2's learned hour; Settings → Notifications quiet-hours switch + Start/End pickers. core (459) + app (171) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#48](https://github.com/Abbo0dio/olf/pull/48) opened; set IN REVIEW.
 
 #### p4.5 — Permanent "stop asking me to subscribe" control
 - **Status:** TODO

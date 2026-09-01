@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:olf_app/src/reminders/quiet_hours_providers.dart';
 import 'package:olf_app/src/reminders/reminder_providers.dart';
 import 'package:olf_core/olf_core.dart';
 
@@ -152,6 +153,55 @@ void main() {
 
           expect(scheduler.scheduled, isEmpty);
           expect(scheduler.cancelled, isNot(contains(ReminderKind.medication)));
+        },
+      );
+    },
+  );
+
+  testWidgets(
+    'the re-plan pushes a fire time inside quiet hours to the window end (p4.4)',
+    (tester) async {
+      final db = memoryDb();
+      final scheduler = FakeReminderScheduler();
+
+      await seedRegularHistory(db);
+      final reminders = DriftReminderRepository(db);
+      await reminders.save(
+        const ReminderSchedule(
+          kind: ReminderKind.upcomingPeriod,
+          hour: 9,
+          minute: 0,
+          enabled: true,
+        ),
+      );
+
+      await pumpOlf(
+        tester,
+        overrides: [
+          dbOverride(db),
+          reminderSchedulerProvider.overrideWithValue(scheduler),
+          // Learned hour 23:00 lands the one-shot deep inside a 22:00–07:00
+          // window...
+          preferredHourProvider.overrideWith((ref) async => 23),
+          quietHoursProvider.overrideWith(
+            (ref) => Stream<QuietHours>.value(
+              const QuietHours(
+                startHour: 22,
+                startMinute: 0,
+                endHour: 7,
+                endMinute: 0,
+                enabled: true,
+              ),
+            ),
+          ),
+        ],
+        body: () async {
+          await flush(tester);
+
+          final armed = scheduler.oneShotFor(ReminderKind.upcomingPeriod);
+          expect(armed, isNotNull, reason: 'the start-up pass armed it');
+          // ...so delivery is shifted to 07:00, never dropped.
+          expect((armed!.hour, armed.minute), (7, 0));
         },
       );
     },
