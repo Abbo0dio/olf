@@ -3160,7 +3160,8 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — review PASS. Merged as `d0501f2` (squash). DONE.
 
 #### p4.6 — Fold the p1.7 medication reminder into the unified system
-- **Status:** IN PROGRESS — worker: phase4; worktree `../olf-wt/p4.6`, branch `feat/p4.6-fold-med-reminder` off `main` @ `d0501f2`.
+- **Status:** IN REVIEW — PR [#50](https://github.com/Abbo0dio/olf/pull/50). Do not self-merge, do not set DONE.
+- **Branch / worktree:** `feat/p4.6-fold-med-reminder` / `../olf-wt/p4.6` off `main` @ `d0501f2`.
 - **Owner:** worker: phase4 · **Depends on:** p4.1, p4.3, p4.4
 - **Requirement refs:** §7, §1.4 (one code path, no dead parallel system)
 - **Goal:** Remove the standalone p1.7 medication-reminder UI + bespoke provider so the `medication` category is managed only through the Phase 4 Settings → Notifications section, on the same controller / scheduler / planning path as every other category. No data migration — same row, same `kind`.
@@ -3181,6 +3182,7 @@ the v1-vs-v2-on-own-data comparison above).
   - No new dependency, no schema change, no CI change; `medication` notification behaviour unchanged.
 - **Log:**
   - 2026-09-02 — claimed by worker: phase4; worktree `../olf-wt/p4.6`, branch `feat/p4.6-fold-med-reminder` off `main` @ `d0501f2`. Folded p4.5 → DONE (PR #49, squash `d0501f2`); bumped the Phase 4 header note to `IN PROGRESS (p4.6)`. Set IN PROGRESS.
+  - 2026-09-02 — built to DoD §1.4. Removed `_ReminderSection` from `meds_page.dart` (page is Birth control + Medications; title `Medications`); **deleted** `medicationReminderProvider` (no alias, no ripple past the meds page); refreshed the `ReminderController` doc-comment; manifest audit comments updated for the renamed screen (audit PASS). No data migration, no schema change. Added a p1.7-upgrade regression (pre-stored enabled `medication` row schedules through the unified controller + surfaces on in Settings → Notifications); `meds_page` / `theme_render` finders updated; deleted the standalone-path meds test. core (463) + app (179) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#50](https://github.com/Abbo0dio/olf/pull/50) opened; set IN REVIEW.
 
 **Exit gate:** every notification type separately controllable (p4.1); delivery behaviour-timed with a safe fallback (p4.2); all copy reviewed and locked behind a content test with no PHI (p4.3); a quiet-hours window that shifts rather than drops (p4.4); a permanent "stop asking to subscribe" control, documented as a Phase 10 gate (p4.5); the p1.7 medication reminder on the one unified path (p4.6).
 
