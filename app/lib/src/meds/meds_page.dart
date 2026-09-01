@@ -3,29 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../period/period_format.dart';
-import '../reminders/reminder_controller.dart';
-import '../reminders/reminder_providers.dart';
 import 'meds_providers.dart';
 
-/// Record medications and a birth-control method, and switch on one daily
-/// reminder (p1.7).
+/// Record medications and a birth-control method (p1.7).
 ///
-/// Everything here is optional and local. The reminder is a single generic
-/// notification — it never names a medication or method (see
-/// `reminder_scheduler.dart`).
+/// Everything here is optional and local. The daily "remind me to take it"
+/// notification is no longer set here — it is the `medication` category in
+/// Settings → Notifications, on the same unified path as every other reminder
+/// (p4.6). The stored reminder row is untouched by that move.
 class MedsPage extends ConsumerWidget {
   const MedsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Medications & reminders')),
+      appBar: AppBar(title: const Text('Medications')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: const [
-          _SectionHeader('Daily reminder'),
-          _ReminderSection(),
-          Divider(height: 32),
           _SectionHeader('Birth control'),
           _BirthControlSection(),
           Divider(height: 32),
@@ -52,64 +47,6 @@ class _SectionHeader extends StatelessWidget {
           color: theme.colorScheme.primary,
         ),
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Daily reminder
-// ---------------------------------------------------------------------------
-
-class _ReminderSection extends ConsumerWidget {
-  const _ReminderSection();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(medicationReminderProvider);
-    final schedule = async.value;
-    final enabled = schedule?.enabled ?? false;
-    final hour = schedule?.hour ?? ReminderController.defaultHour;
-    final minute = schedule?.minute ?? ReminderController.defaultMinute;
-    final controller = ref.read(reminderControllerProvider);
-
-    return Column(
-      children: [
-        SwitchListTile(
-          value: enabled,
-          title: const Text('Remind me once a day'),
-          subtitle: const Text(
-            'A local notification. The text is generic — it never names a '
-            'medication or method.',
-          ),
-          onChanged: async.isLoading
-              ? null
-              : (value) => controller.setEnabled(
-                  ReminderKind.medication,
-                  enabled: value,
-                ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.schedule),
-          title: const Text('Time'),
-          subtitle: Text(TimeOfDay(hour: hour, minute: minute).format(context)),
-          enabled: enabled,
-          onTap: enabled
-              ? () async {
-                  final picked = await showTimePicker(
-                    context: context,
-                    initialTime: TimeOfDay(hour: hour, minute: minute),
-                  );
-                  if (picked != null) {
-                    await controller.setTime(
-                      ReminderKind.medication,
-                      hour: picked.hour,
-                      minute: picked.minute,
-                    );
-                  }
-                }
-              : null,
-        ),
-      ],
     );
   }
 }

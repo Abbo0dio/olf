@@ -101,6 +101,33 @@ void main() {
         expect(scheduler.cancelled, isEmpty);
       },
     );
+
+    test(
+      'a row already stored enabled (p1.7 upgrade) still schedules through the '
+      'unified controller',
+      () async {
+        // Exactly what a p1.7 install left behind: an enabled medication row
+        // at a custom time, written straight to the repo (no p4.x UI involved).
+        await repo.save(
+          const ReminderSchedule(
+            kind: ReminderKind.medication,
+            hour: 7,
+            minute: 30,
+            enabled: true,
+          ),
+        );
+
+        // Re-applying it (Settings → Notifications with the row already on, or a
+        // time tweak) goes through the same path as every other fixed kind.
+        await controller.setEnabled(ReminderKind.medication, enabled: true);
+
+        final daily = scheduler.scheduled.single;
+        expect(daily.kind, ReminderKind.medication);
+        expect((daily.hour, daily.minute), (7, 30));
+        expect(daily.enabled, isTrue);
+        expect(scheduler.oneShots, isEmpty);
+      },
+    );
   });
 
   group('event-relative kind (with a forecast)', () {

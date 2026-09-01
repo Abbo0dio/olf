@@ -1,12 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- audited: p1.7 medication reminder. Shows the single daily local
-         notification the user explicitly turns on in Medications & reminders.
-         No network, no data leaves the device. Reviewed 2026-08-29 by
-         worker: phase1. -->
+    <!-- audited: local reminder notifications (p1.7; per-category since p4.1).
+         Shows only the local notifications the user turns on in the Notifications
+         settings screen. No network. Reviewed 2026-08-29 worker: phase1; screen
+         name updated 2026-09-02 worker: phase4 (p4.6). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- audited: p1.7 medication reminder. Lets flutter_local_notifications
-         re-register the pending daily reminder after a device restart so it
-         keeps firing. No network. Reviewed 2026-08-29 by worker: phase1. -->
+    <!-- audited: local reminder notifications (p1.7; per-category since p4.1).
+         Lets flutter_local_notifications re-register pending reminders after a
+         restart so they keep firing. No network. Reviewed 2026-08-29
+         worker: phase1. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- audited: p2.1 biometric unlock. Lets local_auth show the system
          fingerprint / face prompt as an opt-in shortcut past the app PIN. No

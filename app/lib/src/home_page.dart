@@ -32,7 +32,7 @@ class HomePage extends ConsumerWidget {
           if (database case AsyncData()) ...[
             IconButton(
               icon: const Icon(Icons.medication_outlined),
-              tooltip: 'Medications & reminders',
+              tooltip: 'Medications',
               onPressed: () => Navigator.of(
                 context,
               ).push(MaterialPageRoute<void>(builder: (_) => const MedsPage())),

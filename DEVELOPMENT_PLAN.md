@@ -2966,7 +2966,7 @@ the v1-vs-v2-on-own-data comparison above).
 
 ### Phase 4 — Notifications & reminders
 
-**Status:** IN PROGRESS (p4.5) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
+**Status:** IN PROGRESS (p4.6) · **Requirement refs:** §7, §8 (notification a11y / verbosity control), §9(6), §9(7).
 
 **Phase-wide constraints:** no new runtime dependency (the p1.7 notification stack — `flutter_local_notifications` + `flutter_timezone` + `timezone` — covers all of Phase 4); no schema change (new `ReminderKind` values are additive text in `reminders.kind`; app-wide prefs use the `app_settings` KV store); notifications stay **inexact** — no exact-alarm permission, manifest untouched; no new CI workflow.
 
@@ -3133,8 +3133,9 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — review PASS. Merged as `4f612b3` (squash). DONE.
 
 #### p4.5 — Permanent "stop asking me to subscribe" control
-- **Status:** IN REVIEW — PR [#49](https://github.com/Abbo0dio/olf/pull/49). Do not self-merge, do not set DONE.
-- **Branch / worktree:** `feat/p4.5-subscription-prompt-control` / `../olf-wt/p4.5` off `main` @ `4f612b3`.
+- **Status:** DONE (2026-09-02)
+- **PR:** [#49](https://github.com/Abbo0dio/olf/pull/49) · squash `d0501f2`
+- **Branch / worktree:** `feat/p4.5-subscription-prompt-control` / `../olf-wt/p4.5` (removed)
 - **Owner:** worker: phase4 · **Depends on:** —
 - **Requirement refs:** §7 ("easy stop asking me to subscribe" control), §9(4)
 - **Goal:** Establish now, as an enforceable principle, a single persistent switch that permanently silences subscription/upsell prompting, so Phase 10's paid tier already has a suppression path to honour. No upsell UI exists yet.
@@ -3156,9 +3157,10 @@ the v1-vs-v2-on-own-data comparison above).
 - **Log:**
   - 2026-09-02 — claimed by worker: phase4; worktree `../olf-wt/p4.5`, branch `feat/p4.5-subscription-prompt-control` off `main` @ `4f612b3`. Folded p4.4 → DONE (PR #48, squash `4f612b3`); bumped the Phase 4 header note to `IN PROGRESS (p4.5)`. Set IN PROGRESS.
   - 2026-09-02 — built to DoD §1.4. `SettingKeys.suppressSubscriptionPrompts` + pure `subscriptionPromptsAllowed(String?)` helper (only `'true'` suppresses; absent/malformed → allowed) in core; app `subscription_prompt_providers.dart` (`subscriptionPromptsAllowedProvider` default `true`, `setSubscriptionPromptsSuppressed`); Settings → Subscriptions → "Don't show subscription offers" switch (immediate, no dialog, no re-prompt); `docs/monetization-principles.md` hard-gate contract + §9 Phase 10 backlog line. No schema/dependency/CI change. core (463) + app (177) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#49](https://github.com/Abbo0dio/olf/pull/49) opened; set IN REVIEW.
+  - 2026-09-02 — review PASS. Merged as `d0501f2` (squash). DONE.
 
 #### p4.6 — Fold the p1.7 medication reminder into the unified system
-- **Status:** TODO
+- **Status:** IN PROGRESS — worker: phase4; worktree `../olf-wt/p4.6`, branch `feat/p4.6-fold-med-reminder` off `main` @ `d0501f2`.
 - **Owner:** worker: phase4 · **Depends on:** p4.1, p4.3, p4.4
 - **Requirement refs:** §7, §1.4 (one code path, no dead parallel system)
 - **Goal:** Remove the standalone p1.7 medication-reminder UI + bespoke provider so the `medication` category is managed only through the Phase 4 Settings → Notifications section, on the same controller / scheduler / planning path as every other category. No data migration — same row, same `kind`.
@@ -3170,6 +3172,15 @@ the v1-vs-v2-on-own-data comparison above).
   - Still-relevant p1.7 `reminder_controller_test.dart` assertions migrate into the unified suites; dead tests deleted.
 - **Tests required:** regression test that a pre-existing enabled medication schedule still schedules post-refactor; `meds_page` widget test updated (no reminder section); unified notification-settings test exercises the `medication` row; full suites green.
 - **Notes:** pure consolidation, no new capability. If removing `medicationReminderProvider` ripples past the meds page, stop and flag scope.
+- **Build detail (worker: phase4):**
+  - **`app/lib/src/meds/meds_page.dart`** — removed `_ReminderSection` + its `_SectionHeader('Daily reminder')` + the leading `Divider`; the page is now Birth control + Medications only. Dropped the now-unused `reminder_controller.dart` / `reminder_providers.dart` imports. Doc-comment rewritten (the daily reminder is the `medication` category in Settings → Notifications; the stored row is untouched). **AppBar title `Medications & reminders` → `Medications`** and the `HomePage` icon-button tooltip to match — a consequential rename so the title isn't lying about a control that has moved (ripples: `meds_page_test.dart`, `theme_render_test.dart` finders, one `AndroidManifest.xml` audit comment that named the old screen — comment-only, audit still PASS). **Flag for review:** the dispatch asked only for the doc-comment; the title rename is my call — trivially revertible if unwanted.
+  - **`app/lib/src/reminders/reminder_providers.dart`** — **deleted** `medicationReminderProvider` (no alias). Its only reader was `meds_page.dart`; the generic `reminderScheduleProvider(ReminderKind.medication)` (p4.1) already covers the Settings → Notifications surface. **No ripple** outside the meds page + its test.
+  - **`app/lib/src/reminders/reminder_controller.dart`** — refreshed the class doc-comment so it no longer frames `medication` as the special p1.7 case (it has been a plain fixed-time kind since p4.1). No behaviour or signature change; `ReminderController.defaultHour` / `defaultMinute` unchanged. `reminder_scheduler.dart` needed no change — its only `medication` mention just names a fixed-time kind.
+  - **No data migration, no schema change.** The `reminders` row with `kind = medication` and its OS notification are untouched by this slice.
+  - **Tests:** `meds_page_test.dart` — deleted `'turning the reminder on schedules it and persists'` (standalone-path only); added `'no reminder UI here (p4.6)'` (no `SwitchListTile`, no "Daily reminder"; Birth control + Add medication still render); `openMeds` finders updated for the new title. `reminder_controller_test.dart` (fixed-time group) +1 — a row pre-stored enabled (p1.7 shape) written straight to the repo still `scheduleDaily`s at its stored time through the unified controller. `notification_settings_test.dart` +1 — a pre-existing enabled `medication` row surfaces in Settings → Notifications with the switch on and its stored time shown. `theme_render_test.dart` — meds-screen finders updated for the new title.
+  - No new dependency, no schema change, no CI change; `medication` notification behaviour unchanged.
+- **Log:**
+  - 2026-09-02 — claimed by worker: phase4; worktree `../olf-wt/p4.6`, branch `feat/p4.6-fold-med-reminder` off `main` @ `d0501f2`. Folded p4.5 → DONE (PR #49, squash `d0501f2`); bumped the Phase 4 header note to `IN PROGRESS (p4.6)`. Set IN PROGRESS.
 
 **Exit gate:** every notification type separately controllable (p4.1); delivery behaviour-timed with a safe fallback (p4.2); all copy reviewed and locked behind a content test with no PHI (p4.3); a quiet-hours window that shifts rather than drops (p4.4); a permanent "stop asking to subscribe" control, documented as a Phase 10 gate (p4.5); the p1.7 medication reminder on the one unified path (p4.6).
 

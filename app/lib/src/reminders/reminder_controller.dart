@@ -3,7 +3,8 @@ import 'package:olf_core/olf_core.dart';
 import 'reminder_scheduler.dart';
 
 /// Keeps a stored [ReminderSchedule] and its OS notification in step, for **any**
-/// [ReminderKind] (p4.1 — p1.7 handled only `medication`).
+/// [ReminderKind] — every category, `medication` included, goes through here on
+/// one path (p4.1, p4.6).
 ///
 /// The UI calls [setEnabled] / [setTime]; it never talks to the
 /// [ReminderScheduler] directly. Writing the row is what drives the per-kind
