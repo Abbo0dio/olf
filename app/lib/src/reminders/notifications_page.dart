@@ -7,10 +7,14 @@ import 'reminder_controller.dart';
 import 'reminder_copy.dart';
 import 'reminder_providers.dart';
 
-/// Settings → Notifications (p4.1).
+/// Settings → Notifications (p4.1, p4.2).
 ///
 /// One independently-toggleable category per row. Each row reads and writes only
 /// its own stored reminder — turning one on or off never touches another.
+///
+/// For the forecast-anchored kinds the time control is honest about p4.2: once
+/// there is a learned logging hour it drives delivery, so the row shows that
+/// effective time read-only instead of a picker that would be silently ignored.
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
 
@@ -67,37 +71,101 @@ class _CategoryTile extends ConsumerWidget {
               : (value) => controller.setEnabled(kind, enabled: value),
         ),
         if (enabled && awaitingHistory)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(72, 0, 16, 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "Available once there's enough logged history to predict.",
-              ),
-            ),
+          const _Note(
+            "Available once there's enough logged history to predict.",
           )
         else if (enabled)
-          ListTile(
-            leading: const Icon(Icons.schedule),
-            title: const Text('Time'),
-            subtitle: Text(
-              TimeOfDay(hour: hour, minute: minute).format(context),
-            ),
-            onTap: () async {
-              final picked = await showTimePicker(
-                context: context,
-                initialTime: TimeOfDay(hour: hour, minute: minute),
-              );
-              if (picked != null) {
-                await controller.setTime(
-                  kind,
-                  hour: picked.hour,
-                  minute: picked.minute,
-                );
-              }
-            },
-          ),
+          _TimeArea(kind: kind, hour: hour, minute: minute),
       ],
+    );
+  }
+}
+
+/// The time control for one enabled category.
+///
+///  * Fixed-time kinds (`medication` / `bbtPrompt`) — a manual time picker.
+///  * Forecast-anchored kinds with a **learned logging hour** (p4.2) — a
+///    read-only line with the effective time; the learned hour wins regardless,
+///    so a picker here would be a lie.
+///  * Forecast-anchored kinds with no learned hour yet — the manual picker plus
+///    a caption saying it is only the interim default.
+class _TimeArea extends ConsumerWidget {
+  const _TimeArea({
+    required this.kind,
+    required this.hour,
+    required this.minute,
+  });
+
+  final ReminderKind kind;
+  final int hour;
+  final int minute;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!isEventRelativeReminder(kind)) {
+      return _Picker(kind: kind, hour: hour, minute: minute);
+    }
+
+    final learnedHour = ref.watch(preferredHourProvider).value;
+    if (learnedHour != null) {
+      final effective = TimeOfDay(hour: learnedHour, minute: 0);
+      return ListTile(
+        leading: const Icon(Icons.schedule),
+        title: Text('Around ${effective.format(context)}'),
+        subtitle: const Text('Timed to when you usually log'),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Picker(kind: kind, hour: hour, minute: minute),
+        const _Note(
+          "Until you've logged enough, we'll send these around this time.",
+        ),
+      ],
+    );
+  }
+}
+
+class _Picker extends ConsumerWidget {
+  const _Picker({required this.kind, required this.hour, required this.minute});
+
+  final ReminderKind kind;
+  final int hour;
+  final int minute;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      leading: const Icon(Icons.schedule),
+      title: const Text('Time'),
+      subtitle: Text(TimeOfDay(hour: hour, minute: minute).format(context)),
+      onTap: () async {
+        final picked = await showTimePicker(
+          context: context,
+          initialTime: TimeOfDay(hour: hour, minute: minute),
+        );
+        if (picked != null) {
+          await ref
+              .read(reminderControllerProvider)
+              .setTime(kind, hour: picked.hour, minute: picked.minute);
+        }
+      },
+    );
+  }
+}
+
+class _Note extends StatelessWidget {
+  const _Note(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
+      child: Align(alignment: Alignment.centerLeft, child: Text(text)),
     );
   }
 }
