@@ -286,17 +286,33 @@ class BirthControlEntries extends Table {
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
-/// What a stored [Reminders] row is about. p1.7 ships exactly one kind; Phase 4
-/// generalises the table (per-medication, several times a day, snooze, …).
-enum ReminderKind { medication }
-
-/// A single recurring local reminder (schema v6, p1.7).
+/// What a stored [Reminders] row is about.
 ///
-/// p1.7 keeps **one** row (`kind = medication`): a daily notification at
-/// `hour`:`minute` local time, on or off. There is deliberately **no free-text
-/// column** — the notification body is a fixed, generic string chosen in the
-/// app layer, so no medication name, dosage or method can ever reach the lock
-/// screen. `UNIQUE (kind)` keeps it to one row per kind.
+/// p1.7 shipped exactly one kind (`medication`). p4.1 adds the rest of the
+/// notification categories; each is an independent row keyed by `UNIQUE (kind)`.
+/// Values store as their [Enum.name] text in the existing `kind` column — adding
+/// a value is purely additive, no migration.
+///
+///  * [medication] / [bbtPrompt] — fixed daily clock time.
+///  * [upcomingPeriod] / [fertileWindow] / [latePeriodCheckIn] — anchored on the
+///    cycle forecast (see `reminder_planning.dart`).
+enum ReminderKind {
+  medication,
+  upcomingPeriod,
+  fertileWindow,
+  bbtPrompt,
+  latePeriodCheckIn,
+}
+
+/// A single recurring local reminder (schema v6, p1.7; generalised p4.1).
+///
+/// One row per [ReminderKind] (`UNIQUE (kind)`): the local wall-clock
+/// `hour`:`minute` the user picked, and whether it is on. `hour`:`minute` is the
+/// fire time for the fixed daily kinds and the time-of-day for the
+/// forecast-anchored kinds (the day itself comes from `reminder_planning.dart`).
+/// There is deliberately **no free-text column** — the notification body is a
+/// fixed, generic string chosen in the app layer, so no health detail can ever
+/// reach the lock screen.
 @DataClassName('Reminder')
 class Reminders extends Table {
   IntColumn get id => integer().autoIncrement()();

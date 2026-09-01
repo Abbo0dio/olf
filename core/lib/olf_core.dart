@@ -63,6 +63,7 @@ export 'src/prediction/prediction_delta.dart';
 export 'src/prediction/predictor.dart';
 export 'src/prediction/robust_predictor.dart';
 export 'src/reminders/drift_reminder_repository.dart';
+export 'src/reminders/reminder_planning.dart';
 export 'src/reminders/reminder_repository.dart';
 export 'src/reminders/reminder_schedule.dart';
 export 'src/repository/cycle_event_repository.dart';

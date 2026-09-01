@@ -240,3 +240,28 @@ The CI guard requires an entry naming the current phase.
   Residual risks are unchanged. The Phase 3 `§9` follow-ups are all
   prediction-quality items, none security-relevant. No design changes required
   by this review.
+- **2026-09-01 — Phase 4 opening gate — reviewer: worker: phase4.** Phase 4
+  (notifications & reminders) does one thing new for the threat model: it makes
+  olf emit text **outside the app's own gated UI**, onto the OS notification
+  surface (lock screen / shade). That is an *egress point at the existing app
+  boundary*, not a new boundary — but the content crossing it is the concern.
+  Mitigation, in place from p4.1: every notification title/body is a fixed,
+  generic, PHI-free string chosen from a per-`ReminderKind` lookup
+  (`notificationCopyFor`), locked by a denylist unit test (no medication /
+  method / diagnosis / "pregnan*" / cycle-state words); the full sensitive-copy
+  audit is p4.3, quiet-hours suppression p4.4. Every Android channel is
+  `visibility: private` at `defaultImportance`. **No new asset:** reminder
+  schedules already live in the encrypted `reminders` table (p1.7); Phase 4
+  adds only new *text* `ReminderKind` values in the existing `kind` column and
+  reuses the `app_settings` KV store for any app-wide prefs — **no schema
+  change, no new table, no migration**. **No new data flow and no network:**
+  `flutter_local_notifications` schedules locally on-device with no push
+  service / FCM; the p1.7 notification stack is unchanged and **no dependency
+  is added** anywhere in Phase 4. **No new permission:** notifications stay
+  inexact (`inexactAllowWhileIdle`) — no `SCHEDULE_EXACT_ALARM` /
+  `USE_EXACT_ALARM`, the Android manifest is untouched and the dependency-audit
+  permission set is unchanged. Assets, adversaries, trust boundaries, and the
+  data-flow diagram are unchanged. Watch item for later slices: p4.2 derives
+  the user's usual logging hour on-device to time reminders — it must stay a
+  recomputed-in-memory value, never stored or transmitted; record it here when
+  it lands. No design changes required by this review.
