@@ -33,6 +33,11 @@ abstract final class SettingKeys {
   /// (p2.5). Absent / anything else means off — the default. olf shares nothing
   /// regardless of this today; it exists so any future sharing is opt-in.
   static const String dataSharingOptIn = 'data_sharing_opt_in';
+
+  /// The app-wide quiet-hours window (p4.4) — an opaque `QuietHours` encoding
+  /// owned by the app layer (`quiet_hours_providers.dart`). Absent means the
+  /// default: disabled, so nothing is held.
+  static const String quietHours = 'quiet_hours';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).

@@ -21,12 +21,15 @@ class ReminderController {
     this._scheduler, {
     required CyclePrediction? Function() prediction,
     Future<int?> Function() preferredHour = _noPreferredHour,
+    Future<QuietHours> Function() quietHours = _noQuietHours,
     DateTime Function() now = DateTime.now,
   }) : _prediction = prediction,
        _preferredHour = preferredHour,
+       _quietHours = quietHours,
        _now = now;
 
   static Future<int?> _noPreferredHour() async => null;
+  static Future<QuietHours> _noQuietHours() async => kDefaultQuietHours;
 
   final ReminderRepository _repository;
   final ReminderScheduler _scheduler;
@@ -36,6 +39,11 @@ class ReminderController {
   /// history is thin. Applied to the event-relative kinds only; recomputed on
   /// each call, never stored.
   final Future<int?> Function() _preferredHour;
+
+  /// The app-wide quiet-hours window (p4.4). Applied **after** the learned hour:
+  /// a fire instant that lands inside the window is pushed to the window's end.
+  final Future<QuietHours> Function() _quietHours;
+
   final DateTime Function() _now;
 
   /// Used the first time a reminder is turned on without a picked time — a
@@ -84,12 +92,33 @@ class ReminderController {
 
   /// Hand an enabled [schedule] to the scheduler: daily for fixed-time kinds,
   /// a computed one-shot for forecast-anchored kinds (or a cancel when there is
-  /// nothing to schedule yet).
+  /// nothing to schedule yet). Any resulting fire time inside the quiet-hours
+  /// window is shifted to the window's end (p4.4) — never dropped.
   Future<void> _apply(ReminderSchedule schedule) async {
+    final quiet = await _quietHours();
+
     if (!isEventRelativeReminder(schedule.kind)) {
-      await _scheduler.scheduleDaily(schedule);
+      // A daily notification repeats at one `hour:minute`. Rather than move a
+      // single instant, shift that time once: build today's slot, run it through
+      // quiet hours, and hand the (possibly shifted) time to `scheduleDaily`.
+      // A slot outside the window comes back unchanged, so this is a no-op then.
+      final now = _now();
+      final slot = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        schedule.hour,
+        schedule.minute,
+      );
+      final shifted = applyQuietHours(slot, quiet);
+      final effective =
+          (shifted.hour == schedule.hour && shifted.minute == schedule.minute)
+          ? schedule
+          : schedule.copyWith(hour: shifted.hour, minute: shifted.minute);
+      await _scheduler.scheduleDaily(effective);
       return;
     }
+
     final when = nextFireTime(
       kind: schedule.kind,
       schedule: schedule,
@@ -98,7 +127,7 @@ class ReminderController {
       overrideHour: await _preferredHour(),
     );
     if (when != null) {
-      await _scheduler.scheduleAt(schedule.kind, when);
+      await _scheduler.scheduleAt(schedule.kind, applyQuietHours(when, quiet));
     } else {
       await _scheduler.cancel(schedule.kind);
     }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../prediction/prediction_providers.dart';
+import 'quiet_hours_providers.dart';
 import 'reminder_controller.dart';
 import 'reminder_copy.dart';
 import 'reminder_providers.dart';
@@ -33,8 +34,76 @@ class NotificationsPage extends StatelessWidget {
             ),
           ),
           for (final kind in reminderCategoryOrder) _CategoryTile(kind: kind),
+          const Divider(height: 32),
+          const _QuietHoursSection(),
         ],
       ),
+    );
+  }
+}
+
+/// A single app-wide window during which reminders are held and released at its
+/// end instead of arriving overnight (p4.4). Default off; when on, both ends are
+/// editable and the window may run past midnight.
+class _QuietHoursSection extends ConsumerWidget {
+  const _QuietHoursSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final quiet = ref.watch(quietHoursProvider).value ?? kDefaultQuietHours;
+    final controller = ref.read(quietHoursControllerProvider);
+
+    Future<void> pick(bool isStart) async {
+      final current = isStart
+          ? TimeOfDay(hour: quiet.startHour, minute: quiet.startMinute)
+          : TimeOfDay(hour: quiet.endHour, minute: quiet.endMinute);
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: current,
+      );
+      if (picked == null) return;
+      await controller.save(
+        isStart
+            ? quiet.copyWith(startHour: picked.hour, startMinute: picked.minute)
+            : quiet.copyWith(endHour: picked.hour, endMinute: picked.minute),
+      );
+    }
+
+    return Column(
+      children: [
+        SwitchListTile(
+          value: quiet.enabled,
+          title: const Text('Quiet hours'),
+          subtitle: const Text(
+            'Hold reminders during this window and send them when it ends',
+          ),
+          onChanged: (value) => controller.save(quiet.copyWith(enabled: value)),
+        ),
+        if (quiet.enabled) ...[
+          ListTile(
+            leading: const Icon(Icons.bedtime_outlined),
+            title: const Text('Start'),
+            subtitle: Text(
+              TimeOfDay(
+                hour: quiet.startHour,
+                minute: quiet.startMinute,
+              ).format(context),
+            ),
+            onTap: () => pick(true),
+          ),
+          ListTile(
+            leading: const Icon(Icons.wb_twilight_outlined),
+            title: const Text('End'),
+            subtitle: Text(
+              TimeOfDay(
+                hour: quiet.endHour,
+                minute: quiet.endMinute,
+              ).format(context),
+            ),
+            onTap: () => pick(false),
+          ),
+        ],
+      ],
     );
   }
 }

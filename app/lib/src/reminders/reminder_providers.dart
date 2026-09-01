@@ -4,6 +4,7 @@ import 'package:olf_core/olf_core.dart';
 import '../prediction/prediction_providers.dart';
 import '../providers.dart';
 import 'local_notification_reminder_scheduler.dart';
+import 'quiet_hours_providers.dart';
 import 'reminder_controller.dart';
 import 'reminder_scheduler.dart';
 
@@ -66,6 +67,7 @@ final reminderControllerProvider = Provider<ReminderController>((ref) {
     ref.watch(reminderSchedulerProvider),
     prediction: () => ref.read(predictionProvider),
     preferredHour: () => ref.read(preferredHourProvider.future),
+    quietHours: () => ref.read(quietHoursProvider.future),
   );
 });
 
@@ -76,7 +78,8 @@ final reminderControllerProvider = Provider<ReminderController>((ref) {
 /// editing a period changes [predictionProvider], which re-fires the listener
 /// and re-arms `upcomingPeriod` / `fertileWindow` / `latePeriodCheckIn` with no
 /// user action. Each re-plan also picks up the current [preferredHourProvider]
-/// value (p4.2). Fixed-time kinds are never touched here.
+/// value (p4.2) and the current [quietHoursProvider] window (p4.4). Fixed-time
+/// kinds are never touched here.
 class ReminderSync {
   ReminderSync(this._ref);
 
@@ -91,6 +94,7 @@ class ReminderSync {
   Future<void> replan([CyclePrediction? prediction]) async {
     final forecast = prediction ?? _ref.read(predictionProvider);
     final preferredHour = await _ref.read(preferredHourProvider.future);
+    final quiet = await _ref.read(quietHoursProvider.future);
     final repo = _ref.read(reminderRepositoryProvider);
     final scheduler = _ref.read(reminderSchedulerProvider);
 
@@ -105,7 +109,7 @@ class ReminderSync {
         overrideHour: preferredHour,
       );
       if (when != null) {
-        await scheduler.scheduleAt(kind, when);
+        await scheduler.scheduleAt(kind, applyQuietHours(when, quiet));
       } else {
         await scheduler.cancel(kind);
       }

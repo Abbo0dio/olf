@@ -66,6 +66,7 @@ export 'src/reminders/drift_logging_activity_repository.dart';
 export 'src/reminders/drift_reminder_repository.dart';
 export 'src/reminders/logging_activity_repository.dart';
 export 'src/reminders/preferred_hour.dart';
+export 'src/reminders/quiet_hours.dart';
 export 'src/reminders/reminder_planning.dart';
 export 'src/reminders/reminder_repository.dart';
 export 'src/reminders/reminder_schedule.dart';
