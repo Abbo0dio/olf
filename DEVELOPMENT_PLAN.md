@@ -3133,7 +3133,8 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — review PASS. Merged as `4f612b3` (squash). DONE.
 
 #### p4.5 — Permanent "stop asking me to subscribe" control
-- **Status:** IN PROGRESS — worker: phase4; worktree `../olf-wt/p4.5`, branch `feat/p4.5-subscription-prompt-control` off `main` @ `4f612b3`.
+- **Status:** IN REVIEW — PR [#49](https://github.com/Abbo0dio/olf/pull/49). Do not self-merge, do not set DONE.
+- **Branch / worktree:** `feat/p4.5-subscription-prompt-control` / `../olf-wt/p4.5` off `main` @ `4f612b3`.
 - **Owner:** worker: phase4 · **Depends on:** —
 - **Requirement refs:** §7 ("easy stop asking me to subscribe" control), §9(4)
 - **Goal:** Establish now, as an enforceable principle, a single persistent switch that permanently silences subscription/upsell prompting, so Phase 10's paid tier already has a suppression path to honour. No upsell UI exists yet.
@@ -3154,6 +3155,7 @@ the v1-vs-v2-on-own-data comparison above).
   - No new dependency, no schema change, no CI change, no notification behaviour touched.
 - **Log:**
   - 2026-09-02 — claimed by worker: phase4; worktree `../olf-wt/p4.5`, branch `feat/p4.5-subscription-prompt-control` off `main` @ `4f612b3`. Folded p4.4 → DONE (PR #48, squash `4f612b3`); bumped the Phase 4 header note to `IN PROGRESS (p4.5)`. Set IN PROGRESS.
+  - 2026-09-02 — built to DoD §1.4. `SettingKeys.suppressSubscriptionPrompts` + pure `subscriptionPromptsAllowed(String?)` helper (only `'true'` suppresses; absent/malformed → allowed) in core; app `subscription_prompt_providers.dart` (`subscriptionPromptsAllowedProvider` default `true`, `setSubscriptionPromptsSuppressed`); Settings → Subscriptions → "Don't show subscription offers" switch (immediate, no dialog, no re-prompt); `docs/monetization-principles.md` hard-gate contract + §9 Phase 10 backlog line. No schema/dependency/CI change. core (463) + app (177) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#49](https://github.com/Abbo0dio/olf/pull/49) opened; set IN REVIEW.
 
 #### p4.6 — Fold the p1.7 medication reminder into the unified system
 - **Status:** TODO
