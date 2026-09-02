@@ -3315,8 +3315,9 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — review PASS. Merged as `f9dfaa6` (squash). DONE.
 
 #### p5.1c — Contrast, touch targets, keyboard/switch nav, conformance doc
-- **Status:** IN PROGRESS · **Depends on:** p5.1a, p5.1b
+- **Status:** IN REVIEW · **Depends on:** p5.1a, p5.1b
 - **Branch / worktree:** `feat/p5.1c-contrast-nav` / `../olf-wt/p5.1c`
+- **PR:** [#56](https://github.com/Abbo0dio/olf/pull/56)
 - **Owner:** worker: phase5
 - **Requirement refs:** §8 (4.5:1 contrast, ≥ ~9mm / 48dp targets, keyboard/switch nav, WCAG 2.2 AA), §4
 - **Goal:** Close remaining WCAG 2.2 AA gaps — colour contrast in both themes, minimum touch-target size everywhere, full external-keyboard / switch-access operability — and publish a documented AA conformance statement.
@@ -3337,6 +3338,7 @@ exact-alarm path is backlog (§9), not a gate.
   - Verification: `app/test/a11y/` 129 pass (16 guidelines + 16 semantics + 3 focus + 4 keyboard-nav + 48 text-scaling + 42 theme-contrast); app suite + core suite + analyze `--fatal-infos` + format + dependency-audit + `build_runner` (no `.g.dart` drift) all green; no `pubspec.lock` drift; no schema / manifest / CI-workflow change.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.1c`, branch `feat/p5.1c-contrast-nav` off `main` @ `f9dfaa6` (#55). Folded p5.1b → DONE (squash `f9dfaa6`); bumped the Phase 5 header note to `IN PROGRESS (p5.1c)`. Set p5.1c IN PROGRESS.
+  - 2026-09-03 — built to DoD: `core` contrast helper + 14 unit tests; both-theme token sweep (42 assertions, palette untouched); `textContrastGuideline` unskipped on all 16 surfaces; keyboard-nav test (4) + shared helpers; `docs/accessibility-conformance.md` (39 Supports / 2 Partially / 9 N/A) linked from README; 2 follow-ups → §9. No `lib/` change. app 302 / core 473 / a11y 129, all gates green. PR [#56](https://github.com/Abbo0dio/olf/pull/56) opened; set IN REVIEW.
 
 #### p5.2 — Caption / transcript requirement stub for Phase 11 content
 - **Status:** TODO · **Depends on:** none (sequenced after p5.1c)
