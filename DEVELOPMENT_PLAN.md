@@ -152,7 +152,7 @@ A task is not `DONE` until **all** of these hold:
 | **1** | MVP core tracking — free, un-paywalled | `DONE` | Core tracking usable end-to-end; correction loop works; backup/restore works |
 | **2** | Privacy & security hardening | `DONE` | Lock + decoy + auto-delete + masking shipped and tested; standalone policy live; threat model committed; audit gate enforced as a release blocker |
 | **3** | Correctable adaptive prediction engine v2 | `DONE` | v2 shipped behind the unchanged seam: MAE beat on PCOS/postpartum + large calibration gains on every fat-tailed profile (the honest headline is "stops the false precision", per §4); corrections move v2 ~1.7–2.2× v1; no snowballing in-sample or held-out |
-| **4** | Notifications & reminders | `DONE` | Per-category channels each independently toggleable; on-device behaviour-timed delivery with a safe fallback, nothing stored; all copy reviewed + locked behind a content test, no PHI; a quiet-hours window that shifts rather than drops; a permanent "stop asking to subscribe" control gated for Phase 10 [reverted 2026-09-02, PR #<this> — olf is free-forever]; the p1.7 medication reminder folded onto the one unified path |
+| **4** | Notifications & reminders | `DONE` | Per-category channels each independently toggleable; on-device behaviour-timed delivery with a safe fallback, nothing stored; all copy reviewed + locked behind a content test, no PHI; a quiet-hours window that shifts rather than drops; a permanent "stop asking to subscribe" control gated for Phase 10 [reverted 2026-09-02, PR #52 — olf is free-forever]; the p1.7 medication reminder folded onto the one unified path |
 | **5** | Accessibility & design polish | `TODO` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
 | **6** | Health-platform interop & doctor export | `TODO` | Two-way Apple Health / Health Connect sync; doctor-ready PDF |
 | **7** | Life-stage & condition modes | `TODO` | Pregnancy, loss/birth, postpartum, PCOS, endo, PMDD, perimenopause modes shipped |
@@ -3134,7 +3134,7 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — review PASS. Merged as `4f612b3` (squash). DONE.
 
 #### p4.5 — Permanent "stop asking me to subscribe" control
-- **Status:** REVERTED (2026-09-02) — PR #<this>
+- **Status:** REVERTED (2026-09-02) — PR #52
   Shipped in v1.0.0, then withdrawn when olf committed to being free forever (2026-09-02):
   the control implied a paywall that will never exist. Build detail and log below are kept
   as-is, under this banner, for history.
@@ -3190,7 +3190,7 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — built to DoD §1.4. Removed `_ReminderSection` from `meds_page.dart` (page is Birth control + Medications; title `Medications`); **deleted** `medicationReminderProvider` (no alias, no ripple past the meds page); refreshed the `ReminderController` doc-comment; manifest audit comments updated for the renamed screen (audit PASS). No data migration, no schema change. Added a p1.7-upgrade regression (pre-stored enabled `medication` row schedules through the unified controller + surfaces on in Settings → Notifications); `meds_page` / `theme_render` finders updated; deleted the standalone-path meds test. core (463) + app (179) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#50](https://github.com/Abbo0dio/olf/pull/50) opened; set IN REVIEW.
   - 2026-09-02 — review PASS. Merged as `c560f6a` (squash). DONE.
 
-**Exit gate:** every notification type separately controllable (p4.1); delivery behaviour-timed with a safe fallback (p4.2); all copy reviewed and locked behind a content test with no PHI (p4.3); a quiet-hours window that shifts rather than drops (p4.4); a permanent "stop asking to subscribe" control, documented as a Phase 10 gate (p4.5) [reverted 2026-09-02, PR #<this> — olf is free-forever]; the p1.7 medication reminder on the one unified path (p4.6).
+**Exit gate:** every notification type separately controllable (p4.1); delivery behaviour-timed with a safe fallback (p4.2); all copy reviewed and locked behind a content test with no PHI (p4.3); a quiet-hours window that shifts rather than drops (p4.4); a permanent "stop asking to subscribe" control, documented as a Phase 10 gate (p4.5) [reverted 2026-09-02, PR #52 — olf is free-forever]; the p1.7 medication reminder on the one unified path (p4.6).
 
 **Exit-gate status — MET (2026-09-02).** All six build slices p4.1–p4.6 merged to
 `main` (PRs [#45](https://github.com/Abbo0dio/olf/pull/45)–[#50](https://github.com/Abbo0dio/olf/pull/50))
@@ -3224,7 +3224,7 @@ clause maps to the slice that satisfies it:
   re-prompt) plus `docs/monetization-principles.md`: a hard-gate contract that
   every Phase 10+ upsell prompt must check `subscriptionPromptsAllowedProvider`
   (or the `subscriptionPromptsAllowed` core helper) and render nothing when
-  suppressed. **[reverted 2026-09-02, PR #<this> — olf is free-forever]** — the
+  suppressed. **[reverted 2026-09-02, PR #52 — olf is free-forever]** — the
   code, docs, and tests for this control were removed when olf committed to having
   no paid tier ever; the clause is left here as history, not a live deliverable.
 - **p1.7 medication reminder unified** → **p4.6** (#50, `c560f6a`) — the standalone
