@@ -153,7 +153,7 @@ A task is not `DONE` until **all** of these hold:
 | **2** | Privacy & security hardening | `DONE` | Lock + decoy + auto-delete + masking shipped and tested; standalone policy live; threat model committed; audit gate enforced as a release blocker |
 | **3** | Correctable adaptive prediction engine v2 | `DONE` | v2 shipped behind the unchanged seam: MAE beat on PCOS/postpartum + large calibration gains on every fat-tailed profile (the honest headline is "stops the false precision", per §4); corrections move v2 ~1.7–2.2× v1; no snowballing in-sample or held-out |
 | **4** | Notifications & reminders | `DONE` | Per-category channels each independently toggleable; on-device behaviour-timed delivery with a safe fallback, nothing stored; all copy reviewed + locked behind a content test, no PHI; a quiet-hours window that shifts rather than drops; a permanent "stop asking to subscribe" control gated for Phase 10 [reverted 2026-09-02, PR #52 — olf is free-forever]; the p1.7 medication reminder folded onto the one unified path |
-| **5** | Accessibility & design polish | `TODO` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
+| **5** | Accessibility & design polish | `IN PROGRESS` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
 | **6** | Health-platform interop & doctor export | `TODO` | Two-way Apple Health / Health Connect sync; doctor-ready PDF |
 | **7** | Life-stage & condition modes | `TODO` | Pregnancy, loss/birth, postpartum, PCOS, endo, PMDD, perimenopause modes shipped |
 | **8** | Passive wearable integration | `TODO` | Apple Watch companion + ≥1 third-party wearable; passive phase inference |
@@ -3246,19 +3246,141 @@ exact-alarm path is backlog (§9), not a gate.
 
 ### Phase 5 — Accessibility & design polish
 
-**Status:** `TODO` · **Requirement refs:** §4, §8. Slices:
+**Status:** IN PROGRESS (p5.1a) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
 
-- **p5.1** WCAG 2.2 AA audit across all screens — screen-reader labels, logical focus order,
-  Dynamic Type / text scaling, ≥ 4.5:1 contrast, adequate touch targets, switch/keyboard nav.
-- **p5.2** Video/content captions (for Phase 11 content infra — stub the requirement now).
-- **p5.3** Accessibility ↔ privacy balance — user control over verbose screen-reader output on
-  shared devices; session timeout with warning.
-- **p5.4** Discreet app presence — optional alternate app icon and name.
-- **p5.5** Low-end performance verification against the §3 budget; fix regressions; add a CI
-  size/perf check.
-- **p5.6** Data-loss resilience pass — migration tests across simulated OS upgrades.
+**Phase-wide constraints:**
+- No new runtime **Dart** dependency without §5 negotiation. Two slices carry pre-approved platform/CI changes, spelled out in their rows: **p5.4** (Android `activity-alias` + iOS alternate-icon via a hand-rolled platform channel — NO Dart package; the only Phase 5 slice that edits `AndroidManifest.xml` / `Info.plist`, minimally) and **p5.5** (one new CI job measuring APK size + cold-start against a checked-in budget). No other manifest, permission, or CI-workflow change in the phase.
+- **No schema change anywhere in Phase 5.** p5.6 is migration *tests* against the existing v1–v6 history; the app-wide prefs p5.3 adds use the `app_settings` KV store.
+- `core` stays Flutter-free and `DateTime.now()`-free; any timing/verbosity/contrast logic that belongs in `core` is pure and clock-injected.
+- No change to notification, prediction, or lock/decoy behaviour beyond p5.3's additive inactivity timeout.
+- Accessibility fixes must not regress dark mode or the p1.9 inclusive-language lint.
 
-**Exit gate:** documented AA conformance; perf budget met on reference low-end device.
+#### p5.1a — Automated a11y guideline harness + screen-reader semantics & focus order
+- **Status:** IN REVIEW
+- **PR:** [#54](https://github.com/Abbo0dio/olf/pull/54)
+- **Branch / worktree:** `feat/p5.1a-a11y-semantics` / `../olf-wt/p5.1a`
+- **Owner:** worker: phase5 · **Depends on:** none (first Phase 5 slice)
+- **Requirement refs:** §8 (screen-reader compat, logical tab order, keyboard/switch nav), §1.4
+- **Goal:** Stand up a reusable accessibility-guideline test harness, run it over every top-level screen, and fix every screen-reader defect it surfaces — missing/wrong `Semantics` labels on interactive elements, decorative noise that should be excluded, illogical focus/traversal order. After this, a screen shipping an unlabelled control fails CI.
+- **Acceptance criteria:**
+  - `app/test/support/a11y.dart` — shared helper `Future<void> expectMeetsA11yGuidelines(WidgetTester tester, {bool tapTargets = true, bool contrast = true})` wrapping Flutter's `meetsGuideline(labeledTapTargetGuideline)` + `androidTapTargetGuideline` + `iOSTapTargetGuideline` + `textContrastGuideline`. Deep fixes for contrast/target-size are p5.1b/p5.1c — this slice MAY pass `tapTargets:false` / `contrast:false` for a screen and MUST drop a `// p5.1c:` marker where it does.
+  - One widget test per top-level screen (14 above) pumping it in a realistic state and running at least `labeledTapTargetGuideline` — all green, or committed `skip:`-ped with a `p5.1b`/`p5.1c` reason (never deleted).
+  - Every interactive widget (`IconButton`, `InkWell`, `GestureDetector`, custom tappables, calendar day cells, flow/spotting/clot log chips) has a meaningful `Semantics` label or tooltip. Decorative icons/images → `ExcludeSemantics`. Fragmented compound controls → `MergeSemantics`.
+  - Explicit focus/traversal order wherever tree order ≠ reading order (`FocusTraversalGroup`, `Semantics(sortKey: OrdinalSortKey(...))`, `Focus` ordering). At minimum: the onboarding, PIN, and settings forms; the calendar; any screen with a FAB + list.
+  - Screen-reader alternatives for visual-only interactions (swipe-to-delete gets a semantic action or a button).
+  - No layout/behaviour change for a sighted user; no copy change beyond added labels (labels needing pronouns go through the p1.9 `formsFor` seam).
+- **Tests required:**
+  - The per-screen guideline tests (green or explicitly `skip:`-ped with a downstream-slice reason).
+  - `app/test/a11y/semantics_labels_test.dart` — walk each screen's semantics tree; assert no node with an `onTap`/`onLongPress` action has an empty label.
+  - A focus-order test on at least the onboarding flow and the settings list (simulate `nextFocus()`, assert visited order).
+  - Full `core` + `app` suites + analyze `--fatal-infos` + format + dependency-audit + `build_runner` (no `.g.dart` drift) green. Test-time cost only — no workflow change.
+- **Notes / detail:** worker fills in the file/seam list on the branch. Keep the harness to one helper file imported by each screen test — do not build a bespoke a11y framework.
+- **Build detail (worker: phase5):**
+  - **`app/test/support/a11y.dart`** (new, the one helper file) — `expectMeetsA11yGuidelines(tester, {tapTargets = true, contrast = true})` wrapping `meetsGuideline` for `labeledTapTargetGuideline` + `androidTapTargetGuideline` + `iOSTapTargetGuideline` + `textContrastGuideline`; and `unlabelledTappables(tester)` which walks every render view's semantics tree and returns each operable (tap / long-press) node that is not a text field, not hidden, and not folded into an ancestor, whose `label` + `value` + `tooltip` are all empty. Uses the non-deprecated `RendererBinding.instance.renderViews` + `flagsCollection` APIs.
+  - **`app/test/a11y/screen_guidelines_test.dart`** (new) — one `testWidgets` per surface, **16 surfaces**: home, calendar-with-history, first-run, PIN unlock, settings, meds, notifications, backup, accuracy, pregnancy events, privacy policy, privacy education, privacy explainer detail, manage symptoms, symptom day sheet, flow quick-log. Each pumps the screen via `pumpOlf` + real navigation and asserts `labeledTapTargetGuideline` **and** the Android/iOS tap-target-size guidelines. `contrast: false` on every call with a `// p5.1c:` marker — the systematic both-theme WCAG contrast sweep is p5.1c's headline deliverable and `textContrastGuideline` here would only check the one brightness a test pumps. **Screen-inventory note:** the dispatch's list named `security/screen_security`, which is the `ScreenSecurity` platform seam (no UI); `symptom_day_sheet` + `flow_quick_log` are audited in its place — flagged in the PR.
+  - **`app/test/a11y/semantics_labels_test.dart`** (new) — 15 surfaces through `unlabelledTappables`; asserts the list is empty (every operable semantics node announces something). Catches bare `GestureDetector` / `InkWell` nodes that the `meetsGuideline` tap-target check does not tag.
+  - **`app/test/a11y/focus_order_test.dart`** (new) — drives real `LogicalKeyboardKey.tab` traversal and records the focused node's semantics label after each step. Locks: first-run → privacy-policy link before the acknowledge button; first-run with a PIN chosen → PIN field → Confirm field → acknowledge; settings → Appearance before Privacy (top-to-bottom).
+  - **Audit outcome — no `lib/` change was required.** Every one of the 16 surfaces already passes the label floor **and** the Android/iOS tap-target guidelines; the semantics-tree walk finds zero unlabelled operable nodes; keyboard traversal already follows reading order on all three required forms; there is no swipe-to-delete anywhere (deletion is explicit `tooltip: 'Remove'` buttons), so no visual-only interaction needs a semantic alternative. Earlier slices' §1.4 a11y-baseline discipline (calendar cells are `Semantics(button:, label:, excludeSemantics:)`, every icon button has a `tooltip`, `SwitchListTile` / `RadioListTile` merge their controls) is why. p5.1a therefore delivers the reusable harness + CI-locked coverage; the deep contrast + text-scaling work stays with p5.1c / p5.1b as planned.
+  - **`docs/threat-model.md`** — added the "2026-09-03 — Phase 5 opening gate" Review-log entry (required by `core/test/threat_model_doc_test.dart` once Phase 5 is the current non-`TODO` phase): p5.1a is test-only, no new asset / boundary / data flow / dependency / permission / schema; watch items recorded for p5.3 (verbose-output redaction + auto-lock, decoy-safe), p5.4 (manifest/plist alternate-icon plumbing, permission set unchanged), p5.5 (one CI job), p5.6 (migration tests).
+  - No new dependency, no schema change, no CI-workflow change; `core` untouched (stays Flutter-free). core (459) + app (207, +34) suites, `dart analyze --fatal-infos` (core) / `flutter analyze --fatal-infos` (app), `dart format`, dependency-audit (38 rules), `build_runner` (no `.g.dart` drift) all green.
+- **Log:**
+  - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.1a`, branch `feat/p5.1a-a11y-semantics` off `main` @ `1ca0264` (#53). Transcribed the full Phase 5 expansion into the plan (replacing the one-line-slice stub); set the Phase 5 header + §4 phase-overview row 5 to `IN PROGRESS`. Set p5.1a IN PROGRESS.
+  - 2026-09-03 — built to DoD §1.4. Added the `a11y.dart` harness + 3 test files (`test/a11y/`), 34 new test cases across 16 UI surfaces (guideline sweep + semantics-tree walk + keyboard focus order). Audit surfaced **no `lib/` defect** — the existing UI already meets the label + tap-target floor and reading-order requirement, so no source change was needed; the harness + CI lock-in is the deliverable and a future unlabelled control now fails CI. Added the Phase 5 opening-gate threat-model entry. core (459) + app (207) + analyze `--fatal-infos` + format + dependency-audit + `build_runner` green. PR [#54](https://github.com/Abbo0dio/olf/pull/54) opened; set IN REVIEW.
+
+#### p5.1b — Dynamic Type / text scaling & reflow
+- **Status:** TODO · **Depends on:** p5.1a
+- **Requirement refs:** §8 (scalable text), §4
+- **Goal:** Every screen stays usable and un-clipped at the OS's largest text setting — no overflow, no truncated actions, no unreachable buttons at `textScaler` 2.0.
+- **Acceptance criteria:**
+  - A parametrised widget test pumping every top-level screen at `TextScaler.linear(1.0)`, `1.5`, `2.0` (via `MediaQuery`), asserting zero `RenderFlex` overflow and no layout `FlutterError`.
+  - Fixes are real reflow: intrinsic/min sizes over fixed heights, `Wrap`/`Flexible` for rows that can't shrink, scrollable sheets/dialogs, primary actions kept on-screen. Text is NOT clamped with a lowered `textScaler` to hide overflow. One documented exception allowed: a genuinely fixed-geometry element (e.g. a compact calendar cell) may cap scaling — with a code comment + a plan note.
+  - No golden churn beyond what scaling legitimately changes; regenerate + eyeball any affected goldens (note in PR).
+- **Tests required:** the 1.0/1.5/2.0 overflow sweep across all screens; targeted tests for the worst offenders; full suites + gates green.
+- **Notes / detail:** worker chooses overflow-detecting harness vs goldens.
+
+#### p5.1c — Contrast, touch targets, keyboard/switch nav, conformance doc
+- **Status:** TODO · **Depends on:** p5.1a, p5.1b
+- **Requirement refs:** §8 (4.5:1 contrast, ≥ ~9mm / 48dp targets, keyboard/switch nav, WCAG 2.2 AA), §4
+- **Goal:** Close remaining WCAG 2.2 AA gaps — colour contrast in both themes, minimum touch-target size everywhere, full external-keyboard / switch-access operability — and publish a documented AA conformance statement.
+- **Acceptance criteria:**
+  - A pure unit test (helper may live in `core`, pure, no Flutter) computing WCAG contrast ratios over the actual theme token / `ColorScheme` set for BOTH light and dark: normal text ≥ 4.5:1, large text & UI components ≥ 3:1. Failing pairs fixed in the theme, not suppressed.
+  - `androidTapTargetGuideline` + `iOSTapTargetGuideline` pass **unskipped** for every p5.1a screen test (bump controls < 48dp).
+  - Every action reachable + activatable with an external keyboard (Tab/Shift-Tab/Arrows + Enter/Space) and switch access: visible focus highlight, no keyboard traps, `Shortcuts`/`Actions` where a screen has primary verbs.
+  - `docs/accessibility-conformance.md` — WCAG 2.2 AA conformance statement: table of every Level A + AA success criterion with Supports / Partially / Not Applicable + a one-line evidence pointer (test or screen). Honest — "Partially" + tracked follow-up over a false "Supports". Linked from the docs index / README.
+- **Tests required:** contrast unit test (both themes); all p5.1a screen guideline tests unskipped + green; keyboard-traversal test on 2–3 representative screens; full suites + gates green.
+- **Notes / detail:** this slice owns the phase's a11y exit-gate evidence. Criteria that can't be met in-app (e.g. captions) → "Not Applicable / see p5.2", not blank.
+
+#### p5.2 — Caption / transcript requirement stub for Phase 11 content
+- **Status:** TODO · **Depends on:** none (sequenced after p5.1c)
+- **Requirement refs:** §8 (captions for video content), forward-ref Phase 11
+- **Goal:** No media subsystem exists yet — lock in the requirement now so Phase 11 cannot ship in-app video/audio without synchronised captions + a text transcript, enforced at the type level.
+- **Acceptance criteria:**
+  - `core`: pure value types — `CaptionCue {Duration start, end; String text}`, `CaptionTrack {String languageCode; List<CaptionCue> cues}`, and a `MediaItem` contract making a caption track + transcript **non-optional** (`required`), with a validating constructor (assert/throw on empty cues / empty transcript for non-empty media).
+  - `app`: placeholder `CaptionedMedia` widget whose constructor requires a `CaptionTrack` + transcript `String`; renders a "content coming in a later version" placeholder, nothing playable. No video plugin, no new dependency.
+  - `docs/accessibility-conformance.md` captions row → "Supported by design — enforced by `MediaItem` contract; no media content ships yet".
+  - A paragraph appended under Phase 11's slice list: the content system must consume `MediaItem` / `CaptionedMedia`; captions + transcript are a merge blocker there.
+- **Tests required:** `core` — `MediaItem`/`CaptionTrack` reject missing/empty captions or transcript; cue ordering/overlap validation if added; `app` — `CaptionedMedia` won't construct without both. Full suites + gates green.
+- **Notes / detail:** deliberately tiny — the compile-time gate is the point, not a player.
+
+#### p5.3 — Accessibility ↔ privacy balance: verbose-output control + session timeout
+- **Status:** TODO · **Depends on:** p5.1a (semantics landscape); builds on p2.1 (lock), p2.2 (decoy), p2.4 (re-lock path)
+- **Requirement refs:** §8 (screen readers shouldn't broadcast sensitive data on shared devices; user control over verbose output; session timeouts with warning)
+- **Goal:** Two controls: (1) "Reduce spoken detail" — collapses screen-reader announcements of sensitive values (flow intensity, symptoms, notes, predictions) to generic labels so a shared-room screen reader doesn't broadcast health state; (2) inactivity auto-lock with a visible countdown warning before it triggers.
+- **Acceptance criteria:**
+  - **Verbose control:** `SettingKeys.reduceSpokenDetail` (`app_settings` KV, bool, default OFF; no schema change). `reduceSpokenDetailProvider` (stream over KV). When on, sensitive `Semantics` labels switch to a redacted form (flow cell → "logged" not "heavy flow"; symptom chip → "symptom logged"; calendar day → date + "has entries"). Visible UI unchanged — only the semantic label differs. One helper (`semanticValue(full, {required redacted, required reduce})`) used at every sensitive call site. Settings row under an "Accessibility" section with an honest sub-label.
+  - **Session timeout:** `SettingKeys.autoLockMinutes` (KV, int; Off / 1 / 2 / 5 / 15; default 2 when a PIN/biometric is configured, else Off; no schema change). Inactivity timer in the lock gate; any interaction resets it; on expiry → lock screen via the p2.4 background-relock path. A warning ~15–20s before: dismissible countdown snackbar/dialog ("Locking soon for privacy — tap to stay"), resets the timer on interaction, screen-reader-announced. Pure deadline maths in `core` (injected clock) — `nextAutoLockDeadline(lastActivity, setting, now)` style, no `DateTime.now()`. Decoy/duress session (p2.2) auto-locks identically, never revealing which vault was open.
+  - Dark mode + gender-neutral copy; warning copy passes the inclusive-language lint, carries no PHI.
+- **Tests required:** `core` — deadline maths (off → never; reset; expiry; warning-window boundary). `app` — reduce-on → redacted semantic label + unchanged visible `Text`; reduce-off → full label; inactivity fires re-lock after the window; a tap in the warning window cancels it; decoy session re-locks the same way. Full suites + gates green.
+- **Notes / detail:** don't over-redact — dates, nav, non-sensitive chrome stay fully spoken. Record the "sensitive surfaces" list in the as-built notes.
+
+#### p5.4 — Discreet app presence: optional alternate icon & name
+- **Status:** TODO · **Depends on:** none (sequenced after p5.3)
+- **Requirement refs:** §4 (discreet home-screen presence — icon/name), §9(8)-adjacent (privacy distrust)
+- **§5 decision (pre-approved — record in this row):** implement with a **hand-rolled platform channel** — Android `activity-alias` entries in `AndroidManifest.xml` toggled via `PackageManager.setComponentEnabledSetting`; iOS `UIApplication.setAlternateIconName` with `CFBundleAlternateIcons` in `Info.plist`. **No new Dart dependency.** Only Phase 5 slice that edits the manifest / `Info.plist`, limited to icon-alias plumbing. Dependency-audit permission diff MUST show no new runtime permission. If the hand-rolled channel proves unreasonably fragile, STOP and renegotiate — do not pull in a plugin unilaterally.
+- **Goal:** A user can switch the home-screen icon + label to a discreet neutral alternative so the app doesn't announce itself on a shared/observed device. Default = normal branded icon.
+- **Acceptance criteria:**
+  - Android: a small fixed set of `activity-alias` launcher entries (default + discreet option(s)); exactly one enabled at a time; switching disables the others; document the actual post-switch launch behaviour (task may need reopening — warn if so).
+  - iOS: matching alternate icon set(s) in the asset catalog + `Info.plist`; `setAlternateIconName` wired; graceful no-op where unsupported.
+  - `app`: platform-channel wrapper behind an `AppIconRepository` seam (fake in widget tests); a Settings → Appearance/Privacy row with a small named picker; selection persisted (`SettingKeys.appIcon` KV, default = branded; no schema change).
+  - Discreet icon + name genuinely neutral (no cycle/health imagery, no "olf" in the discreet label); all density buckets / iOS sizes present.
+  - Fails safe: any platform error leaves the current icon and shows a non-alarming message.
+- **Tests required:** `app` — picker persists the choice + calls the seam with the right id; fake seam records calls; platform-error path shows fallback + doesn't change the stored value. Manual device steps documented in the PR and added to `docs/release-checklist.md`. core/app suites + analyze + format + dependency-audit (permission diff clean) + `build_runner` + the Android/iOS CI build matrix green with the manifest/plist changes.
+- **Notes / detail:** keep the option set small (branded + 1–2 discreet). Record the exact manifest/plist diff in as-built notes; add a one-liner to `docs/threat-model.md` noting it's a local UX affordance with no data surface.
+
+#### p5.5 — Low-end performance verification + CI size/perf budget
+- **Status:** TODO · **Depends on:** none (sequenced after p5.4)
+- **Requirement refs:** §3 (cold start < 2s on a 2019 mid-range Android; log-a-period ≤ 2 taps & < 100ms feedback; small install size tracked in CI), §4 (anti-bloat)
+- **§5 decision (pre-approved — record in this row):** add **one new CI job** (`perf-budget`, in `ci.yml` or a sibling workflow) that (a) builds the release APK and fails if its size exceeds `baseline * (1 + threshold)` against a checked-in baseline, and (b) runs a trace-startup measurement on the existing p0.5 emulator and asserts cold start under a documented emulator-adjusted ceiling. No other CI change; `CI OK` aggregation still gates the same way.
+- **Goal:** Turn the §3 budget from prose into measured, enforced gates; fix any current regression against it.
+- **Acceptance criteria:**
+  - `docs/performance-budget.md` — the concrete numbers (cold start; tap count + feedback latency for log-a-period; APK/IPA size ceiling + growth threshold), how each is measured, how to deliberately update a baseline.
+  - **Size gate:** `.github/scripts/` script records release-APK size; committed baseline file; CI fails past the threshold (e.g. 5%). Baseline bumps are a visible one-line diff + reason.
+  - **Startup gate:** `flutter run --profile --trace-startup` (or `integration_test` + `traceAction`) on the p0.5 emulator; assert derived cold start under the documented ceiling. If too flaky to gate, make it informational for this slice and note it — but the size gate and tap-count gate stay hard.
+  - **Log-a-period gate:** a widget/integration test asserting home → period-logged is ≤ 2 taps with a tight pump-and-settle acknowledgement budget. Encodes §1's "one or two taps" permanently.
+  - Any regression found is fixed here or filed as a §9 follow-up with the measured gap — the gate lands green with an honest current baseline, not an aspirational one.
+- **Tests required:** the three gates wired into CI + passing; `docs/performance-budget.md`; the release checklist references the size baseline. Existing suites + gates stay green.
+- **Notes / detail:** don't gold-plate. Emulator startup is noisy — generous documented ceiling.
+
+#### p5.6 — Data-loss resilience: migration test matrix across schema history
+- **Status:** TODO · **Depends on:** none (sequenced last)
+- **Requirement refs:** §4 + §9(11) ("Lost 3 years of data after iOS update"), §7 (never lose data)
+- **Goal:** Prove every drift migration (v1 → v6, each step) preserves data, with a committed test matrix, so a future schema bump can't silently corrupt or drop history. No schema change — test + tooling hardening on the existing history.
+- **Acceptance criteria:**
+  - drift schema snapshots generated + committed for every version (`drift_dev schema dump` / `make-migrations`, project convention). `drift_dev` is already a dev dependency — no new runtime dependency.
+  - `core/test/db/migration_matrix_test.dart` — for each `from` in 1..5 (→ 6, and each single step): build a DB at `from` from the generated schema, seed representative rows in every table that exists at `from`, migrate to `to`, assert (a) `verifySelfIntegrity` / no exceptions, (b) every seeded row present + unchanged, (c) new columns have expected defaults.
+  - A round-trip test tying in p1.10 backup/restore: export from a migrated DB, wipe, restore, assert equality — covers "OS update → migrate → restore an old backup" end to end.
+  - `docs/release-checklist.md` gains a "schema change" section: any PR bumping `schemaVersion` must add the new snapshot + extend this matrix in the same PR.
+  - If a historical migration turns out lossy/missing, that's a real bug — fix the migration (with its own test), note it prominently; don't paper over it in the snapshot.
+- **Tests required:** the migration matrix; the backup/restore-across-migration round trip; `verifySelfIntegrity` on the final schema; full core + app suites + gates green. Test-time only — no workflow change.
+- **Notes / detail:** worker picks the drift tooling layout. Small seed data, every table, a few edge values (nulls, unicode notes, boundary dates).
+
+**Exit gate (Phase 5):**
+- Documented WCAG 2.2 AA conformance statement (`docs/accessibility-conformance.md`), every applicable success criterion → status + evidence; automated guideline tests (labels, contrast, tap targets) green in CI across all 14 screens — p5.1a / p5.1b / p5.1c.
+- User control over verbose screen-reader output on shared devices + inactivity auto-lock with warning, decoy-safe — p5.3.
+- Caption + transcript requirement enforced at the type level for all future media — p5.2.
+- Optional discreet alternate app icon + neutral name; no new dependency, no new permission — p5.4.
+- §3 performance budget documented + enforced in CI (APK size baseline + growth gate; cold-start check; log-a-period ≤ 2 taps gate); low-end cold start verified — p5.5.
+- Migration test matrix across schema v1–v6 + backup/restore-across-migration round trip, green in CI; release checklist requires new snapshots on any future schema bump — p5.6.
 
 ---
 

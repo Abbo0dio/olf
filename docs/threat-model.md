@@ -271,3 +271,25 @@ The CI guard requires an entry naming the current phase.
   uses it only to choose a local notification time on-device, and **never
   writes it anywhere or transmits it** — no `app_settings` key, no new column,
   no network. Still no new asset, boundary, or data flow.
+- **2026-09-03 — Phase 5 opening gate — reviewer: worker: phase5.** Phase 5
+  (accessibility & design polish) is UI, test-tooling, and docs work. The
+  opening slice **p5.1a** (screen-reader semantics + an automated
+  accessibility-guideline test harness) touches **no source at all** — it adds
+  test files only — and introduces **no new asset, boundary, data flow,
+  dependency, permission, or schema change**. Assets, adversaries, trust
+  boundaries, and the data-flow diagram are unchanged. Watch items for later
+  Phase 5 slices, to be reviewed and logged when they land: **p5.3** adds a
+  "reduce spoken detail" control that must *narrow* what a screen reader
+  announces on a shared device (redacted `Semantics` labels for sensitive
+  values) and an inactivity auto-lock — both are defensive, but the redaction
+  helper must be applied at every sensitive surface and the auto-lock must
+  re-lock the decoy/duress session (p2.2) identically, revealing nothing about
+  which vault was open; both new prefs use the existing `app_settings` KV store
+  (no schema change). **p5.4** adds an optional discreet home-screen icon/name
+  via a hand-rolled platform channel — the only Phase 5 change to
+  `AndroidManifest.xml` / `Info.plist`, limited to `activity-alias` /
+  `CFBundleAlternateIcons` plumbing; the dependency-audit permission set must
+  not change, and it is a local UX affordance with no data surface. **p5.5**
+  adds one CI job (APK size + cold-start budget) — no runtime change. **p5.6**
+  is migration *tests* over the existing v1–v6 schema history — no schema
+  change. No design changes required by this review.
