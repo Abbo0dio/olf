@@ -3256,7 +3256,8 @@ exact-alarm path is backlog (§9), not a gate.
 - Accessibility fixes must not regress dark mode or the p1.9 inclusive-language lint.
 
 #### p5.1a — Automated a11y guideline harness + screen-reader semantics & focus order
-- **Status:** IN PROGRESS
+- **Status:** IN REVIEW
+- **PR:** [#54](https://github.com/Abbo0dio/olf/pull/54)
 - **Branch / worktree:** `feat/p5.1a-a11y-semantics` / `../olf-wt/p5.1a`
 - **Owner:** worker: phase5 · **Depends on:** none (first Phase 5 slice)
 - **Requirement refs:** §8 (screen-reader compat, logical tab order, keyboard/switch nav), §1.4
@@ -3284,7 +3285,7 @@ exact-alarm path is backlog (§9), not a gate.
   - No new dependency, no schema change, no CI-workflow change; `core` untouched (stays Flutter-free). core (459) + app (207, +34) suites, `dart analyze --fatal-infos` (core) / `flutter analyze --fatal-infos` (app), `dart format`, dependency-audit (38 rules), `build_runner` (no `.g.dart` drift) all green.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.1a`, branch `feat/p5.1a-a11y-semantics` off `main` @ `1ca0264` (#53). Transcribed the full Phase 5 expansion into the plan (replacing the one-line-slice stub); set the Phase 5 header + §4 phase-overview row 5 to `IN PROGRESS`. Set p5.1a IN PROGRESS.
-  - 2026-09-03 — built to DoD §1.4. Added the `a11y.dart` harness + 3 test files (`test/a11y/`), 34 new test cases across 16 UI surfaces (guideline sweep + semantics-tree walk + keyboard focus order). Audit surfaced **no `lib/` defect** — the existing UI already meets the label + tap-target floor and reading-order requirement, so no source change was needed; the harness + CI lock-in is the deliverable and a future unlabelled control now fails CI. Added the Phase 5 opening-gate threat-model entry. core (459) + app (207) + analyze `--fatal-infos` + format + dependency-audit + `build_runner` green. PR opened; set IN REVIEW.
+  - 2026-09-03 — built to DoD §1.4. Added the `a11y.dart` harness + 3 test files (`test/a11y/`), 34 new test cases across 16 UI surfaces (guideline sweep + semantics-tree walk + keyboard focus order). Audit surfaced **no `lib/` defect** — the existing UI already meets the label + tap-target floor and reading-order requirement, so no source change was needed; the harness + CI lock-in is the deliverable and a future unlabelled control now fails CI. Added the Phase 5 opening-gate threat-model entry. core (459) + app (207) + analyze `--fatal-infos` + format + dependency-audit + `build_runner` green. PR [#54](https://github.com/Abbo0dio/olf/pull/54) opened; set IN REVIEW.
 
 #### p5.1b — Dynamic Type / text scaling & reflow
 - **Status:** TODO · **Depends on:** p5.1a
