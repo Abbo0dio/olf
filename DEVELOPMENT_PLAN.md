@@ -3246,7 +3246,7 @@ exact-alarm path is backlog (§9), not a gate.
 
 ### Phase 5 — Accessibility & design polish
 
-**Status:** IN PROGRESS (p5.1a) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
+**Status:** IN PROGRESS (p5.1b) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
 
 **Phase-wide constraints:**
 - No new runtime **Dart** dependency without §5 negotiation. Two slices carry pre-approved platform/CI changes, spelled out in their rows: **p5.4** (Android `activity-alias` + iOS alternate-icon via a hand-rolled platform channel — NO Dart package; the only Phase 5 slice that edits `AndroidManifest.xml` / `Info.plist`, minimally) and **p5.5** (one new CI job measuring APK size + cold-start against a checked-in budget). No other manifest, permission, or CI-workflow change in the phase.
@@ -3256,8 +3256,8 @@ exact-alarm path is backlog (§9), not a gate.
 - Accessibility fixes must not regress dark mode or the p1.9 inclusive-language lint.
 
 #### p5.1a — Automated a11y guideline harness + screen-reader semantics & focus order
-- **Status:** IN REVIEW
-- **PR:** [#54](https://github.com/Abbo0dio/olf/pull/54)
+- **Status:** DONE (2026-09-03)
+- **PR:** [#54](https://github.com/Abbo0dio/olf/pull/54) · squash `777e02e`
 - **Branch / worktree:** `feat/p5.1a-a11y-semantics` / `../olf-wt/p5.1a`
 - **Owner:** worker: phase5 · **Depends on:** none (first Phase 5 slice)
 - **Requirement refs:** §8 (screen-reader compat, logical tab order, keyboard/switch nav), §1.4
@@ -3286,9 +3286,13 @@ exact-alarm path is backlog (§9), not a gate.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.1a`, branch `feat/p5.1a-a11y-semantics` off `main` @ `1ca0264` (#53). Transcribed the full Phase 5 expansion into the plan (replacing the one-line-slice stub); set the Phase 5 header + §4 phase-overview row 5 to `IN PROGRESS`. Set p5.1a IN PROGRESS.
   - 2026-09-03 — built to DoD §1.4. Added the `a11y.dart` harness + 3 test files (`test/a11y/`), 34 new test cases across 16 UI surfaces (guideline sweep + semantics-tree walk + keyboard focus order). Audit surfaced **no `lib/` defect** — the existing UI already meets the label + tap-target floor and reading-order requirement, so no source change was needed; the harness + CI lock-in is the deliverable and a future unlabelled control now fails CI. Added the Phase 5 opening-gate threat-model entry. core (459) + app (207) + analyze `--fatal-infos` + format + dependency-audit + `build_runner` green. PR [#54](https://github.com/Abbo0dio/olf/pull/54) opened; set IN REVIEW.
+  - 2026-09-03 — review PASS. Merged as `777e02e` (squash). DONE.
 
 #### p5.1b — Dynamic Type / text scaling & reflow
-- **Status:** TODO · **Depends on:** p5.1a
+- **Status:** IN REVIEW · **Depends on:** p5.1a
+- **Branch / worktree:** `feat/p5.1b-text-scaling` / `../olf-wt/p5.1b`
+- **PR:** [#55](https://github.com/Abbo0dio/olf/pull/55)
+- **Owner:** worker: phase5
 - **Requirement refs:** §8 (scalable text), §4
 - **Goal:** Every screen stays usable and un-clipped at the OS's largest text setting — no overflow, no truncated actions, no unreachable buttons at `textScaler` 2.0.
 - **Acceptance criteria:**
@@ -3296,7 +3300,18 @@ exact-alarm path is backlog (§9), not a gate.
   - Fixes are real reflow: intrinsic/min sizes over fixed heights, `Wrap`/`Flexible` for rows that can't shrink, scrollable sheets/dialogs, primary actions kept on-screen. Text is NOT clamped with a lowered `textScaler` to hide overflow. One documented exception allowed: a genuinely fixed-geometry element (e.g. a compact calendar cell) may cap scaling — with a code comment + a plan note.
   - No golden churn beyond what scaling legitimately changes; regenerate + eyeball any affected goldens (note in PR).
 - **Tests required:** the 1.0/1.5/2.0 overflow sweep across all screens; targeted tests for the worst offenders; full suites + gates green.
-- **Notes / detail:** worker chooses overflow-detecting harness vs goldens.
+- **Notes / detail:** reuses p5.1a's 16-surface inventory. New shared helper `app/test/support/text_scaling.dart` and new `app/test/a11y/text_scaling_test.dart` drive all 16 surfaces × {1.0, 1.5, 2.0}. Source fixes go where the sweep flags overflow; any fixed-geometry cap gets a `// p5.1b:` comment and a note here (none needed — see build detail). `core` untouched.
+- **Build detail (worker: phase5):**
+  - **Shared inventory refactor.** Lifted p5.1a's per-file navigation helpers into a new `app/test/support/screen_nav.dart` — one canonical `List<Surface> screenSurfaces` (the same 16: home empty, calendar w/ history, first-run, PIN unlock, settings, meds, notifications, backup, accuracy, pregnancy events, privacy policy, privacy education, privacy explainer detail, manage symptoms, symptom day sheet, flow quick-log) plus `screenNavOverrides(db)`. `screen_guidelines_test.dart` (308→~28 lines) and `semantics_labels_test.dart` (283→~26 lines) now loop that list, so the a11y sweep and the text-scaling sweep can never drift to different surface sets.
+  - **Text-scaling harness.** `app/test/support/text_scaling.dart`: `const textScales = [1.0, 1.5, 2.0]`; `useTextScale(tester, scale)` sets `tester.platformDispatcher.textScaleFactorTestValue` (cleared on teardown) — the mechanism that actually feeds `MediaQuery.of(context).textScaler` for a full-app `pumpOlf`, since `MaterialApp` builds its own `MediaQuery.fromView` and a wrapping `MediaQuery` widget would be ignored; `expectNoOverflow(tester, where:)` takes the pending exception and fails only on layout errors (`RenderFlex` overflow / unbounded-constraints), rethrowing anything else untouched.
+  - **`app/test/a11y/text_scaling_test.dart`** — 48 tests (16 surfaces × 3 scales), each pumps the surface at the scale and asserts no overflow / no layout `FlutterError`.
+  - **The one `lib/` fix.** `app/lib/src/symptom/symptom_day_sheet.dart` — the action `Row` (Manage symptoms · Start a period · Done) overflowed on the right at 1.5× (202 px) and 2.0× (405 px). Replaced with `OverflowBar` (`alignment: spaceBetween`, `overflowAlignment: start`) wrapping the two trailing buttons in a `Wrap`, so it stays one row at normal size and stacks vertically once the labels no longer fit. `// p5.1b:` comment on the widget. `manage_symptoms_page` was the *same* defect (its nav opens the day sheet first), fixed by the same change.
+  - **No fixed-geometry cap was needed** — the documented single-exception allowance is unused. The other 15 surfaces survive 2.0× untouched (the app is almost entirely `ListView` / `SingleChildScrollView`, symptom/mucus rows are already `Wrap`, and nothing uses `maxLines` / `TextOverflow.ellipsis`).
+  - **No goldens.** The repo has no golden `.png` files (only a deferred-goldens comment in `theme_render_test.dart`), so nothing to regenerate.
+  - Verification: `app/test/a11y/` 83 pass (16 guidelines + 16 semantics + 3 focus + 48 text-scaling); app suite 256 pass; `flutter analyze --fatal-infos` clean; `dart format` clean; core 459 pass, `dart analyze --fatal-infos` clean, no `.g.dart` drift; both `pubspec.lock`s unchanged; `dependency_audit.dart` PASS (38 rules).
+- **Log:**
+  - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.1b`, branch `feat/p5.1b-text-scaling` off `main` @ `777e02e` (#54). Folded p5.1a → DONE (squash `777e02e`); bumped the Phase 5 header note to `IN PROGRESS (p5.1b)`. Set p5.1b IN PROGRESS.
+  - 2026-09-03 — built to DoD: shared `screen_nav.dart` (16-surface inventory), `text_scaling.dart` harness, `text_scaling_test.dart` (48 tests), one `lib/` reflow fix (`symptom_day_sheet.dart` action row → `OverflowBar`); no fixed-geometry cap, no goldens. All suites + gates green. PR [#55](https://github.com/Abbo0dio/olf/pull/55) opened; set IN REVIEW.
 
 #### p5.1c — Contrast, touch targets, keyboard/switch nav, conformance doc
 - **Status:** TODO · **Depends on:** p5.1a, p5.1b
