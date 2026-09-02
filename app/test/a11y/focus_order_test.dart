@@ -1,9 +1,9 @@
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olf_app/src/onboarding/disclaimers.dart';
 import 'package:olf_app/src/privacy/privacy_policy_content.dart';
 
+import '../support/a11y.dart';
 import '../support/harness.dart';
 
 /// p5.1a — keyboard / switch traversal must follow reading order. These tests
@@ -13,40 +13,13 @@ import '../support/harness.dart';
 /// forms in the slice spec; the calendar and FAB+list screens rely on default
 /// geometry order, asserted lightly here via the settings list.
 void main() {
-  /// Label / value / hint of the semantics node that currently has focus. Text
-  /// fields expose their `InputDecoration` label here; buttons expose their
-  /// child text.
-  String focusToken(WidgetTester tester) {
-    String? found;
-    void visit(SemanticsNode n) {
-      final d = n.getSemanticsData();
-      if (found == null && d.flagsCollection.isFocused) {
-        found = [
-          d.label,
-          d.value,
-          d.hint,
-        ].map((s) => s.trim()).where((s) => s.isNotEmpty).join(' / ');
-      }
-      n.visitChildren((c) {
-        visit(c);
-        return true;
-      });
-    }
-
-    for (final view in RendererBinding.instance.renderViews) {
-      final root = view.owner?.semanticsOwner?.rootSemanticsNode;
-      if (root != null) visit(root);
-    }
-    return (found == null || found!.isEmpty) ? '<none>' : found!;
-  }
-
   Future<List<String>> tabThrough(WidgetTester tester, {int steps = 14}) async {
     final handle = tester.ensureSemantics();
     final seen = <String>[];
     for (var i = 0; i < steps; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
-      final token = focusToken(tester);
+      final token = focusedSemanticToken();
       if (token == '<none>') continue;
       if (seen.isNotEmpty && seen.last == token) break; // wrapped / stuck
       seen.add(token);
