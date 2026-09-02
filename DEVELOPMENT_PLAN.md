@@ -112,8 +112,9 @@ A task is not `DONE` until **all** of these hold:
    prediction visibly improves future ones; a late period never silently "rolls forward".
 3. **Local-first.** On-device storage is the default. Cloud is opt-in and zero-knowledge.
 4. **No ad/analytics SDKs. Ever.** This is a hard architectural constraint.
-5. **Humane monetization.** Core tracking is permanently free and un-paywalled. No post-action
-   upsell pop-ups. Easy cancellation. Advanced/AI features only behind the paid tier.
+5. **Free forever.** olf has no subscription, no paid tier, no billing, and no upsell — ever.
+   Every feature, including the AI assistant and advanced insights, is free. Hard product
+   constraint, not a launch-phase choice.
 6. **Inclusive by default.** Gender-neutral language, optional pronouns, discreet neutral design.
 7. **Never lose data.** Robust export/backup; survive OS updates and migrations.
 8. **Not a medical device** (unless/until a deliberate FDA program in Phase 12). Clear disclaimers.
@@ -151,13 +152,13 @@ A task is not `DONE` until **all** of these hold:
 | **1** | MVP core tracking — free, un-paywalled | `DONE` | Core tracking usable end-to-end; correction loop works; backup/restore works |
 | **2** | Privacy & security hardening | `DONE` | Lock + decoy + auto-delete + masking shipped and tested; standalone policy live; threat model committed; audit gate enforced as a release blocker |
 | **3** | Correctable adaptive prediction engine v2 | `DONE` | v2 shipped behind the unchanged seam: MAE beat on PCOS/postpartum + large calibration gains on every fat-tailed profile (the honest headline is "stops the false precision", per §4); corrections move v2 ~1.7–2.2× v1; no snowballing in-sample or held-out |
-| **4** | Notifications & reminders | `DONE` | Per-category channels each independently toggleable; on-device behaviour-timed delivery with a safe fallback, nothing stored; all copy reviewed + locked behind a content test, no PHI; a quiet-hours window that shifts rather than drops; a permanent "stop asking to subscribe" control gated for Phase 10; the p1.7 medication reminder folded onto the one unified path |
+| **4** | Notifications & reminders | `DONE` | Per-category channels each independently toggleable; on-device behaviour-timed delivery with a safe fallback, nothing stored; all copy reviewed + locked behind a content test, no PHI; a quiet-hours window that shifts rather than drops; a permanent "stop asking to subscribe" control gated for Phase 10 [reverted 2026-09-02, PR #52 — olf is free-forever]; the p1.7 medication reminder folded onto the one unified path |
 | **5** | Accessibility & design polish | `TODO` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
 | **6** | Health-platform interop & doctor export | `TODO` | Two-way Apple Health / Health Connect sync; doctor-ready PDF |
 | **7** | Life-stage & condition modes | `TODO` | Pregnancy, loss/birth, postpartum, PCOS, endo, PMDD, perimenopause modes shipped |
 | **8** | Passive wearable integration | `TODO` | Apple Watch companion + ≥1 third-party wearable; passive phase inference |
 | **9** | Optional zero-knowledge encrypted sync | `TODO` | Opt-in multi-device sync; local-first stays default; deletion propagates |
-| **10** | Monetization + AI assistant + advanced insights | `TODO` | Paid tier live; core still free; humane billing; AI assistant privacy-safe |
+| **10** | AI assistant + advanced insights | `TODO` | AI assistant privacy design documented in the threat model (on-device / zero-knowledge, no health data to a third party); advanced insights are useful and non-alarming — no diagnosis language. Free, like everything else. |
 | **11** | Educational content & privacy-safe community | `TODO` | Named-reviewer content system; anonymous community with moderation |
 | **12** | Scale & defensibility (B2B2C, ISO 27001, optional FDA) | `TODO` | B2B2C pilot path; compliance ledger complete; FDA decision recorded |
 | **13** | Desktop app provision (separate, lean) | `TODO` | Separate desktop shell reusing `core`; zero added weight to mobile |
@@ -2978,7 +2979,7 @@ the v1-vs-v2-on-own-data comparison above).
 - **Depends on:** p1.7 (reminder stack + seams), p3.6 (`predictorProvider` for event-relative categories)
 - **Requirement refs:** §7 (granular category controls — the #1 notification complaint), §9(6)
 - **Goal:** Replace p1.7's single `ReminderKind.medication` daily reminder with the full set of independently-controllable reminder categories, each with its own OS channel, its own stored on/off + timing, and its own row in a Settings → Notifications section. Turning one category on or off never touches another.
-- **Categories (this slice):** `upcomingPeriod`, `fertileWindow`, `medication`, `bbtPrompt`, `latePeriodCheckIn`. Content and subscription reminder types are **not** created here (no such subsystems exist; p4.5 establishes the "stop asking to subscribe" control as principle).
+- **Categories (this slice):** `upcomingPeriod`, `fertileWindow`, `medication`, `bbtPrompt`, `latePeriodCheckIn`. Content reminder types are **not** created here (no such subsystem exists).
 - **Acceptance criteria:**
   - `core`: `ReminderKind` gains `upcomingPeriod`, `fertileWindow`, `bbtPrompt`, `latePeriodCheckIn` (keep `medication`). **No `Reminders` table change, no migration** — values store as text in the existing `kind` column.
   - `core`: new pure module (`reminder_planning.dart` or your naming) exposing `DateTime? nextFireTime({required ReminderKind kind, required ReminderSchedule schedule, required CyclePrediction? prediction, required DateTime today})`. Rules:
@@ -3133,7 +3134,10 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — review PASS. Merged as `4f612b3` (squash). DONE.
 
 #### p4.5 — Permanent "stop asking me to subscribe" control
-- **Status:** DONE (2026-09-02)
+- **Status:** REVERTED (2026-09-02) — PR #52
+  Shipped in v1.0.0, then withdrawn when olf committed to being free forever (2026-09-02):
+  the control implied a paywall that will never exist. Build detail and log below are kept
+  as-is, under this banner, for history.
 - **PR:** [#49](https://github.com/Abbo0dio/olf/pull/49) · squash `d0501f2`
 - **Branch / worktree:** `feat/p4.5-subscription-prompt-control` / `../olf-wt/p4.5` (removed)
 - **Owner:** worker: phase4 · **Depends on:** —
@@ -3186,7 +3190,7 @@ the v1-vs-v2-on-own-data comparison above).
   - 2026-09-02 — built to DoD §1.4. Removed `_ReminderSection` from `meds_page.dart` (page is Birth control + Medications; title `Medications`); **deleted** `medicationReminderProvider` (no alias, no ripple past the meds page); refreshed the `ReminderController` doc-comment; manifest audit comments updated for the renamed screen (audit PASS). No data migration, no schema change. Added a p1.7-upgrade regression (pre-stored enabled `medication` row schedules through the unified controller + surfaces on in Settings → Notifications); `meds_page` / `theme_render` finders updated; deleted the standalone-path meds test. core (463) + app (179) suites, analyze `--fatal-infos`, format, dependency-audit, `build_runner` (no `.g.dart` drift) all green. PR [#50](https://github.com/Abbo0dio/olf/pull/50) opened; set IN REVIEW.
   - 2026-09-02 — review PASS. Merged as `c560f6a` (squash). DONE.
 
-**Exit gate:** every notification type separately controllable (p4.1); delivery behaviour-timed with a safe fallback (p4.2); all copy reviewed and locked behind a content test with no PHI (p4.3); a quiet-hours window that shifts rather than drops (p4.4); a permanent "stop asking to subscribe" control, documented as a Phase 10 gate (p4.5); the p1.7 medication reminder on the one unified path (p4.6).
+**Exit gate:** every notification type separately controllable (p4.1); delivery behaviour-timed with a safe fallback (p4.2); all copy reviewed and locked behind a content test with no PHI (p4.3); a quiet-hours window that shifts rather than drops (p4.4); a permanent "stop asking to subscribe" control, documented as a Phase 10 gate (p4.5) [reverted 2026-09-02, PR #52 — olf is free-forever]; the p1.7 medication reminder on the one unified path (p4.6).
 
 **Exit-gate status — MET (2026-09-02).** All six build slices p4.1–p4.6 merged to
 `main` (PRs [#45](https://github.com/Abbo0dio/olf/pull/45)–[#50](https://github.com/Abbo0dio/olf/pull/50))
@@ -3220,7 +3224,9 @@ clause maps to the slice that satisfies it:
   re-prompt) plus `docs/monetization-principles.md`: a hard-gate contract that
   every Phase 10+ upsell prompt must check `subscriptionPromptsAllowedProvider`
   (or the `subscriptionPromptsAllowed` core helper) and render nothing when
-  suppressed.
+  suppressed. **[reverted 2026-09-02, PR #52 — olf is free-forever]** — the
+  code, docs, and tests for this control were removed when olf committed to having
+  no paid tier ever; the clause is left here as history, not a live deliverable.
 - **p1.7 medication reminder unified** → **p4.6** (#50, `c560f6a`) — the standalone
   `_ReminderSection` UI and `medicationReminderProvider` are removed; `medication`
   is now a plain fixed-time category on the same `ReminderController` / scheduler /
@@ -3230,7 +3236,7 @@ clause maps to the slice that satisfies it:
 the p1.7 notification stack (`flutter_local_notifications` + `flutter_timezone` +
 `timezone`) covered the whole phase, new `ReminderKind` values are additive text in
 the existing `reminders.kind` column, and every app-wide preference (learned hour,
-quiet-hours window, subscription-prompt suppression) is either recomputed in memory
+quiet-hours window) is either recomputed in memory
 or an opaque string in the existing `app_settings` KV store. Notifications remain
 **inexact by design** (`AndroidScheduleMode.inexactAllowWhileIdle`, no exact-alarm
 permission, manifest untouched) — a nudge does not need to hit the minute; an
@@ -3332,24 +3338,20 @@ no health data; deletion verified end-to-end.
 
 ---
 
-### Phase 10 — Monetization + AI assistant + advanced insights
+### Phase 10 — AI assistant + advanced insights
 
-**Status:** `TODO` · **Requirement refs:** §2, §5, §7, §9(4)(5). Slices:
+**Status:** `TODO` · **Requirement refs:** §2. Slices:
 
-- **p10.1** Subscription plumbing (StoreKit 2 / Play Billing) — ~$40/yr tier. **Core tracking
-  stays free and un-paywalled**; no feature that was ever free moves behind the wall.
-- **p10.2** Humane billing UX — one-tap cancellation path, clear renewal reminders, no
-  post-action upsell pop-ups, honour the p4.5 "stop asking" control.
-- **p10.3** AI health assistant — 24/7 Q&A. Decide the provider (consult `claude-api` skill);
+- **p10.1** AI health assistant — 24/7 Q&A. Decide the provider (consult `claude-api` skill);
   hard constraint: no health data leaves the device to a third party without zero-knowledge or
   on-device processing. Humane, non-alarming messaging; never an automated "diagnosis".
-- **p10.4** Advanced personalized insights (paid) — pattern detection, cycle × sleep ×
+- **p10.2** Advanced personalized insights — pattern detection, cycle × sleep ×
   nutrition synthesis, condition-mode correlation insights.
-- **p10.5** FSA/HSA eligibility groundwork (receipts, documentation), pending legal review.
 
-**Exit gate:** paid tier live; audit confirms nothing previously free was paywalled; billing
-UX reviewed against the §9 complaint list; AI assistant privacy design documented in the threat
-model.
+**Exit gate:** AI assistant privacy design documented in the threat model (no health data to a
+third party without zero-knowledge or on-device processing); advanced insights are useful and
+non-alarming — worded as patterns and correlations, never as a diagnosis. Free, like everything
+else.
 
 ---
 
@@ -3728,7 +3730,10 @@ Move these into the Decisions Log once answered.
 - Is the desktop shell Flutter-desktop or Tauri+`core` bridge? (Phase 13.)
 - Do we ever pursue FDA / contraception positioning? (Phase 12 decision point.)
 - Self-host the sync backend vs. managed? (Phase 9.)
-- Monetization: confirm ~$40/yr and the exact free/paid line before Phase 10.
+- 2026-09-02 — Monetization: decided against, permanently. olf is free forever — no
+  subscription, no paid tier, no billing. Phase 10 rescoped to AI assistant + advanced
+  insights, both free. p4.5's "stop asking to subscribe" control reverted (this PR) — it
+  implied a paywall that will never exist.
 
 ---
 
@@ -4027,15 +4032,6 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   `olf_daily_reminder` channel** — p4.1 deletes it on `ensureInitialized()` for upgraded
   installs; if that cleanup is ever removed, it must be replaced with an equivalent so the
   orphaned system-Settings entry does not return. — noted by worker: phase4 during p4.1.
-- **Phase 10 gate — subscription-prompt suppression (from p4.5).** The
-  "Don't show subscription offers" switch (`SettingKeys.suppressSubscriptionPrompts`,
-  `subscriptionPromptsAllowedProvider`, core helper `subscriptionPromptsAllowed`)
-  exists now with no upsell surface behind it. When Phase 10 adds the paid tier,
-  **every** subscription / upsell / "upgrade" prompt it introduces MUST gate on
-  this and render nothing when suppression is on — a hard gate, contract in
-  [`docs/monetization-principles.md`](docs/monetization-principles.md). Add a
-  suppression check to the Phase 10 exit-gate audit. — noted by worker: phase4
-  during p4.5.
 - **p4.4 follow-ups:** (a) **No per-category quiet-hours exemption.** The quiet-hours
   window is app-wide, so a fixed `medication` time that falls inside it is shifted to
   the window end like every other kind — a user who deliberately set a 06:30 med

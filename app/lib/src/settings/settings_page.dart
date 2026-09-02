@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../backup/backup_page.dart';
-import '../monetization/subscription_prompt_providers.dart';
 import '../personalization/personalization_providers.dart';
 import '../prediction/accuracy_format.dart';
 import '../prediction/accuracy_page.dart';
@@ -47,8 +46,6 @@ class SettingsPage extends ConsumerWidget {
         ref.watch(biometricUnlockEnabledProvider).valueOrNull ?? false;
     final retentionWindow =
         ref.watch(retentionWindowProvider).valueOrNull ?? RetentionWindow.off;
-    final subscriptionOffersHidden =
-        !(ref.watch(subscriptionPromptsAllowedProvider).valueOrNull ?? true);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -209,20 +206,6 @@ class SettingsPage extends ConsumerWidget {
                 builder: (_) => const NotificationsPage(),
               ),
             ),
-          ),
-          const _SectionHeader('Subscriptions'),
-          SwitchListTile(
-            secondary: const Icon(Icons.notifications_off_outlined),
-            value: subscriptionOffersHidden,
-            title: const Text("Don't show subscription offers"),
-            subtitle: const Text(
-              'Permanently hide any prompt about paid plans. Core tracking is '
-              'free regardless. Turn this back on whenever you like.',
-            ),
-            // p4.5: on is immediate and final until the user turns it back off —
-            // no confirmation, no "are you sure you'll miss out", no re-prompt.
-            onChanged: (hide) =>
-                setSubscriptionPromptsSuppressed(ref, suppressed: hide),
           ),
           const _SectionHeader('Data'),
           ListTile(
