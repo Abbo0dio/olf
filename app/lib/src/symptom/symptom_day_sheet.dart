@@ -237,7 +237,14 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
               ),
             ],
             const SizedBox(height: 20),
-            Row(
+            // p5.1b: OverflowBar keeps these on one row at normal text size and
+            // stacks them vertically once the labels no longer fit (large
+            // Dynamic Type), instead of a Row that overflows on the right.
+            OverflowBar(
+              alignment: MainAxisAlignment.spaceBetween,
+              overflowAlignment: OverflowBarAlignment.start,
+              spacing: 8,
+              overflowSpacing: 4,
               children: [
                 TextButton.icon(
                   onPressed: _openManage,
@@ -245,18 +252,27 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
                   label: const Text('Manage symptoms'),
                   style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
                 ),
-                const Spacer(),
-                if (widget.onStartPeriod != null)
-                  TextButton(
-                    onPressed: _startPeriod,
-                    style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
-                    child: const Text('Start a period'),
-                  ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                  child: const Text('Done'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    if (widget.onStartPeriod != null)
+                      TextButton(
+                        onPressed: _startPeriod,
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                        ),
+                        child: const Text('Start a period'),
+                      ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
+                      child: const Text('Done'),
+                    ),
+                  ],
                 ),
               ],
             ),
