@@ -4,6 +4,7 @@
 /// §3): the mobile app and the future desktop shell both consume it.
 library;
 
+export 'src/a11y/contrast.dart';
 export 'src/backtest/backtest_harness.dart';
 export 'src/backtest/backtest_metrics.dart';
 export 'src/backtest/correction_response.dart';

@@ -5,6 +5,7 @@ Private, correctable period & cycle tracker. Local-first, no ad/analytics SDKs, 
 - **What the product must do:** [`requirements.md`](./requirements.md)
 - **Roadmap & task order:** [`DEVELOPMENT_PLAN.md`](./DEVELOPMENT_PLAN.md)
 - **How to contribute:** [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- **Accessibility (WCAG 2.2 AA) conformance:** [`docs/accessibility-conformance.md`](./docs/accessibility-conformance.md)
 
 ## Workspace layout
 

@@ -3246,7 +3246,7 @@ exact-alarm path is backlog (§9), not a gate.
 
 ### Phase 5 — Accessibility & design polish
 
-**Status:** IN PROGRESS (p5.1b) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
+**Status:** IN PROGRESS (p5.1c) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
 
 **Phase-wide constraints:**
 - No new runtime **Dart** dependency without §5 negotiation. Two slices carry pre-approved platform/CI changes, spelled out in their rows: **p5.4** (Android `activity-alias` + iOS alternate-icon via a hand-rolled platform channel — NO Dart package; the only Phase 5 slice that edits `AndroidManifest.xml` / `Info.plist`, minimally) and **p5.5** (one new CI job measuring APK size + cold-start against a checked-in budget). No other manifest, permission, or CI-workflow change in the phase.
@@ -3289,9 +3289,9 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — review PASS. Merged as `777e02e` (squash). DONE.
 
 #### p5.1b — Dynamic Type / text scaling & reflow
-- **Status:** IN REVIEW · **Depends on:** p5.1a
+- **Status:** DONE (2026-09-03)
 - **Branch / worktree:** `feat/p5.1b-text-scaling` / `../olf-wt/p5.1b`
-- **PR:** [#55](https://github.com/Abbo0dio/olf/pull/55)
+- **PR:** [#55](https://github.com/Abbo0dio/olf/pull/55) · squash `f9dfaa6`
 - **Owner:** worker: phase5
 - **Requirement refs:** §8 (scalable text), §4
 - **Goal:** Every screen stays usable and un-clipped at the OS's largest text setting — no overflow, no truncated actions, no unreachable buttons at `textScaler` 2.0.
@@ -3312,9 +3312,12 @@ exact-alarm path is backlog (§9), not a gate.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.1b`, branch `feat/p5.1b-text-scaling` off `main` @ `777e02e` (#54). Folded p5.1a → DONE (squash `777e02e`); bumped the Phase 5 header note to `IN PROGRESS (p5.1b)`. Set p5.1b IN PROGRESS.
   - 2026-09-03 — built to DoD: shared `screen_nav.dart` (16-surface inventory), `text_scaling.dart` harness, `text_scaling_test.dart` (48 tests), one `lib/` reflow fix (`symptom_day_sheet.dart` action row → `OverflowBar`); no fixed-geometry cap, no goldens. All suites + gates green. PR [#55](https://github.com/Abbo0dio/olf/pull/55) opened; set IN REVIEW.
+  - 2026-09-03 — review PASS. Merged as `f9dfaa6` (squash). DONE.
 
 #### p5.1c — Contrast, touch targets, keyboard/switch nav, conformance doc
-- **Status:** TODO · **Depends on:** p5.1a, p5.1b
+- **Status:** IN PROGRESS · **Depends on:** p5.1a, p5.1b
+- **Branch / worktree:** `feat/p5.1c-contrast-nav` / `../olf-wt/p5.1c`
+- **Owner:** worker: phase5
 - **Requirement refs:** §8 (4.5:1 contrast, ≥ ~9mm / 48dp targets, keyboard/switch nav, WCAG 2.2 AA), §4
 - **Goal:** Close remaining WCAG 2.2 AA gaps — colour contrast in both themes, minimum touch-target size everywhere, full external-keyboard / switch-access operability — and publish a documented AA conformance statement.
 - **Acceptance criteria:**
@@ -3324,6 +3327,16 @@ exact-alarm path is backlog (§9), not a gate.
   - `docs/accessibility-conformance.md` — WCAG 2.2 AA conformance statement: table of every Level A + AA success criterion with Supports / Partially / Not Applicable + a one-line evidence pointer (test or screen). Honest — "Partially" + tracked follow-up over a false "Supports". Linked from the docs index / README.
 - **Tests required:** contrast unit test (both themes); all p5.1a screen guideline tests unskipped + green; keyboard-traversal test on 2–3 representative screens; full suites + gates green.
 - **Notes / detail:** this slice owns the phase's a11y exit-gate evidence. Criteria that can't be met in-app (e.g. captions) → "Not Applicable / see p5.2", not blank.
+- **Build detail (worker: phase5):**
+  - **Contrast maths in `core` (pure, Flutter-free).** New `core/lib/src/a11y/contrast.dart` — `relativeLuminance(argb)`, `contrastRatio(a, b)`, `alphaComposite(fg, bg)`, `meetsWcagAa(ratio, {largeText})`, and the `wcagAaNormalText = 4.5` / `wcagAaLargeTextOrComponent = 3.0` constants. Colours are 32-bit ARGB ints (`toARGB32()` layout) so `core` needs no Flutter dep. Exported from `olf_core.dart`. `core/test/a11y/contrast_test.dart` — 14 unit tests pinning black/white = 21:1, the `#767676` / `#777777` 4.5:1 boundary greys, the `#949494` 3:1 boundary, order-independence, and `alphaComposite`.
+  - **Both-theme token sweep.** `app/test/a11y/theme_contrast_test.dart` walks `olfTheme(Brightness.light).colorScheme` **and** dark and asserts every foreground/background role pair olf actually paints — the M3 `on*`/`*Container` content pairs + `onInverseSurface`, plus `primary`/`error`/`tertiary` on `surface` (accent text/icons), at ≥ 4.5:1; `outline` on `surface` at ≥ 3:1. **42 assertions (21 pairs × 2 themes), all pass with the `ColorScheme.fromSeed` palette untouched** — no token change was needed. Recorded plainly rather than inventing a fix.
+  - **Contrast locked into the rendered-screen sweep too.** `screen_guidelines_test.dart` now calls `expectMeetsA11yGuidelines(tester)` with the default `contrast: true` — `textContrastGuideline` passes unskipped on all 16 surfaces (the p5.1a `contrast: false` / `// p5.1c:` deferral markers are removed). Tap-target guidelines were already unskipped + green since p5.1a; confirmed still so.
+  - **Keyboard / switch nav.** `app/test/a11y/keyboard_nav_test.dart` — 4 tests: Tab-reach + Enter-activate on a form (first-run acknowledge → onboarding completes), a list row (Settings → Privacy policy → screen pushed), and a FAB (Manage symptoms → Add symptom → dialog opens); plus a no-trap test that Tabs 60× through Settings and asserts focus keeps moving and cycles. Shared helpers `focusedSemanticToken()` / `tabToFocus()` / `activateFocused()` added to `app/test/support/a11y.dart`; `focus_order_test.dart` refactored to use `focusedSemanticToken()` (its local copy removed). No `lib/` change — Material 3's default focus highlight + the existing traversal already satisfy it.
+  - **`docs/accessibility-conformance.md`** — full WCAG 2.2 A + AA table (50 criteria): **39 Supports / 2 Partially / 9 Not applicable**, each with a test-file or screen pointer. Linked from `README.md`. The two **Partially** rows: **SC 2.5.7 Dragging Movements** (symptom-list reorder is drag-only, no single-tap move alternative for pointer users) and **SC 4.1.3 Status Messages** (`SnackBar` confirmations aren't wrapped in a live region — the calendar month-change announcement is). Both have a working AT path today and touch no health data; recorded as p5.1c follow-ups in §9.
+  - **No `lib/` code change in this slice.** Contrast passed untouched; keyboard nav and focus visibility were already conformant. All work is tests + the `core` helper + docs.
+  - Verification: `app/test/a11y/` 129 pass (16 guidelines + 16 semantics + 3 focus + 4 keyboard-nav + 48 text-scaling + 42 theme-contrast); app suite + core suite + analyze `--fatal-infos` + format + dependency-audit + `build_runner` (no `.g.dart` drift) all green; no `pubspec.lock` drift; no schema / manifest / CI-workflow change.
+- **Log:**
+  - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.1c`, branch `feat/p5.1c-contrast-nav` off `main` @ `f9dfaa6` (#55). Folded p5.1b → DONE (squash `f9dfaa6`); bumped the Phase 5 header note to `IN PROGRESS (p5.1c)`. Set p5.1c IN PROGRESS.
 
 #### p5.2 — Caption / transcript requirement stub for Phase 11 content
 - **Status:** TODO · **Depends on:** none (sequenced after p5.1c)
@@ -4182,6 +4195,21 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   scheduled, the new window only takes effect the next time that reminder is armed.
   Event-relative kinds are unaffected (the sync layer re-arms them on every forecast
   move). — noted by worker: phase4 during the Phase 4 close.
+- **p5.1c follow-ups (WCAG 2.2 AA "Partially" rows, see `docs/accessibility-conformance.md`):**
+  (a) **SC 2.5.7 Dragging Movements** — reordering the symptom list in
+  `app/lib/src/symptom/manage_symptoms_page.dart` is drag-only
+  (`ReorderableDragStartListener`); there is no single-tap "move up / move down"
+  alternative for a pointer user who cannot drag. Screen-reader users already get
+  `ReorderableListView`'s built-in move actions. Fix: add explicit move controls (an
+  overflow menu or up/down icon buttons on each row) and a widget test that reorders
+  without a drag gesture. (b) **SC 4.1.3 Status Messages** — `ScaffoldMessenger`
+  `SnackBar` confirmations ("App lock is on.", "… removed.") are visible but not wrapped
+  in a live region, so a screen reader may not speak them without a focus move; the
+  calendar month-change announcement already does this correctly via
+  `SemanticsService.announce` + `liveRegion: true`. Fix: route SnackBar confirmations
+  through a shared `announce()` helper / a `liveRegion` wrapper, with a test asserting
+  the announcement fires. Both have a working AT path today and touch no health data —
+  they do not block the Phase 5 exit gate. — noted by worker: phase5 during p5.1c.
 - (add more here)
 
 ## 10. Orphaned / cut work
