@@ -66,11 +66,11 @@ Consistent findings from the University of Washington study (2,000 reviews, 687 
 ### 5. Monetization Models
 - **Freemium subscription is dominant**: Flo Premium ~$40-50/year; Clue Plus ~$40/year; Natural Cycles ~$120/year ($9.99/mo). Flo's subscription revenue reached $275 million in 2025 with roughly 5 million paid subscribers.
 - **Typical paywall gating**: advanced/personalized insights, AI assistant, symptom checker, in-depth pregnancy content, wearable sync (Clue locks Oura/Fitbit/WHOOP behind Clue Plus), ad-free experience. **Warning**: the most damaging complaint pattern is *retroactively* moving previously-free features behind a paywall mid-use, plus post-every-action subscription pop-ups (documented for both Flo and Clue, including Clue's early-2025 upgrade-prompt escalation).
-- **B2B2C (employer/insurer) channel**: Ovia (owned by Labcorp) sells to employers/health plans (partnered with BCBS Massachusetts; Clue partnered with UnitedHealth Group in 2024) — fertility/family-building benefits, care navigation, and the "Ovia Wallet" (FSA/adoption/surrogacy funds via First Dollar). Ovia has supported over 18 million family journeys. This diversifies away from consumer subscriptions and is the most defensible revenue model.
+- **B2B2C (employer/insurer) channel**: Ovia (owned by Labcorp) sells to employers/health plans (partnered with BCBS Massachusetts; Clue partnered with UnitedHealth Group in 2024) — fertility/family-building benefits, care navigation, and the "Ovia Wallet" (FSA/adoption/surrogacy funds via First Dollar). Ovia has supported over 18 million family journeys. This diversifies away from consumer subscriptions and is the most defensible revenue model. (olf does not pursue this.)
 - **Hardware bundling**: Natural Cycles sells the NC° Band and discounts Oura/Garmin — device + subscription.
-- **FSA/HSA eligibility** widens the addressable market (Natural Cycles is prescribable and reimbursable).
+- **FSA/HSA eligibility** widens the addressable market for a paid product (Natural Cycles is prescribable and reimbursable). A paid-product mechanic — N/A for olf.
 - **One-time purchase / fully free**: privacy-first apps (Euki, Drip) are free/nonprofit; not a growth model but a strong trust signal.
-- **Recommended strategy**: olf is not monetized via subscription. The entire app — AI assistant and advanced insights included — is permanently free. A funding model, if ever needed, is a separate explicit decision; the commitment is free. Avoid ads entirely regardless (ads = the SDK liability vector *and* a top complaint).
+- **Recommended strategy**: olf is not monetized via subscription. The entire app — AI assistant and advanced insights included — is permanently free. No B2B2C / employer / insurer channel and no FSA/HSA reimbursement play — those are paid-product mechanics. olf has no revenue model. A funding model, if ever needed, is a separate explicit decision; the commitment is free. Avoid ads entirely regardless (ads = the SDK liability vector *and* a top complaint).
 
 ### 6. Regulatory / Compliance
 - **FDA clearance is required only if you market for contraception or make medical/diagnostic claims.** Natural Cycles is the template: cleared in 2018 via the **de novo** pathway (request DEN170052; first "digital contraceptive"), establishing "special controls"; substantially similar apps can subsequently use **510(k)**. Natural Cycles has since earned six FDA clearances, including wearable integrations (Oura 2021, Apple Watch) and a 2025 next-generation algorithm.
@@ -122,7 +122,7 @@ Drawn from 2024-2026 app-store reviews and analysis (one vendor's distribution o
 
 **SHOULD-HAVE (competitive parity+):** passive wearable integration (Apple Watch/Oura/Garmin/Whoop); AI assistant & personalized insights (free); PCOS/endometriosis/PMDD/perimenopause modes; pregnancy & TTC modes; birth-control-switching support; partner sharing (free both sides); doctor-ready data export; named-expert educational content; ISO 27001.
 
-**WOW-FACTOR (differentiators):** fully correctable/self-learning prediction engine that visibly improves when users fix it; zero-knowledge encrypted sync with local-first default; decoy screen + scheduled auto-deletion; condition-specific symptom-correlation insights ("your flares track your luteal phase"); MCP-style AI coach synthesizing cycle + sleep + nutrition; humane, non-alarming AI messaging; B2B2C employer/insurer benefit; FSA/HSA reimbursement.
+**WOW-FACTOR (differentiators):** fully correctable/self-learning prediction engine that visibly improves when users fix it; zero-knowledge encrypted sync with local-first default; decoy screen + scheduled auto-deletion; condition-specific symptom-correlation insights ("your flares track your luteal phase"); MCP-style AI coach synthesizing cycle + sleep + nutrition; humane, non-alarming AI messaging.
 
 ## Recommendations
 
@@ -142,9 +142,9 @@ Drawn from 2024-2026 app-store reviews and analysis (one vendor's distribution o
 - *Threshold:* NPS above category norms.
 
 **Stage 3 — Scale & defensibility:**
-- Pursue **B2B2C** (employers/insurers) à la Ovia for durable revenue.
+- No revenue model — olf stays free for every user and is not sold to employers or insurers.
 - Consider **FDA clearance** *only if* you want to market for contraception (de novo/510(k), requires a prospective clinical study on the scale of Natural Cycles' 15,000+ users) — otherwise stay clearly non-medical with disclaimers.
-- Add privacy-safe community, educational content with named medical reviewers, and FSA/HSA eligibility.
+- Add privacy-safe community and educational content with named medical reviewers.
 - *Threshold:* if pursuing contraception positioning, budget for a multi-year clinical program and Pearl Index validation.
 
 **What would change these recommendations:** If a new US federal health-privacy law extends HIPAA-like rules to apps, on-device storage becomes less of a differentiator and compliance cost rises across the board. If Apple/Google build robust native cycle prediction into OS-level health apps, standalone trackers must compete on depth (condition modes, community, AI coaching) rather than basic tracking.

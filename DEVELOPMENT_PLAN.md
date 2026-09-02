@@ -160,7 +160,7 @@ A task is not `DONE` until **all** of these hold:
 | **9** | Optional zero-knowledge encrypted sync | `TODO` | Opt-in multi-device sync; local-first stays default; deletion propagates |
 | **10** | AI assistant + advanced insights | `TODO` | AI assistant privacy design documented in the threat model (on-device / zero-knowledge, no health data to a third party); advanced insights are useful and non-alarming — no diagnosis language. Free, like everything else. |
 | **11** | Educational content & privacy-safe community | `TODO` | Named-reviewer content system; anonymous community with moderation |
-| **12** | Scale & defensibility (B2B2C, ISO 27001, optional FDA) | `TODO` | B2B2C pilot path; compliance ledger complete; FDA decision recorded |
+| **12** | Scale & defensibility (ISO 27001, optional FDA) | `TODO` | compliance ledger complete; FDA decision recorded |
 | **13** | Desktop app provision (separate, lean) | `TODO` | Separate desktop shell reusing `core`; zero added weight to mobile |
 
 Cross-cutting work (compliance ledger, release/store readiness, threat model) is tracked in §6.
@@ -3373,18 +3373,16 @@ opt-in.
 
 ### Phase 12 — Scale & defensibility
 
-**Status:** `TODO` · **Requirement refs:** §5, §6. Slices:
+**Status:** `TODO` · **Requirement refs:** §6. Slices:
 
-- **p12.1** B2B2C channel — employer/insurer benefit packaging, admin/reporting that exposes
-  **no individual health data**.
-- **p12.2** ISO 27001 readiness track.
-- **p12.3** FTC Health Breach Notification Rule process + incident runbook.
-- **p12.4** Compliance ledger completed (GDPR, CCPA, MHMDA, Nevada) — see §6.
-- **p12.5** **Decision point:** pursue FDA clearance for contraception positioning
+- **p12.1** ISO 27001 readiness track.
+- **p12.2** FTC Health Breach Notification Rule process + incident runbook.
+- **p12.3** Compliance ledger completed (GDPR, CCPA, MHMDA, Nevada) — see §6.
+- **p12.4** **Decision point:** pursue FDA clearance for contraception positioning
   (de novo / 510(k) + prospective clinical study on the scale of Natural Cycles' 15,000+ users)
   or stay explicitly non-medical. Record the decision and rationale in §7 regardless.
 
-**Exit gate:** a documented B2B2C path; compliance ledger complete; FDA decision recorded.
+**Exit gate:** compliance ledger complete; FDA decision recorded.
 
 ---
 
@@ -3732,8 +3730,11 @@ Move these into the Decisions Log once answered.
 - Self-host the sync backend vs. managed? (Phase 9.)
 - 2026-09-02 — Monetization: decided against, permanently. olf is free forever — no
   subscription, no paid tier, no billing. Phase 10 rescoped to AI assistant + advanced
-  insights, both free. p4.5's "stop asking to subscribe" control reverted (this PR) — it
-  implied a paywall that will never exist.
+  insights, both free. p4.5's "stop asking to subscribe" control reverted (PR #52) — it
+  implied a paywall that will never exist. No B2B2C / employer / insurer channel either —
+  olf is not sold to anyone. There is no revenue model; if one is ever needed it is a
+  separate, explicit, and reversible-with-scrutiny decision. (B2B2C struck from Phase 12
+  this PR.)
 
 ---
 
