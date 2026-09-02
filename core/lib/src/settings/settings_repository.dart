@@ -38,25 +38,7 @@ abstract final class SettingKeys {
   /// owned by the app layer (`quiet_hours_providers.dart`). Absent means the
   /// default: disabled, so nothing is held.
   static const String quietHours = 'quiet_hours';
-
-  /// `'true'` once the user has permanently turned off subscription / upsell
-  /// prompting (p4.5). Absent / `'false'` / anything else means prompts are
-  /// allowed — the default. Read only through [subscriptionPromptsAllowed] so
-  /// the "absent = allowed" rule lives in one place. This is a **hard gate**:
-  /// every paid-tier prompt added in Phase 10+ must honour it — see
-  /// `docs/monetization-principles.md`.
-  static const String suppressSubscriptionPrompts =
-      'suppress_subscription_prompts';
 }
-
-/// Whether subscription / upsell / paid-tier prompts may be shown, given the
-/// raw [SettingKeys.suppressSubscriptionPrompts] value.
-///
-/// Only the exact string `'true'` suppresses. Absent, `'false'`, or any
-/// unrecognised / malformed value ⇒ `true` (prompts allowed) — a storage glitch
-/// must never silently hide a paid feature the user never chose to turn off,
-/// and this matches the "absent = allowed" default.
-bool subscriptionPromptsAllowed(String? rawSetting) => rawSetting != 'true';
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).
 ///

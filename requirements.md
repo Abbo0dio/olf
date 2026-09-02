@@ -3,7 +3,7 @@
 ## TL;DR
 - A market-leading period tracker in 2026 must combine **accurate, correctable predictions** (especially for irregular cycles), **radical privacy** (on-device/anonymous options, no third-party data sharing), and **wearable-driven passive tracking** — the three areas where incumbents like Flo, Clue, Ovia, and Natural Cycles draw the most user complaints and litigation.
 - The biggest differentiation opportunity is trust: privacy fears (~28% of negative reviews) and prediction inaccuracy (~19%) are the top two complaint categories, and Flo's 2021 FTC settlement plus the August 1, 2025 California jury verdict against Meta have made data ethics a competitive weapon, not just compliance overhead.
-- Monetization should keep core tracking free and un-paywalled, gate genuinely advanced/AI features behind a ~$40/year subscription, and consider a B2B2C (employer/insurer) channel like Ovia; the femtech market was valued at roughly USD 9.12 billion in 2025 (estimates vary widely) and is growing double digits, with Flo alone earning $275 million in subscription revenue in 2025.
+- The entire app is free forever — no subscription, no paid tier. This is a fixed product commitment, not a launch-phase choice; a funding model, if ever needed, is a separate explicit decision. For context, the incumbents monetize heavily: the femtech market was valued at roughly USD 9.12 billion in 2025 (estimates vary widely) and is growing double digits, with Flo alone earning $275 million in subscription revenue in 2025.
 
 ## Key Findings
 
@@ -70,7 +70,7 @@ Consistent findings from the University of Washington study (2,000 reviews, 687 
 - **Hardware bundling**: Natural Cycles sells the NC° Band and discounts Oura/Garmin — device + subscription.
 - **FSA/HSA eligibility** widens the addressable market (Natural Cycles is prescribable and reimbursable).
 - **One-time purchase / fully free**: privacy-first apps (Euki, Drip) are free/nonprofit; not a growth model but a strong trust signal.
-- **Recommended strategy**: keep all core tracking permanently free and un-paywalled; gate AI + advanced insights + condition programs behind ~$40/yr; pursue B2B2C as the scale lever; avoid ads entirely (ads = the SDK liability vector *and* a top complaint).
+- **Recommended strategy**: olf is not monetized via subscription. The entire app — AI assistant and advanced insights included — is permanently free. A funding model, if ever needed, is a separate explicit decision; the commitment is free. Avoid ads entirely regardless (ads = the SDK liability vector *and* a top complaint).
 
 ### 6. Regulatory / Compliance
 - **FDA clearance is required only if you market for contraception or make medical/diagnostic claims.** Natural Cycles is the template: cleared in 2018 via the **de novo** pathway (request DEN170052; first "digital contraceptive"), establishing "special controls"; substantially similar apps can subsequently use **510(k)**. Natural Cycles has since earned six FDA clearances, including wearable integrations (Oura 2021, Apple Watch) and a 2025 next-generation algorithm.
@@ -83,7 +83,7 @@ Consistent findings from the University of Washington study (2,000 reviews, 687 
 - **Granular, category-by-category controls** — the #1 notification complaint is inability to disable content/article notifications separately from cycle reminders.
 - **Behavior-timed reminders** (send when the user typically logs).
 - **No PHI in notification text** (privacy + lock-screen exposure).
-- **An easy "stop asking me to subscribe" control** — post-every-action upsell pop-ups are a top-cited frustration for Flo and Clue.
+- **An easy "stop asking me to subscribe" control** — post-every-action upsell pop-ups are a top-cited frustration for Flo and Clue. (N/A for olf — there is no subscription.)
 - Useful reminder types: upcoming period, fertile window, pill/medication, BBT-logging prompt, and a late-period check-in worded sensitively (avoid the "raising your hand to see if the teacher is collecting homework" pattern users mock).
 
 ### 8. Accessibility
@@ -120,7 +120,7 @@ Drawn from 2024-2026 app-store reviews and analysis (one vendor's distribution o
 
 **MUST-HAVE (table stakes):** period logging with correction/override; adaptive cycle & ovulation prediction with ranges; symptom/mood/flow/discharge tracking with custom symptoms; BBT + cervical mucus; medication/birth-control reminders; on-device storage option + encryption; anonymous/no-account mode; PIN/biometric lock; gender-neutral language + pronouns; granular notifications; WCAG 2.2 AA; Apple Health/Google Fit export; dark mode; explicit pregnancy-loss/birth events; clear non-medical disclaimers; no third-party ad/analytics SDKs.
 
-**SHOULD-HAVE (competitive parity+):** passive wearable integration (Apple Watch/Oura/Garmin/Whoop); AI assistant & personalized insights (paid tier); PCOS/endometriosis/PMDD/perimenopause modes; pregnancy & TTC modes; birth-control-switching support; partner sharing (free both sides); doctor-ready data export; named-expert educational content; ISO 27001.
+**SHOULD-HAVE (competitive parity+):** passive wearable integration (Apple Watch/Oura/Garmin/Whoop); AI assistant & personalized insights (free); PCOS/endometriosis/PMDD/perimenopause modes; pregnancy & TTC modes; birth-control-switching support; partner sharing (free both sides); doctor-ready data export; named-expert educational content; ISO 27001.
 
 **WOW-FACTOR (differentiators):** fully correctable/self-learning prediction engine that visibly improves when users fix it; zero-knowledge encrypted sync with local-first default; decoy screen + scheduled auto-deletion; condition-specific symptom-correlation insights ("your flares track your luteal phase"); MCP-style AI coach synthesizing cycle + sleep + nutrition; humane, non-alarming AI messaging; B2B2C employer/insurer benefit; FSA/HSA reimbursement.
 
@@ -137,9 +137,9 @@ Drawn from 2024-2026 app-store reviews and analysis (one vendor's distribution o
 **Stage 2 — Differentiate:**
 - Add **passive wearable integration** (Apple Watch, Oura, Garmin) for temperature/HRV — the biggest friction reducer.
 - Launch **condition modes** (PCOS, endometriosis, PMDD, perimenopause) with symptom-correlation insights and doctor-ready export.
-- Add an **AI assistant** and personalized insights as the primary **paid tier (~$40/yr)**; ensure easy in-app cancellation and clear renewal notices.
+- Add an **AI assistant** and personalized insights — free, like everything else. No billing, no cancellation flow.
 - Granular notification controls; humane, sensitive reminder copy.
-- *Threshold:* paid conversion >3-5% and NPS above category norms.
+- *Threshold:* NPS above category norms.
 
 **Stage 3 — Scale & defensibility:**
 - Pursue **B2B2C** (employers/insurers) à la Ovia for durable revenue.
