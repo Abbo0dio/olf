@@ -31,8 +31,12 @@ be waived in CI.
       [`local-database.md`](local-database.md)).
 - [ ] Android `debug` / `profile` manifests reviewed by eye if they changed
       (they are not scanned by the audit).
-- [ ] Install-size report from the `build` job is within expectations (a hard
-      budget on a release build is Phase 5).
+- [ ] **`perf-budget` job green on the release commit** — the release APK is
+      within `.github/perf-baseline.json` + threshold
+      ([`performance-budget.md`](performance-budget.md)). If the baseline was
+      bumped since the last release, that bump has its own commit with the
+      reason in its PR. The debug-build install-size report from the `build` job
+      is a secondary sanity check.
 - [ ] Privacy policy [`privacy-and-lock.md`](privacy-and-lock.md) and the
       in-app policy screen still match what the build actually does.
 - [ ] **Discreet app icon (p5.4) verified on a device.** On a real device or
