@@ -27,8 +27,27 @@ be waived in CI.
 
 - [ ] Version and build number bumped.
 - [ ] Changelog / release notes updated.
-- [ ] Schema migrations, if any, have a migration test (see
-      [`local-database.md`](local-database.md)).
+- [ ] **Schema change (any PR that bumps `schemaVersion` in
+      `core/lib/src/db/app_database.dart`)** — the same PR must, or the change
+      does not ship:
+  - [ ] Regenerate the drift snapshots: from `core/`, run
+        `dart run drift_dev schema dump lib/src/db/app_database.dart drift_schemas/`
+        (refreshes the latest `drift_schema_vN.json`) then
+        `dart run tool/dump_historical_schemas.dart` (rebuilds v1..v(N-1)), and
+        regenerate the verifier helpers with
+        `dart run drift_dev schema generate drift_schemas/ test/db/generated/`.
+        Commit all of `core/drift_schemas/` and `core/test/db/generated/`.
+  - [ ] Extend `core/test/db/migration_matrix_test.dart`: add the new version to
+        the `from` loops and the `_tableCountAtVersion` map in
+        `tool/dump_historical_schemas.dart`, and seed representative rows in any
+        new table so the `v(old) → v(new)` path is covered with data.
+  - [ ] The migration matrix and every per-feature `*_migration_test.dart` are
+        green. A lossy or missing historical step is a real bug — fix the
+        migration and add a test; do not adjust a snapshot to hide it.
+  - [ ] Backup/restore still round-trips across the migration (the
+        `v(old) → migrate → backup → restore` tests in the same file).
+  - [ ] Older per-feature migration tests still there for context (see
+        [`local-database.md`](local-database.md)).
 - [ ] Android `debug` / `profile` manifests reviewed by eye if they changed
       (they are not scanned by the audit).
 - [ ] **`perf-budget` job green on the release commit** — the release APK is
