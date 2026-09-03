@@ -29,11 +29,11 @@ contrast maths. All run in the required `CI OK` check.
 | SC | Level | Status | Evidence |
 |----|-------|--------|----------|
 | 1.1.1 Non-text Content | A | Supports | Every icon button carries a `tooltip`; calendar cells are `Semantics(button:, label:)`. `semantics_labels_test.dart` fails on any operable node with no label/value/tooltip; `screen_guidelines_test.dart` runs `labeledTapTargetGuideline`. No informational images. |
-| 1.2.1 Audio-only / Video-only (Prerecorded) | A | Not applicable | olf ships no audio or video. Media is forbidden until Phase 11, where the `MediaItem` contract (p5.2) makes a transcript non-optional. |
-| 1.2.2 Captions (Prerecorded) | A | Not applicable | No media — see p5.2. |
-| 1.2.3 Audio Description / Media Alternative (Prerecorded) | A | Not applicable | No media — see p5.2. |
-| 1.2.4 Captions (Live) | AA | Not applicable | No live media. |
-| 1.2.5 Audio Description (Prerecorded) | AA | Not applicable | No media — see p5.2. |
+| 1.2.1 Audio-only / Video-only (Prerecorded) | A | Not applicable | olf ships no audio or video. **Enforced by design:** the `core` `MediaItem` contract + the `CaptionedMedia` widget (p5.2) make a transcript non-optional, so Phase 11 media cannot ship without a text alternative. |
+| 1.2.2 Captions (Prerecorded) | A | Not applicable | No media ships. **Enforced by design:** `MediaItem` / `CaptionTrack` (p5.2, `core/lib/src/a11y/captions.dart`, tests in `core/test/a11y/captions_test.dart`) make a synchronised caption track a `required`, non-empty, chronological field — a Phase 11 media slice cannot compile without it. |
+| 1.2.3 Audio Description / Media Alternative (Prerecorded) | A | Not applicable | No media ships. **Enforced by design:** `MediaItem.transcript` is `required` and asserted non-empty (p5.2); a caption track alone does not satisfy the contract. |
+| 1.2.4 Captions (Live) | AA | Not applicable | No live media, and none is planned. |
+| 1.2.5 Audio Description (Prerecorded) | AA | Not applicable | No media ships. **Enforced by design:** the mandatory `MediaItem.transcript` (p5.2) is the media alternative carrying description of visual information; a Phase 11 audio-description track would layer on top. |
 | 1.3.1 Info and Relationships | A | Supports | Native Material widgets (`ListTile`, `SwitchListTile`, `RadioListTile`, `AppBar` titles, section headers) carry role/label/state in the semantics tree; `SwitchListTile`/`RadioListTile` merge their control so the row is one labelled node. |
 | 1.3.2 Meaningful Sequence | A | Supports | Reading order follows the widget tree; `focus_order_test.dart` asserts traversal order on the first-run form and the settings list. |
 | 1.3.3 Sensory Characteristics | A | Supports | Instructions never rely on shape/position/colour alone ("tap everything that applies", not "tap the button on the right"). Enforced in spirit by the p1.9 copy sweep. |
@@ -113,4 +113,4 @@ The two "Partially" rows are tracked as p5.1c follow-ups in
 working path for assistive-technology users today, and neither touches health
 data or the privacy posture.
 
-_Last reviewed: 2026-09-03 (p5.1c), reviewer: worker: phase5._
+_Last reviewed: 2026-09-03 (p5.2 — captions rows updated for the `MediaItem` contract; p5.1c otherwise), reviewer: worker: phase5._
