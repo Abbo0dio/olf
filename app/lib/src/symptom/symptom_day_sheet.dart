@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../a11y/spoken_detail.dart';
 import '../bbt/bbt_format.dart';
 import '../bbt/bbt_providers.dart';
 import '../mucus/mucus_providers.dart';
@@ -142,6 +143,11 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
     final unit =
         ref.watch(temperatureUnitProvider).value ?? TemperatureUnit.celsius;
     final temp = _tempCelsius;
+    // p5.3: with "Reduce spoken detail" on, chip names are not spoken — the
+    // screen reader still announces the selected state, and the visible label
+    // is unchanged.
+    final reduceSpoken =
+        ref.watch(reduceSpokenDetailProvider).valueOrNull ?? false;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -186,7 +192,13 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
                 children: [
                   for (final type in types)
                     FilterChip(
-                      label: Text(type.name),
+                      label: Text(
+                        type.name,
+                        semanticsLabel: spokenLabel(
+                          reduceSpoken,
+                          redacted: 'symptom',
+                        ),
+                      ),
                       selected: _selected.contains(type.id),
                       onSelected: (v) => _toggle(type.id, v),
                     ),

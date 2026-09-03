@@ -76,6 +76,7 @@ export 'src/repository/cycle_event_repository.dart';
 export 'src/repository/drift_cycle_event_repository.dart';
 export 'src/retention/retention_service.dart';
 export 'src/retention/retention_window.dart';
+export 'src/security/auto_lock.dart';
 export 'src/security/pin.dart';
 export 'src/security/pin_store.dart';
 export 'src/settings/drift_settings_repository.dart';

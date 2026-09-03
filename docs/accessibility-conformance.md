@@ -98,7 +98,7 @@ contrast maths. All run in the required `CI OK` check.
 |----|-------|--------|----------|
 | 4.1.1 Parsing | A | Not applicable | Obsolete/removed in WCAG 2.2, and not meaningful for a native rendered UI (no markup to parse). |
 | 4.1.2 Name, Role, Value | A | Supports | Native Material widgets expose name/role/state; `semantics_labels_test.dart` + `screen_guidelines_test.dart` guard names; toggles expose checked state through the merged list-tile node. |
-| 4.1.3 Status Messages | AA | **Partially** | The calendar month change announces via `SemanticsService.announce` + a `liveRegion: true` node. The `ScaffoldMessenger` `SnackBar` confirmations elsewhere ("App lock is on.", "… removed.") are visible but not wrapped in a live region, so a screen reader may not speak them without focus movement. Follow-up: route SnackBar confirmations through a live region / `SemanticsService.announce` — `DEVELOPMENT_PLAN.md` §9 (p5.1c follow-ups). |
+| 4.1.3 Status Messages | AA | **Partially** | The calendar month change announces via `SemanticsService.announce` + a `liveRegion: true` node. p5.3 adds a shared `announce()` helper (`app/lib/src/a11y/announce.dart`) and routes the inactivity auto-lock warning and the prediction-correction notice through it. The remaining `ScaffoldMessenger` `SnackBar` confirmations ("App lock is on.", "… removed.") are visible but not wrapped in a live region, so a screen reader may not speak them without focus movement. Follow-up (narrowed): route the remaining SnackBar confirmations through `announce()` — `DEVELOPMENT_PLAN.md` §9. |
 
 ## Summary
 
@@ -108,9 +108,22 @@ contrast maths. All run in the required `CI OK` check.
 | Partially | 2 (SC 2.5.7, SC 4.1.3) |
 | Not applicable | 9 |
 
-The two "Partially" rows are tracked as p5.1c follow-ups in
-`DEVELOPMENT_PLAN.md` §9 and do not block the Phase 5 exit gate: both have a
-working path for assistive-technology users today, and neither touches health
-data or the privacy posture.
+The two "Partially" rows are tracked as follow-ups in `DEVELOPMENT_PLAN.md` §9
+and do not block the Phase 5 exit gate: both have a working path for
+assistive-technology users today, and neither touches health data or the
+privacy posture. The SC 4.1.3 follow-up was narrowed in p5.3 (the shared
+`announce()` helper now covers the auto-lock warning and the correction
+notice; only the plain confirmation SnackBars remain).
 
-_Last reviewed: 2026-09-03 (p5.2 — captions rows updated for the `MediaItem` contract; p5.1c otherwise), reviewer: worker: phase5._
+### p5.3 — reduce spoken detail
+
+The "Reduce spoken detail" preference (Settings › Accessibility) is an
+accessibility ↔ privacy control, not a WCAG criterion. When it is on, sensitive
+`Semantics` labels are swapped for a generic form ("has entries" / "symptom
+logged" / "flow logged") while the **visible** text is unchanged; dates,
+navigation, and headings stay fully spoken. Redacted surfaces: the calendar
+day cell, today's flow chip, today's symptoms chip, the recent-symptoms list,
+the next-period prediction card, the prediction-correction notice, and the
+symptom day sheet's chips.
+
+_Last reviewed: 2026-09-03 (p5.3 — SC 4.1.3 narrowed via the shared `announce()` helper; added the "reduce spoken detail" note. p5.2 — captions rows for the `MediaItem` contract; p5.1c otherwise), reviewer: worker: phase5._

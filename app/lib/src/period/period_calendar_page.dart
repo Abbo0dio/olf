@@ -1,10 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../a11y/announce.dart';
+import '../a11y/spoken_detail.dart';
 import '../cycle/cycle_format.dart';
 import '../cycle/cycle_providers.dart';
 import '../flow/flow_format.dart';
@@ -264,6 +265,13 @@ class _LoadedState extends ConsumerState<_Loaded> {
     final pregnancyState = ref.watch(pregnancyRecoveryStateProvider);
     final pregnancySince = ref.watch(mostRecentPregnancyEndProvider)?.date;
 
+    // p5.3: when "Reduce spoken detail" is on, sensitive read-outs on this
+    // screen (day cells, the prediction card, the correction notice, the
+    // recent-symptoms list, today's flow chip) announce only that an entry
+    // exists. Visible text is unchanged.
+    final reduceSpoken =
+        ref.watch(reduceSpokenDetailProvider).valueOrNull ?? false;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
@@ -274,6 +282,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
             today: today,
             todayFlow: flowOn(today),
             todaySymptomCount: symptomCountOn(today),
+            reduceSpoken: reduceSpoken,
             onLogTodayFlow: () => showFlowQuickLog(context, date: today),
             onLogTodaySymptoms: () => _openSymptoms(
               today,
@@ -290,6 +299,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
             const SizedBox(height: 16),
             _CorrectionNotice(
               delta: correctionDelta,
+              reduceSpoken: reduceSpoken,
               onDismiss: () =>
                   ref.read(correctionNoticeProvider.notifier).clear(),
             ),
@@ -299,6 +309,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
             _PredictionCard(
               prediction: prediction,
               observedFertileWindow: observedFertile,
+              reduceSpoken: reduceSpoken,
               onLogPeriodStart: _addPeriod,
             ),
           ],
@@ -317,6 +328,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
             periodOn: _periodOn,
             flowOn: flowOn,
             symptomCountOn: symptomCountOn,
+            reduceSpoken: reduceSpoken,
             onPrev: () =>
                 setState(() => _visibleMonth = addMonths(_visibleMonth, -1)),
             onNext: _visibleMonth.isBefore(firstOfMonth(today))
@@ -344,7 +356,11 @@ class _LoadedState extends ConsumerState<_Loaded> {
             onDelete: _deleteFromHistory,
           ),
           const SizedBox(height: 24),
-          _RecentSymptoms(idsByDay: symptomIdsByDay, types: symptomTypes),
+          _RecentSymptoms(
+            idsByDay: symptomIdsByDay,
+            types: symptomTypes,
+            reduceSpoken: reduceSpoken,
+          ),
         ],
       ),
     );
@@ -357,6 +373,7 @@ class _Summary extends StatelessWidget {
     required this.today,
     required this.todayFlow,
     required this.todaySymptomCount,
+    required this.reduceSpoken,
     required this.onLogTodayFlow,
     required this.onLogTodaySymptoms,
   });
@@ -365,6 +382,7 @@ class _Summary extends StatelessWidget {
   final DateTime today;
   final DailyFlow? todayFlow;
   final int todaySymptomCount;
+  final bool reduceSpoken;
   final VoidCallback onLogTodayFlow;
   final VoidCallback onLogTodaySymptoms;
 
@@ -406,6 +424,12 @@ class _Summary extends StatelessWidget {
                   flow == null
                       ? "Log today's flow"
                       : "Today's flow: ${flow.intensity.label}",
+                  semanticsLabel: flow == null
+                      ? null
+                      : spokenLabel(
+                          reduceSpoken,
+                          redacted: "Today's flow logged",
+                        ),
                 ),
                 onPressed: onLogTodayFlow,
               ),
@@ -440,6 +464,12 @@ class _Summary extends StatelessWidget {
               todaySymptomCount == 0
                   ? "Log today's symptoms"
                   : "Today's symptoms: $todaySymptomCount",
+              semanticsLabel: todaySymptomCount == 0
+                  ? null
+                  : spokenLabel(
+                      reduceSpoken,
+                      redacted: "Today's symptoms logged",
+                    ),
             ),
             onPressed: onLogTodaySymptoms,
           ),
@@ -456,6 +486,7 @@ class _MonthCalendar extends StatelessWidget {
     required this.periodOn,
     required this.flowOn,
     required this.symptomCountOn,
+    required this.reduceSpoken,
     required this.onPrev,
     required this.onNext,
     required this.onDayTap,
@@ -466,6 +497,7 @@ class _MonthCalendar extends StatelessWidget {
   final Period? Function(DateTime) periodOn;
   final DailyFlow? Function(DateTime) flowOn;
   final int Function(DateTime) symptomCountOn;
+  final bool reduceSpoken;
   final VoidCallback onPrev;
   final VoidCallback? onNext;
   final ValueChanged<DateTime> onDayTap;
@@ -487,6 +519,7 @@ class _MonthCalendar extends StatelessWidget {
           period: periodOn(DateTime(month.year, month.month, day)),
           flow: flowOn(DateTime(month.year, month.month, day)),
           symptomCount: symptomCountOn(DateTime(month.year, month.month, day)),
+          reduceSpoken: reduceSpoken,
           onTap: onDayTap,
         ),
     ];
@@ -550,6 +583,7 @@ class _DayCell extends StatelessWidget {
     required this.period,
     required this.flow,
     required this.symptomCount,
+    required this.reduceSpoken,
     required this.onTap,
   });
 
@@ -558,6 +592,7 @@ class _DayCell extends StatelessWidget {
   final Period? period;
   final DailyFlow? flow;
   final int symptomCount;
+  final bool reduceSpoken;
   final ValueChanged<DateTime> onTap;
 
   @override
@@ -567,12 +602,18 @@ class _DayCell extends StatelessWidget {
     final isToday = dateOnly(date) == dateOnly(today);
     final f = flow;
 
+    final hasEntries = inPeriod || f != null || symptomCount > 0;
     final parts = <String>[
       inPeriod ? 'period day' : 'no period logged',
       if (f != null) flowSemantics(f.intensity, f.clotSize),
       if (symptomCount > 0) symptomCountLabel(symptomCount),
     ];
-    final semantic = '${formatDay(date)}, ${parts.join(', ')}';
+    // p5.3: with "Reduce spoken detail" on, a day with anything logged
+    // announces only "<date>, has entries" — no flow intensity, symptom count,
+    // or period state.
+    final semantic = reduceSpoken
+        ? (hasEntries ? '${formatDay(date)}, has entries' : formatDay(date))
+        : '${formatDay(date)}, ${parts.join(', ')}';
 
     final barColor = inPeriod
         ? theme.colorScheme.onPrimaryContainer
@@ -749,10 +790,15 @@ class _History extends StatelessWidget {
 /// that has since been removed drops out of the list (its day still counts on
 /// the calendar).
 class _RecentSymptoms extends StatelessWidget {
-  const _RecentSymptoms({required this.idsByDay, required this.types});
+  const _RecentSymptoms({
+    required this.idsByDay,
+    required this.types,
+    required this.reduceSpoken,
+  });
 
   final Map<DateTime, List<int>> idsByDay;
   final List<SymptomType> types;
+  final bool reduceSpoken;
 
   static const int _maxDays = 14;
 
@@ -782,6 +828,10 @@ class _RecentSymptoms extends StatelessWidget {
                       Text(formatDay(day), style: theme.textTheme.bodyMedium),
                       Text(
                         symptomSummary(names),
+                        semanticsLabel: spokenLabel(
+                          reduceSpoken,
+                          redacted: symptomCountLabel(names.length),
+                        ),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -832,11 +882,13 @@ class _PredictionCard extends StatelessWidget {
   const _PredictionCard({
     required this.prediction,
     required this.onLogPeriodStart,
+    required this.reduceSpoken,
     this.observedFertileWindow,
   });
 
   final CyclePrediction prediction;
   final VoidCallback onLogPeriodStart;
+  final bool reduceSpoken;
 
   /// Fertile window observed from this cycle's cervical-mucus notes (p1.6).
   /// Shown as an extra line alongside the statistical estimate when present.
@@ -955,6 +1007,13 @@ class _PredictionCard extends StatelessWidget {
   }
 
   String _semanticLabel() {
+    // p5.3: with "Reduce spoken detail" on, the forecast dates are not spoken —
+    // just that a prediction is on screen.
+    if (reduceSpoken) {
+      return prediction.isOverdue
+          ? 'Period check-in available. Open the calendar for details.'
+          : 'Next period prediction available. Open the calendar for the dates.';
+    }
     if (prediction.isOverdue) {
       return 'Period check-in. '
           '${overdueHeadline(prediction.daysPastExpected!)}. $overdueBody';
@@ -979,9 +1038,14 @@ class _PredictionCard extends StatelessWidget {
 /// forecast held. It is a live change, so it announces itself to screen readers
 /// and clears on its own after a short while (or on manual dismiss).
 class _CorrectionNotice extends StatefulWidget {
-  const _CorrectionNotice({required this.delta, required this.onDismiss});
+  const _CorrectionNotice({
+    required this.delta,
+    required this.reduceSpoken,
+    required this.onDismiss,
+  });
 
   final PredictionDelta delta;
+  final bool reduceSpoken;
   final VoidCallback onDismiss;
 
   @override
@@ -991,6 +1055,14 @@ class _CorrectionNotice extends StatefulWidget {
 class _CorrectionNoticeState extends State<_CorrectionNotice> {
   static const _visibleFor = Duration(seconds: 10);
   Timer? _autoClear;
+
+  /// p5.3: the reason lines can name dates, so with "Reduce spoken detail" on
+  /// the screen reader hears only that the forecast changed. Visible text is
+  /// unchanged.
+  static const _reducedLabel = 'Your prediction was updated.';
+
+  String get _spokenLabel =>
+      widget.reduceSpoken ? _reducedLabel : widget.delta.reasons.join(' ');
 
   @override
   void initState() {
@@ -1020,15 +1092,8 @@ class _CorrectionNoticeState extends State<_CorrectionNotice> {
   }
 
   void _announce() {
-    final message = widget.delta.reasons.join(' ');
-    if (message.isEmpty) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      SemanticsService.announce(
-        message,
-        Directionality.maybeOf(context) ?? TextDirection.ltr,
-      );
-    });
+    if (!mounted) return;
+    announce(context, _spokenLabel);
   }
 
   @override
@@ -1038,7 +1103,7 @@ class _CorrectionNoticeState extends State<_CorrectionNotice> {
     return Semantics(
       container: true,
       liveRegion: true,
-      label: widget.delta.reasons.join(' '),
+      label: _spokenLabel,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
