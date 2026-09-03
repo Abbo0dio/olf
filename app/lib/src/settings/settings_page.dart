@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../a11y/spoken_detail.dart';
 import '../backup/backup_page.dart';
 import '../personalization/personalization_providers.dart';
 import '../prediction/accuracy_format.dart';
@@ -15,6 +16,7 @@ import '../privacy/privacy_policy_screen.dart';
 import '../providers.dart';
 import '../reminders/notifications_page.dart';
 import '../retention/retention_providers.dart';
+import '../security/auto_lock_providers.dart';
 import '../security/biometric_providers.dart';
 import '../security/pin_providers.dart';
 import '../theme/theme_providers.dart';
@@ -46,6 +48,9 @@ class SettingsPage extends ConsumerWidget {
         ref.watch(biometricUnlockEnabledProvider).valueOrNull ?? false;
     final retentionWindow =
         ref.watch(retentionWindowProvider).valueOrNull ?? RetentionWindow.off;
+    final reduceSpokenDetail =
+        ref.watch(reduceSpokenDetailProvider).valueOrNull ?? false;
+    final autoLockMinutes = ref.watch(autoLockMinutesProvider).valueOrNull ?? 0;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -172,6 +177,36 @@ class SettingsPage extends ConsumerWidget {
                 builder: (_) => const PrivacyEducationScreen(),
               ),
             ),
+          ),
+          const _SectionHeader('Accessibility'),
+          SwitchListTile(
+            secondary: const Icon(Icons.hearing_outlined),
+            value: reduceSpokenDetail,
+            title: const Text('Reduce spoken detail'),
+            subtitle: const Text(
+              'Screen readers announce only that an entry exists, not its '
+              'detail — useful on a shared device. What you see on screen is '
+              'unchanged.',
+            ),
+            onChanged: (want) => setReduceSpokenDetail(ref, value: want),
+          ),
+          ListTile(
+            leading: const Icon(Icons.lock_clock_outlined),
+            title: const Text('Lock after inactivity'),
+            subtitle: Text(
+              pinSet
+                  ? 'Re-lock the app automatically when it has been idle, with '
+                        'a short warning first.'
+                  : 'Turn on the app lock (PIN) above to use this.',
+            ),
+            enabled: pinSet,
+            trailing: Text(
+              autoLockLabel(autoLockMinutes),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            onTap: pinSet
+                ? () => _pickAutoLock(context, ref, autoLockMinutes)
+                : null,
           ),
           const _SectionHeader('Cycle'),
           ListTile(
@@ -322,6 +357,34 @@ class SettingsPage extends ConsumerWidget {
     if (yes != true) return;
     await ref.read(pinControllerProvider).clearDecoyPin();
     messenger.showSnackBar(const SnackBar(content: Text('Decoy PIN is off.')));
+  }
+
+  Future<void> _pickAutoLock(
+    BuildContext context,
+    WidgetRef ref,
+    int current,
+  ) async {
+    final chosen = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Lock after inactivity'),
+        children: [
+          RadioGroup<int>(
+            groupValue: current,
+            onChanged: (v) => Navigator.of(dialogContext).pop(v),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final m in kAutoLockOptions)
+                  RadioListTile<int>(value: m, title: Text(autoLockLabel(m))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (chosen == null || chosen == current) return;
+    await setAutoLockMinutes(ref, chosen);
   }
 
   Future<void> _pickRetention(

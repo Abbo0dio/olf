@@ -38,6 +38,18 @@ abstract final class SettingKeys {
   /// owned by the app layer (`quiet_hours_providers.dart`). Absent means the
   /// default: disabled, so nothing is held.
   static const String quietHours = 'quiet_hours';
+
+  /// `'true'` when the user has turned on "Reduce spoken detail" (p5.3): screen
+  /// readers announce only that a sensitive entry exists, not its detail
+  /// (flow intensity, symptom names, prediction dates). Visible text is
+  /// unchanged. Absent / anything else means off — full detail is spoken.
+  static const String reduceSpokenDetail = 'reduce_spoken_detail';
+
+  /// Inactivity auto-lock window in whole minutes (p5.3), as a decimal string.
+  /// `'0'` / absent / unrecognised means off. Only acted on while a PIN lock
+  /// exists. The app layer (`auto_lock_providers.dart`) owns the allowed set
+  /// (0 / 1 / 2 / 5 / 15) and the "default 2 when a lock is set" behaviour.
+  static const String autoLockMinutes = 'auto_lock_minutes';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).

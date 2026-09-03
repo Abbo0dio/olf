@@ -3246,7 +3246,7 @@ exact-alarm path is backlog (§9), not a gate.
 
 ### Phase 5 — Accessibility & design polish
 
-**Status:** IN PROGRESS (p5.2) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
+**Status:** IN PROGRESS (p5.3) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
 
 **Phase-wide constraints:**
 - No new runtime **Dart** dependency without §5 negotiation. Two slices carry pre-approved platform/CI changes, spelled out in their rows: **p5.4** (Android `activity-alias` + iOS alternate-icon via a hand-rolled platform channel — NO Dart package; the only Phase 5 slice that edits `AndroidManifest.xml` / `Info.plist`, minimally) and **p5.5** (one new CI job measuring APK size + cold-start against a checked-in budget). No other manifest, permission, or CI-workflow change in the phase.
@@ -3342,8 +3342,8 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — review PASS. Merged as `a9e9102` (squash). DONE. The p5.1a/b/c a11y audit is complete.
 
 #### p5.2 — Caption / transcript requirement stub for Phase 11 content
-- **Status:** IN REVIEW · **Depends on:** none (sequenced after p5.1c)
-- **Branch / worktree:** `feat/p5.2-caption-stub` / `../olf-wt/p5.2`
+- **Status:** DONE (2026-09-03) · **Depends on:** none (sequenced after p5.1c)
+- **Branch / worktree:** `feat/p5.2-caption-stub` / `../olf-wt/p5.2` · **squash `bf14dec`**
 - **PR:** [#57](https://github.com/Abbo0dio/olf/pull/57)
 - **Owner:** worker: phase5
 - **Requirement refs:** §8 (captions for video content), forward-ref Phase 11
@@ -3369,9 +3369,12 @@ exact-alarm path is backlog (§9), not a gate.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.2`, branch `feat/p5.2-caption-stub` off `main` @ `a9e9102` (#56). Folded p5.1c → DONE (squash `a9e9102`); bumped the Phase 5 header note to `IN PROGRESS (p5.2)`. Set p5.2 IN PROGRESS.
   - 2026-09-03 — built to DoD: `core/lib/src/a11y/captions.dart` (`CaptionCue` / `CaptionTrack` / `MediaItem`, all `required`-gated + assert-validated) + 16 unit tests; `app/lib/src/a11y/captioned_media.dart` placeholder widget + 4 tests; conformance-doc captions rows → "enforced by design" (39/2/9 unchanged); Phase 11 captions-gate paragraph. core 489 / app 306, all gates green. PR [#57](https://github.com/Abbo0dio/olf/pull/57) opened; set IN REVIEW.
+  - 2026-09-03 — merged (squash `bf14dec`, PR #57). Set DONE.
 
 #### p5.3 — Accessibility ↔ privacy balance: verbose-output control + session timeout
-- **Status:** TODO · **Depends on:** p5.1a (semantics landscape); builds on p2.1 (lock), p2.2 (decoy), p2.4 (re-lock path)
+- **Status:** IN PROGRESS · **Depends on:** p5.1a (semantics landscape); builds on p2.1 (lock), p2.2 (decoy), p2.4 (re-lock path)
+- **Branch / worktree:** `feat/p5.3-a11y-privacy` / `../olf-wt/p5.3`
+- **Owner:** worker: phase5
 - **Requirement refs:** §8 (screen readers shouldn't broadcast sensitive data on shared devices; user control over verbose output; session timeouts with warning)
 - **Goal:** Two controls: (1) "Reduce spoken detail" — collapses screen-reader announcements of sensitive values (flow intensity, symptoms, notes, predictions) to generic labels so a shared-room screen reader doesn't broadcast health state; (2) inactivity auto-lock with a visible countdown warning before it triggers.
 - **Acceptance criteria:**
@@ -3380,6 +3383,34 @@ exact-alarm path is backlog (§9), not a gate.
   - Dark mode + gender-neutral copy; warning copy passes the inclusive-language lint, carries no PHI.
 - **Tests required:** `core` — deadline maths (off → never; reset; expiry; warning-window boundary). `app` — reduce-on → redacted semantic label + unchanged visible `Text`; reduce-off → full label; inactivity fires re-lock after the window; a tap in the warning window cancels it; decoy session re-locks the same way. Full suites + gates green.
 - **Notes / detail:** don't over-redact — dates, nav, non-sensitive chrome stay fully spoken. Record the "sensitive surfaces" list in the as-built notes.
+- **Build detail (worker: phase5):**
+  - **Reduce spoken detail**
+    - **`core/lib/src/settings/settings_repository.dart`** — new `SettingKeys.reduceSpokenDetail = 'reduce_spoken_detail'` (`'true'` = on; absent / anything else = off). No schema change — `app_settings` KV only.
+    - **`app/lib/src/a11y/spoken_detail.dart`** (new) — `reduceSpokenDetailProvider` (`StreamProvider<bool>` over the KV, degrades to `false` when the DB gate isn't open); `setReduceSpokenDetail(ref, value:)`; the shared helper `spokenDetail(reduce, {required full, required redacted})` → `reduce ? redacted : full`, plus `spokenLabel(reduce, {required redacted})` → `reduce ? redacted : null` for the `Text.semanticsLabel` call sites where "no override" is the natural non-reduced state.
+    - **Redacted surfaces** (semantic label only — the visible `Text` is untouched at every one):
+      1. **Calendar day cell** (`_DayCell`, `period_calendar_page.dart`) — `"<date>, has entries"` (or just `"<date>"` when the day is empty) instead of `"<date>, <period/flow/symptom detail>"`.
+      2. **Today's flow chip** (`_Summary` ActionChip) — `"Today's flow logged"` instead of `"Today's flow: Heavy"`.
+      3. **Today's symptoms chip** (`_Summary` ActionChip) — `"Today's symptoms logged"` instead of the count/name summary.
+      4. **Recent-symptoms list** (`_RecentSymptoms`) — `symptomCountLabel(n)` ("1 symptom") instead of `symptomSummary(names)` (the names).
+      5. **Next-period prediction card** (`_PredictionCard._semanticLabel`) — `"Next period prediction available. Open the calendar for the dates."` / `"Period check-in available. Open the calendar for details."` instead of the dated read-out.
+      6. **Prediction-correction notice** (`_CorrectionNotice`) — `"Your prediction was updated."` instead of `delta.reasons.join(' ')`; the `announce()` on appearance uses the same redacted string.
+      7. **Symptom day sheet chips** (`symptom_day_sheet.dart` `FilterChip`) — `"symptom"` instead of the symptom name.
+    - Dates, navigation, headings, buttons, and all non-sensitive chrome stay fully spoken. Interactive pickers keep their selected-state announcement.
+    - **`app/lib/src/settings/settings_page.dart`** — new **"Accessibility"** `_SectionHeader` + a `SwitchListTile` ("Reduce spoken detail" / "Screen readers announce only that an entry exists, not its detail — useful on a shared device. What you see on screen is unchanged.").
+  - **Inactivity auto-lock**
+    - **`core/lib/src/security/auto_lock.dart`** (new, pure Dart, exported from `olf_core.dart`) — `AutoLockPhase { idle, warning, expired }`, `AutoLockDecision { phase, deadline, secondsUntilLock }` (`@immutable`, `==` / `hashCode` / `toString`), and `nextAutoLockState({required lastActivity, required int? minutes, required now, Duration warnLead = kAutoLockWarnLead (20s)})`. `minutes == null || <= 0` → `idle` / no deadline (off). Otherwise `deadline = lastActivity + minutes`; `now >= deadline` → `expired`; within `warnLead` of it → `warning`; else `idle`. No `DateTime.now()`, no Flutter — clock is the `now` arg.
+    - **`core/test/security/auto_lock_test.dart`** — 10 tests (off for null / 0 / negative; idle before the lead; idle just outside the lead; warning exactly at `warnLead` (inclusive); warning inside the lead; custom lead; expired exactly at the deadline; expired past it; activity reset re-opens the window).
+    - **`SettingKeys.autoLockMinutes = 'auto_lock_minutes'`** (decimal string; `'0'` / absent / unrecognised = off). No schema change.
+    - **`app/lib/src/security/auto_lock_providers.dart`** (new) — `kAutoLockOptions = [0, 1, 2, 5, 15]`, `kDefaultAutoLockMinutes = 2`; `nowProvider` (`Provider<DateTime Function()>` = `DateTime.now`, overridable in tests); `lastInteractionProvider` (`StateProvider<DateTime>`); `autoLockMinutesProvider` (`StreamProvider<int>` over the KV — returns `0` when no PIN credential and no biometric opt-in exists; returns `kDefaultAutoLockMinutes` when a lock exists and the key is unset; clamps unknown values to `0`); `setAutoLockMinutes(ref, minutes)`; `autoLockLabel(minutes)` ("Off" / "After 1 minute" / "After N minutes").
+    - **`app/lib/src/a11y/announce.dart`** (new) — shared `announce(context, message)` → post-frame `SemanticsService.announce` with the ambient text direction. Used for the auto-lock warning and (refactored onto it) `_CorrectionNotice`. **Narrows the p5.1c §9 SC 4.1.3 follow-up** — the remaining plain confirmation SnackBars are still a small follow-up, now pointed at this helper.
+    - **`app/lib/src/app_gate.dart`** — `_AppGateState` gains a `Timer.periodic` (5s) that evaluates `nextAutoLockState`, a first-frame `_bumpActivity()` prime, and a top-level `Listener(onPointerDown:)` wrapping the gate's child so any touch resets `lastInteractionProvider`. On `warning` it shows a 30s dismissible `SnackBar` ("Locking soon for privacy — tap to stay unlocked.") with a "Stay unlocked" action + a screen-reader `announce()`; on `expired` it calls the **same `_relock()`** used by the `AppLifecycleListener` paused/hidden path — clears `sessionUnlockedProvider` and resets `appVaultProvider` to `AppVault.real`. **Decoy-safe (p2.2):** the timer, warning copy, and re-lock are identical whichever vault is open; the vault is always reset to real on re-lock. The timer is cancelled in `dispose`. **Structural note:** this stayed contained in `_AppGateState` (timer + `Listener` + dispose) — no ripple, the gate did not have to become a new interaction root beyond the one `Listener`.
+    - **`app/lib/src/settings/settings_page.dart`** — under the same **"Accessibility"** section, a "Lock after inactivity" `ListTile` (disabled with "Turn on the app lock (PIN) above to use this." when no PIN); tapping opens a `SimpleDialog` / `RadioGroup<int>` over `kAutoLockOptions`. Placed under Accessibility (not Privacy) because the paired control and the §8 requirement framing are both accessibility-facing; it is only *acted on* when a lock exists.
+  - **Copy:** gender-neutral, no PHI; the warning + sub-labels pass the p1.9 inclusive-language lint. Dark mode inherits (no new palette).
+  - **Constraints honoured:** `core` stays Flutter-free / `DateTime.now()`-free; no new dependency; no schema change; no CI-workflow change; no `.g.dart` drift; `pubspec.lock` unchanged.
+  - **Tests:** `core/test/security/auto_lock_test.dart` (10); `app/test/a11y/reduce_spoken_detail_test.dart` (3 — reduce OFF speaks full detail; reduce ON redacts the day cell / flow chip / recent-symptoms line with visible text unchanged; reduce ON day-sheet chips announce "symptom"); `app/test/security/auto_lock_test.dart` (3 — re-locks after the window; a tap in the warning window keeps it unlocked; a decoy session re-locks identically with the same warning copy); `app/test/settings/a11y_privacy_settings_test.dart` (3 — "Reduce spoken detail" round-trips; "Lock after inactivity" disabled without a PIN; with a PIN the picked window persists).
+- **Log:**
+  - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.3`, branch `feat/p5.3-a11y-privacy` off `main` @ `bf14dec` (#57). Folded p5.2 → DONE (squash `bf14dec`); bumped the Phase 5 header note to `IN PROGRESS (p5.3)`. Set p5.3 IN PROGRESS.
+  - 2026-09-03 — built to DoD: `SettingKeys.reduceSpokenDetail` + `SettingKeys.autoLockMinutes` (KV, no schema change); `core/lib/src/security/auto_lock.dart` pure deadline maths + 10 unit tests; `app/lib/src/a11y/spoken_detail.dart` (`reduceSpokenDetailProvider` + `spokenDetail`/`spokenLabel` helper) redacting 7 sensitive semantic surfaces (day cell, flow chip, symptoms chip, recent-symptoms list, prediction card, correction notice, day-sheet chips) with visible text untouched; `app/lib/src/a11y/announce.dart` shared helper (narrows the §9 SC 4.1.3 follow-up); `app/lib/src/security/auto_lock_providers.dart` + `Timer.periodic` / `Listener` wiring contained in `_AppGateState`, re-lock via the existing p2.4 path, decoy-safe; Settings gains an "Accessibility" section (both controls). core 499 / app 316, `analyze --fatal-infos` + `format` + `dependency-audit` (38 rules) + `build_runner` (no drift) all green. PR opened; set IN REVIEW.
 
 #### p5.4 — Discreet app presence: optional alternate icon & name
 - **Status:** TODO · **Depends on:** none (sequenced after p5.3)
@@ -4229,14 +4260,15 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   alternative for a pointer user who cannot drag. Screen-reader users already get
   `ReorderableListView`'s built-in move actions. Fix: add explicit move controls (an
   overflow menu or up/down icon buttons on each row) and a widget test that reorders
-  without a drag gesture. (b) **SC 4.1.3 Status Messages** — `ScaffoldMessenger`
-  `SnackBar` confirmations ("App lock is on.", "… removed.") are visible but not wrapped
-  in a live region, so a screen reader may not speak them without a focus move; the
-  calendar month-change announcement already does this correctly via
-  `SemanticsService.announce` + `liveRegion: true`. Fix: route SnackBar confirmations
-  through a shared `announce()` helper / a `liveRegion` wrapper, with a test asserting
-  the announcement fires. Both have a working AT path today and touch no health data —
-  they do not block the Phase 5 exit gate. — noted by worker: phase5 during p5.1c.
+  without a drag gesture. (b) **SC 4.1.3 Status Messages** — **narrowed in p5.3.** The shared
+  `announce()` helper now exists (`app/lib/src/a11y/announce.dart`) and the auto-lock
+  warning + the prediction-correction notice route through it (with tests). The
+  calendar month-change announcement already used `SemanticsService.announce` +
+  `liveRegion: true`. **Remaining:** the plain `ScaffoldMessenger` confirmation
+  SnackBars ("App lock is on.", "… removed.") are still not announced — route them
+  through `announce()` too, with a test asserting the announcement fires. Working AT
+  path today, no health data, does not block the Phase 5 exit gate. — noted by
+  worker: phase5 during p5.1c, narrowed during p5.3.
 - (add more here)
 
 ## 10. Orphaned / cut work
