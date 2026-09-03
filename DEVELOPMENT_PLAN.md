@@ -3246,7 +3246,7 @@ exact-alarm path is backlog (§9), not a gate.
 
 ### Phase 5 — Accessibility & design polish
 
-**Status:** IN PROGRESS (p5.1c) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
+**Status:** IN PROGRESS (p5.2) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
 
 **Phase-wide constraints:**
 - No new runtime **Dart** dependency without §5 negotiation. Two slices carry pre-approved platform/CI changes, spelled out in their rows: **p5.4** (Android `activity-alias` + iOS alternate-icon via a hand-rolled platform channel — NO Dart package; the only Phase 5 slice that edits `AndroidManifest.xml` / `Info.plist`, minimally) and **p5.5** (one new CI job measuring APK size + cold-start against a checked-in budget). No other manifest, permission, or CI-workflow change in the phase.
@@ -3315,10 +3315,10 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — review PASS. Merged as `f9dfaa6` (squash). DONE.
 
 #### p5.1c — Contrast, touch targets, keyboard/switch nav, conformance doc
-- **Status:** IN REVIEW · **Depends on:** p5.1a, p5.1b
+- **Status:** DONE (2026-09-03)
 - **Branch / worktree:** `feat/p5.1c-contrast-nav` / `../olf-wt/p5.1c`
-- **PR:** [#56](https://github.com/Abbo0dio/olf/pull/56)
-- **Owner:** worker: phase5
+- **PR:** [#56](https://github.com/Abbo0dio/olf/pull/56) · squash `a9e9102`
+- **Owner:** worker: phase5 · **Depends on:** p5.1a, p5.1b
 - **Requirement refs:** §8 (4.5:1 contrast, ≥ ~9mm / 48dp targets, keyboard/switch nav, WCAG 2.2 AA), §4
 - **Goal:** Close remaining WCAG 2.2 AA gaps — colour contrast in both themes, minimum touch-target size everywhere, full external-keyboard / switch-access operability — and publish a documented AA conformance statement.
 - **Acceptance criteria:**
@@ -3339,9 +3339,12 @@ exact-alarm path is backlog (§9), not a gate.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.1c`, branch `feat/p5.1c-contrast-nav` off `main` @ `f9dfaa6` (#55). Folded p5.1b → DONE (squash `f9dfaa6`); bumped the Phase 5 header note to `IN PROGRESS (p5.1c)`. Set p5.1c IN PROGRESS.
   - 2026-09-03 — built to DoD: `core` contrast helper + 14 unit tests; both-theme token sweep (42 assertions, palette untouched); `textContrastGuideline` unskipped on all 16 surfaces; keyboard-nav test (4) + shared helpers; `docs/accessibility-conformance.md` (39 Supports / 2 Partially / 9 N/A) linked from README; 2 follow-ups → §9. No `lib/` change. app 302 / core 473 / a11y 129, all gates green. PR [#56](https://github.com/Abbo0dio/olf/pull/56) opened; set IN REVIEW.
+  - 2026-09-03 — review PASS. Merged as `a9e9102` (squash). DONE. The p5.1a/b/c a11y audit is complete.
 
 #### p5.2 — Caption / transcript requirement stub for Phase 11 content
-- **Status:** TODO · **Depends on:** none (sequenced after p5.1c)
+- **Status:** IN PROGRESS · **Depends on:** none (sequenced after p5.1c)
+- **Branch / worktree:** `feat/p5.2-caption-stub` / `../olf-wt/p5.2`
+- **Owner:** worker: phase5
 - **Requirement refs:** §8 (captions for video content), forward-ref Phase 11
 - **Goal:** No media subsystem exists yet — lock in the requirement now so Phase 11 cannot ship in-app video/audio without synchronised captions + a text transcript, enforced at the type level.
 - **Acceptance criteria:**
@@ -3351,6 +3354,19 @@ exact-alarm path is backlog (§9), not a gate.
   - A paragraph appended under Phase 11's slice list: the content system must consume `MediaItem` / `CaptionedMedia`; captions + transcript are a merge blocker there.
 - **Tests required:** `core` — `MediaItem`/`CaptionTrack` reject missing/empty captions or transcript; cue ordering/overlap validation if added; `app` — `CaptionedMedia` won't construct without both. Full suites + gates green.
 - **Notes / detail:** deliberately tiny — the compile-time gate is the point, not a player.
+- **Build detail (worker: phase5):**
+  - **`core/lib/src/a11y/captions.dart`** (new, pure Dart, exported from `olf_core.dart`):
+    - `CaptionCue { Duration start, end; String text }` — constructor asserts `start >= 0`, `end > start`, non-blank text; `duration` getter.
+    - `CaptionTrack { String languageCode; List<CaptionCue> cues }` — `cues` stored `List.unmodifiable`; constructor asserts non-blank `languageCode`, non-empty `cues`, and that cues are chronological + non-overlapping (`cues[i].start >= cues[i-1].end`).
+    - `MediaItem { String id, title; CaptionTrack captions; String transcript }` — all four `required` / non-nullable (the compile-time gate); constructor asserts non-blank `id` / `title` and non-empty `transcript`. Because `captions` is a non-nullable `CaptionTrack` (itself un-constructible empty), a `MediaItem` cannot exist without a real caption track *and* a transcript.
+    - All three are `@immutable` with `==` / `hashCode` / `toString`, matching the `DateRange` / `PregnancyEvent` house style. Validation is `assert` (fires under `dart test` + debug, same as `DateRange`) — the developer-facing contract a Phase 11 media slice hits.
+  - **`app/lib/src/a11y/captioned_media.dart`** (new): `CaptionedMedia` widget, constructor `required CaptionTrack captions` + `required String transcript` (+ optional `title`), plus `CaptionedMedia.fromItem(MediaItem)`. Renders a theme-aware, gender-neutral `surfaceContainerHighest` panel — a `movie_outlined` icon, the title, and "This content is coming in a later version." Nothing playable, no video plugin, no new dependency. `Semantics(container: true, explicitChildNodes: true, label: 'Media placeholder…')` wraps it.
+  - **`docs/accessibility-conformance.md`** — SC 1.2.1 / 1.2.2 / 1.2.3 / 1.2.5 evidence updated from "no media — see p5.2" to "Not applicable — **enforced by design**: the `MediaItem` / `CaptionTrack` contract makes captions + a transcript `required`, so Phase 11 media cannot compile without them." Status column unchanged (still "Not applicable"), so the 39 / 2 / 9 summary is untouched. Footer review line notes the p5.2 update.
+  - **`DEVELOPMENT_PLAN.md`** — Phase 11 slice list gains a "captions + transcript are a merge blocker" paragraph pointing at `MediaItem` / `CaptionedMedia`.
+  - **Tests:** `core/test/a11y/captions_test.dart` — 16 tests (negative start, end ≤ start, blank text; empty cue list, blank language, out-of-order + overlapping cues, unmodifiable list, equality; `MediaItem` rejects empty transcript / blank id / blank title, equality). `app/test/a11y/captioned_media_test.dart` — 4 tests (renders placeholder + no transport controls; dark mode clean; semantics label; `fromItem` carries the contract).
+  - `core` stays Flutter-free / `DateTime.now()`-free (`Duration` only); no new dependency; no schema / manifest / CI-workflow change.
+- **Log:**
+  - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.2`, branch `feat/p5.2-caption-stub` off `main` @ `a9e9102` (#56). Folded p5.1c → DONE (squash `a9e9102`); bumped the Phase 5 header note to `IN PROGRESS (p5.2)`. Set p5.2 IN PROGRESS.
 
 #### p5.3 — Accessibility ↔ privacy balance: verbose-output control + session timeout
 - **Status:** TODO · **Depends on:** p5.1a (semantics landscape); builds on p2.1 (lock), p2.2 (decoy), p2.4 (re-lock path)
@@ -3517,6 +3533,13 @@ else.
 - **p11.3** Privacy-safe anonymous community (à la "Secret Chats") — no real identities,
   minimal metadata.
 - **p11.4** Moderation tooling and reporting.
+
+**Captions gate (from p5.2):** any Phase 11 slice that adds in-app video or audio **must**
+route it through `core`'s `MediaItem` / `CaptionTrack` and the app's `CaptionedMedia` widget.
+Both make a synchronised caption track **and** a plain-text transcript `required`,
+non-nullable fields — a media slice that omits either will not compile. Shipping media without
+captions + a transcript is a merge blocker; see `docs/accessibility-conformance.md`
+(SC 1.2.1–1.2.5).
 
 **Exit gate:** content is attributed and accessible; community is anonymous, moderated, and
 opt-in.
