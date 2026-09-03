@@ -3246,7 +3246,7 @@ exact-alarm path is backlog (§9), not a gate.
 
 ### Phase 5 — Accessibility & design polish
 
-**Status:** IN PROGRESS (p5.4) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
+**Status:** IN PROGRESS (p5.5) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
 
 **Phase-wide constraints:**
 - No new runtime **Dart** dependency without §5 negotiation. Two slices carry pre-approved platform/CI changes, spelled out in their rows: **p5.4** (Android `activity-alias` + iOS alternate-icon via a hand-rolled platform channel — NO Dart package; the only Phase 5 slice that edits `AndroidManifest.xml` / `Info.plist`, minimally) and **p5.5** (one new CI job measuring APK size + cold-start against a checked-in budget). No other manifest, permission, or CI-workflow change in the phase.
@@ -3416,8 +3416,8 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — merged (squash `faa03fb`, PR #58). Set DONE.
 
 #### p5.4 — Discreet app presence: optional alternate icon & name
-- **Status:** IN REVIEW · **Depends on:** none (sequenced after p5.3)
-- **Branch / worktree:** `feat/p5.4-discreet-icon` / `../olf-wt/p5.4`
+- **Status:** DONE (2026-09-03) · **Depends on:** none (sequenced after p5.3)
+- **Branch / worktree:** `feat/p5.4-discreet-icon` / `../olf-wt/p5.4` · **squash `dbfd103`**
 - **PR:** [#59](https://github.com/Abbo0dio/olf/pull/59)
 - **Owner:** worker: phase5
 - **Requirement refs:** §4 (discreet home-screen presence — icon/name), §9(8)-adjacent (privacy distrust)
@@ -3448,11 +3448,18 @@ exact-alarm path is backlog (§9), not a gate.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.4`, branch `feat/p5.4-discreet-icon` off `main` @ `faa03fb` (#58). Folded p5.3 → DONE (squash `faa03fb`); bumped the Phase 5 header note to `IN PROGRESS (p5.4)`. Set p5.4 IN PROGRESS.
   - 2026-09-03 — built to DoD: `AppIconOption { branded, notes }` + `AppIconRepository` seam over the hand-rolled `olf/app_icon` channel; `appIconProvider` / `setAppIcon` (persist only after the platform switch succeeds); `SettingKeys.appIcon` KV (no schema change). Android: two `<activity-alias>` launcher entries toggled from `MainActivity.kt` (no new permission) + `ic_launcher_notes` placeholder ×5 buckets. iOS: `AppIconNotes.appiconset` + `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` ×3 configs + `AppDelegate.swift` `setAlternateIconName` (Info.plist unchanged). Settings → Appearance picker with an Android-only "olf will close" confirm; failed switch shows a calm SnackBar and doesn't persist. Docs: threat-model "p5.4 update" + release-checklist device step. 6 new app tests + `FakeAppIconRepository`. core 499 / app 321; `analyze --fatal-infos` + `format` + `dependency-audit` (38 rules, permission diff clean) + `build_runner` (no drift) all green. PR [#59](https://github.com/Abbo0dio/olf/pull/59) opened into `main`; set IN REVIEW.
+  - 2026-09-03 — merged (squash `dbfd103`, PR #59). The activity-alias / alternate-icon plumbing built clean on both CI build-matrix platforms and the permission diff stayed empty. Set DONE.
 
 #### p5.5 — Low-end performance verification + CI size/perf budget
-- **Status:** TODO · **Depends on:** none (sequenced after p5.4)
+- **Status:** IN PROGRESS · **Depends on:** none (sequenced after p5.4)
+- **Branch / worktree:** `feat/p5.5-perf-budget` / `../olf-wt/p5.5`
+- **Owner:** worker: phase5
 - **Requirement refs:** §3 (cold start < 2s on a 2019 mid-range Android; log-a-period ≤ 2 taps & < 100ms feedback; small install size tracked in CI), §4 (anti-bloat)
 - **§5 decision (pre-approved — record in this row):** add **one new CI job** (`perf-budget`, in `ci.yml` or a sibling workflow) that (a) builds the release APK and fails if its size exceeds `baseline * (1 + threshold)` against a checked-in baseline, and (b) runs a trace-startup measurement on the existing p0.5 emulator and asserts cold start under a documented emulator-adjusted ceiling. No other CI change; `CI OK` aggregation still gates the same way.
+- **§5 refinement (orchestrator, 2026-09-03 — record in this row):** split the three gates by how gate-able they actually are, matching how the repo already treats emulator work (`nightly-integration.yml` is deliberately NOT a required check):
+  - **APK-size gate → hard, in `ci.yml`, part of `CI OK`.** Fast, deterministic.
+  - **Log-a-period ≤ 2 taps gate → hard, a headless widget test in the existing `test` job.** Fast, deterministic.
+  - **Cold-start measurement → NOT in `CI OK`.** A non-blocking step in `nightly-integration.yml` (measured, logged, `continue-on-error`, `::warning::`-only). It must never be able to flaky-block a merge. (The plan row already allowed this fallback.)
 - **Goal:** Turn the §3 budget from prose into measured, enforced gates; fix any current regression against it.
 - **Acceptance criteria:**
   - `docs/performance-budget.md` — the concrete numbers (cold start; tap count + feedback latency for log-a-period; APK/IPA size ceiling + growth threshold), how each is measured, how to deliberately update a baseline.
@@ -3462,6 +3469,18 @@ exact-alarm path is backlog (§9), not a gate.
   - Any regression found is fixed here or filed as a §9 follow-up with the measured gap — the gate lands green with an honest current baseline, not an aspirational one.
 - **Tests required:** the three gates wired into CI + passing; `docs/performance-budget.md`; the release checklist references the size baseline. Existing suites + gates stay green.
 - **Notes / detail:** don't gold-plate. Emulator startup is noisy — generous documented ceiling.
+- **Build detail (worker: phase5):**
+  - **`docs/performance-budget.md`** (new) — the three §3 numbers as a table (which gate, where enforced, blocking?): install size ≤ baseline + 5%; log-a-period ≤ 2 taps + ack within a 100ms pump budget; cold start ≤ 2500ms emulator-adjusted (physical-device target stays < 2000ms, verified by hand via the p0.5 smoke table). For each: the exact number, how it's measured, and the deliberate way to move the baseline (own commit + reason in the PR).
+  - **`.github/perf-baseline.json`** (new) — `apk_release_bytes: 69904869` (the **actual** `v1.0.1` signed release APK, tag on `1ca0264` — a real shipped number, sourced in the file), `apk_growth_threshold_pct: 5`, `cold_start_ceiling_ms: 2500` (+ a note explaining the emulator adjustment).
+  - **Size gate (hard, `CI OK`):** `.github/scripts/apk_size_budget.dart` (pure `dart:io`/`dart:convert`, no `pub get` — same style as `dependency_audit.dart`). Reads the built APK size + the baseline JSON; exit 1 if `size > apk_release_bytes × (1 + pct/100)`; writes a size table to `$GITHUB_STEP_SUMMARY` every run; `::notice::` (not a failure) if the APK shrank past the threshold (prompt to lower the baseline); `--update` flag rewrites `apk_release_bytes` for a deliberate bump. New **`perf-budget` job** in `ci.yml` (`needs: [detect, format, analyze, test]`, ubuntu): `flutter build apk --release` (debug-signed fallback per `build.gradle.kts` — no keystore needed, size is representative) → runs the script. **`perf-budget` added to `ci-ok`'s `needs:`** so it's part of the required aggregate. The old 250 MiB debug tripwire in the `build` job stays as a coarse secondary; its comment now points at `perf-budget`. `analyze` job's script step widened from the single `dependency_audit.dart` file to the whole `.github/scripts` dir.
+  - **Log-a-period gate (hard, `CI OK`):** `app/test/perf/log_period_tap_budget_test.dart` — headless widget test in the existing `test` job. From the calendar with nothing logged: tap "Add a period" (1) → tap "Save" in the today-prefilled editor (2) → asserts `taps ≤ 2`, and that "Period saved." + "Day 1" are on screen after only `pump()` + `pump(100ms)` (no `pumpAndSettle` for the assertion).
+  - **Cold-start (informational, NOT `CI OK`):** `.github/scripts/cold_start_budget.dart` (pure Dart) parses `build/start_up_info.json`'s `timeToFirstFrameRasterizedMicros` (falls back to `timeToFirstFrameMicros`), logs it to the step summary, and emits a `::warning::` only if over `cold_start_ceiling_ms`. **It never exits non-zero.** Wired as a new `continue-on-error: true` step in `nightly-integration.yml`'s `android-emulator` job: a second `android-emulator-runner` invocation runs `timeout 300 flutter run --profile --trace-startup --no-dds -d emulator-5554 || true` then the parser `|| true`. A slow/missing measurement can't turn the nightly job red, let alone block a merge.
+  - **`docs/release-checklist.md`** — the install-size line now points at the `perf-budget` job + `.github/perf-baseline.json`: gate must be green on the release commit, and any baseline bump since the last release must have its own explained commit.
+  - **No regression found.** APK size can't be measured locally (no JDK in the worker env) — the `perf-budget` job's first run on this PR reports the real current `--release` size; the baseline (`v1.0.1` = 66.7 MiB, ceiling 70.0 MiB) has ~3.3 MiB of headroom for normal drift since `1ca0264`. If the first CI run shows the current build already over the ceiling, that's a real §9 finding — recorded with the measured gap, baseline bumped honestly to the current number in its own commit.
+  - **Constraints honoured:** `core` untouched; no new Dart dependency; no schema change; the only CI-workflow change is the `perf-budget` job (+ its `ci-ok` wiring + the widened analyze glob) and the non-blocking nightly cold-start step. `CI OK` still aggregates the same way (a skipped `perf-budget` on a docs-only branch is fine — only `dependency-audit` has the stricter must-be-`success` check).
+  - **Tests:** `app/test/perf/log_period_tap_budget_test.dart` (1) — the tap-count gate. Both scripts were exercised locally against fixture inputs (under/over budget → exit 0/1 for size; under/over/missing-trace → always exit 0 for cold start). core 499 / app 322; `analyze --fatal-infos` (core + app + `.github/scripts`) + `format` + `dependency-audit` + `build_runner` (no drift) all green.
+- **Log:**
+  - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.5`, branch `feat/p5.5-perf-budget` off `main` @ `dbfd103` (#59). Folded p5.4 → DONE (squash `dbfd103`); bumped the Phase 5 header note to `IN PROGRESS (p5.5)`. Set p5.5 IN PROGRESS. Recorded the orchestrator §5 refinement (size + tap gates hard in `CI OK`; cold-start informational in nightly).
 
 #### p5.6 — Data-loss resilience: migration test matrix across schema history
 - **Status:** TODO · **Depends on:** none (sequenced last)

@@ -107,7 +107,7 @@ jobs:
           flutter pub get
           flutter analyze --fatal-infos --fatal-warnings
       - name: scripts — analyze standalone tooling
-        run: dart analyze --fatal-infos --fatal-warnings .github/scripts/dependency_audit.dart
+        run: dart analyze --fatal-infos --fatal-warnings .github/scripts
 
   test:
     name: Test
@@ -223,18 +223,48 @@ jobs:
           mib=$(( kib / 1024 ))
           echo "### Install size — ${{ matrix.target }}" >> "$GITHUB_STEP_SUMMARY"
           echo "\`$artifact\` = **${mib} MiB** (${kib} KiB, debug build)" >> "$GITHUB_STEP_SUMMARY"
-          # Tripwire only. A real budget on a release build is p5.5.
+          # Coarse tripwire on the debug build. The real §3 install-size budget
+          # (release APK vs a checked-in baseline + growth threshold) is the
+          # `perf-budget` job below — see docs/performance-budget.md.
           ceiling_mib=250
           if [ "$mib" -gt "$ceiling_mib" ]; then
             echo "::error::debug ${{ matrix.target }} is ${mib} MiB (> ${ceiling_mib} MiB tripwire)"
             exit 1
           fi
 
+  # §3 install-size budget (p5.5). Builds the release APK and fails if it grew
+  # past .github/perf-baseline.json by more than the threshold there. Fast and
+  # deterministic, so it gates: it is in `ci-ok`'s `needs:`. The cold-start half
+  # of the §3 budget is measured non-blocking in nightly-integration.yml
+  # (emulator noise makes it unfit to gate). See docs/performance-budget.md.
+  perf-budget:
+    name: Perf budget
+    needs: [detect, format, analyze, test]
+    if: needs.detect.outputs.flutter_ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build release APK (size only — debug-signed fallback per build.gradle.kts)
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build apk --release
+      - name: APK size vs baseline (§3)
+        run: |
+          dart .github/scripts/apk_size_budget.dart \
+            --apk app/build/app/outputs/flutter-apk/app-release.apk \
+            --baseline .github/perf-baseline.json
+
   # Aggregate gate: this is the REQUIRED status check on the `protect-main`
   # ruleset (p0.3). It stays green when the Flutter jobs legitimately skip.
   ci-ok:
     name: CI OK
-    needs: [format, analyze, test, dependency-audit, build]
+    needs: [format, analyze, test, dependency-audit, build, perf-budget]
     if: always()
     runs-on: ubuntu-latest
     env:

@@ -1,0 +1,8 @@
+{
+  "note": "p5.5 performance-budget baselines (requirements.md §3). See docs/performance-budget.md for how each number is measured and how to bump it. Baseline changes must land in their own commit with the reason in the PR body.",
+  "apk_release_bytes": 69904869,
+  "apk_release_bytes_source": "v1.0.1 signed release APK (tag on 1ca0264): https://github.com/Abbo0dio/olf/releases/tag/v1.0.1",
+  "apk_growth_threshold_pct": 5,
+  "cold_start_ceiling_ms": 2500,
+  "cold_start_ceiling_note": "requirements.md §3 target is < 2000 ms cold start on a 2019 mid-range physical Android. CI can only measure on an x86_64 emulator on a shared GitHub runner, which is slower and noisy, so 2500 ms is the emulator-adjusted ceiling. This measurement is informational (nightly, non-blocking) — it never blocks a merge."
+}

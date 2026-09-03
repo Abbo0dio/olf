@@ -103,6 +103,30 @@ jobs:
           working-directory: app
           script: flutter test integration_test/
 
+      # Cold-start measurement (p5.5) — INFORMATIONAL, never blocks. `flutter run
+      # --trace-startup` writes build/start_up_info.json after the first frame;
+      # `timeout` then kills the still-attached `flutter run`. The parser only
+      # ever emits a `::warning::`, and `continue-on-error` means a slow or
+      # missing measurement cannot even turn this nightly job red. See
+      # docs/performance-budget.md.
+      - name: Cold start (informational)
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 4096M
+          disable-animations: true
+          working-directory: app
+          script: |
+            rm -f build/start_up_info.json
+            timeout 300 flutter run --profile --trace-startup --no-dds \
+              -d emulator-5554 || true
+            dart ../.github/scripts/cold_start_budget.dart \
+              --trace build/start_up_info.json \
+              --baseline ../.github/perf-baseline.json || true
+
   ios-simulator:
     name: iOS simulator
     runs-on: macos-latest
