@@ -3486,8 +3486,9 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — merged (squash `23560d2`, PR #60). First `perf-budget` CI run measured the current `--release` APK at 69,994,505 B (+0.13% vs baseline) — no regression, no §9 follow-up. Set DONE.
 
 #### p5.6 — Data-loss resilience: migration test matrix across schema history
-- **Status:** IN PROGRESS · **Depends on:** none (sequenced last)
+- **Status:** IN REVIEW · **Depends on:** none (sequenced last)
 - **Branch / worktree:** `feat/p5.6-migration-matrix` / `../olf-wt/p5.6`
+- **PR:** [#61](https://github.com/Abbo0dio/olf/pull/61)
 - **Owner:** worker: phase5
 - **Requirement refs:** §4 + §9(11) ("Lost 3 years of data after iOS update"), §7 (never lose data)
 - **Goal:** Prove every drift migration (v1 → v6, each step) preserves data, with a committed test matrix, so a future schema bump can't silently corrupt or drop history. No schema change — test + tooling hardening on the existing history.
@@ -3513,6 +3514,7 @@ exact-alarm path is backlog (§9), not a gate.
   - **Constraints honoured:** no `schemaVersion` change; no new dependency (Dart or platform); `core` stays Flutter-free / `DateTime.now()`-free (the matrix passes an explicit `now:` to the repo); **no CI workflow change** — the matrix runs in the existing `test` job.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.6`, branch `feat/p5.6-migration-matrix` off `main` @ `23560d2` (#60). Folded p5.5 → DONE (squash `23560d2`); bumped the Phase 5 header note to `IN PROGRESS (p5.6)`. Set p5.6 IN PROGRESS.
+  - 2026-09-03 — built to DoD: `core/drift_schemas/drift_schema_v1..v6.json` (v6 dumped from source; v1..v5 reconstructed by `core/tool/dump_historical_schemas.dart` via strictly-additive truncation); `core/test/db/generated/` verifier helpers + `analysis_options.yaml` exclude; `core/test/db/migration_matrix_test.dart` (15 tests — full v`from`→v6 with seeded-row + integrity + repository-usability assertions, each single step v`from`→v`from`+1, and v`from`→migrate→backup→restore round trip); `docs/release-checklist.md` "Schema change" block. No migration bug found. core 514 / app 322; analyze `--fatal-infos` (core + app + `.github/scripts`) + format + dependency-audit + `build_runner` (no `.g.dart` drift) all green. PR [#61](https://github.com/Abbo0dio/olf/pull/61) opened into `main`; set IN REVIEW.
 
 **Exit gate (Phase 5):**
 - Documented WCAG 2.2 AA conformance statement (`docs/accessibility-conformance.md`), every applicable success criterion → status + evidence; automated guideline tests (labels, contrast, tap targets) green in CI across all 14 screens — p5.1a / p5.1b / p5.1c.
