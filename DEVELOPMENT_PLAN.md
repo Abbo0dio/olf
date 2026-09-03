@@ -3416,8 +3416,9 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — merged (squash `faa03fb`, PR #58). Set DONE.
 
 #### p5.4 — Discreet app presence: optional alternate icon & name
-- **Status:** IN PROGRESS · **Depends on:** none (sequenced after p5.3)
+- **Status:** IN REVIEW · **Depends on:** none (sequenced after p5.3)
 - **Branch / worktree:** `feat/p5.4-discreet-icon` / `../olf-wt/p5.4`
+- **PR:** [#59](https://github.com/Abbo0dio/olf/pull/59)
 - **Owner:** worker: phase5
 - **Requirement refs:** §4 (discreet home-screen presence — icon/name), §9(8)-adjacent (privacy distrust)
 - **§5 decision (pre-approved — record in this row):** implement with a **hand-rolled platform channel** — Android `activity-alias` entries in `AndroidManifest.xml` toggled via `PackageManager.setComponentEnabledSetting`; iOS `UIApplication.setAlternateIconName` with `CFBundleAlternateIcons` in `Info.plist`. **No new Dart dependency.** Only Phase 5 slice that edits the manifest / `Info.plist`, limited to icon-alias plumbing. Dependency-audit permission diff MUST show no new runtime permission. If the hand-rolled channel proves unreasonably fragile, STOP and renegotiate — do not pull in a plugin unilaterally.
@@ -3446,6 +3447,7 @@ exact-alarm path is backlog (§9), not a gate.
   - **Tests:** `app/test/appearance/app_icon_test.dart` (6) — `fromStorage` default + round-trip; default row reads "Default"; picking "Notes" calls the seam with `AppIconOption.notes` and the choice persists (round-trips through the settings stream); a failed switch (`FakeAppIconRepository(failWith:)`) shows the message and leaves the row on "Default"; cancelling the "will close" warning calls nothing. New `FakeAppIconRepository` in `app/test/support/harness.dart`.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.4`, branch `feat/p5.4-discreet-icon` off `main` @ `faa03fb` (#58). Folded p5.3 → DONE (squash `faa03fb`); bumped the Phase 5 header note to `IN PROGRESS (p5.4)`. Set p5.4 IN PROGRESS.
+  - 2026-09-03 — built to DoD: `AppIconOption { branded, notes }` + `AppIconRepository` seam over the hand-rolled `olf/app_icon` channel; `appIconProvider` / `setAppIcon` (persist only after the platform switch succeeds); `SettingKeys.appIcon` KV (no schema change). Android: two `<activity-alias>` launcher entries toggled from `MainActivity.kt` (no new permission) + `ic_launcher_notes` placeholder ×5 buckets. iOS: `AppIconNotes.appiconset` + `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` ×3 configs + `AppDelegate.swift` `setAlternateIconName` (Info.plist unchanged). Settings → Appearance picker with an Android-only "olf will close" confirm; failed switch shows a calm SnackBar and doesn't persist. Docs: threat-model "p5.4 update" + release-checklist device step. 6 new app tests + `FakeAppIconRepository`. core 499 / app 321; `analyze --fatal-infos` + `format` + `dependency-audit` (38 rules, permission diff clean) + `build_runner` (no drift) all green. PR [#59](https://github.com/Abbo0dio/olf/pull/59) opened into `main`; set IN REVIEW.
 
 #### p5.5 — Low-end performance verification + CI size/perf budget
 - **Status:** TODO · **Depends on:** none (sequenced after p5.4)
