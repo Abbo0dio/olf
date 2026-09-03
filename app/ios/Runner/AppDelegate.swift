@@ -19,7 +19,53 @@ import UIKit
       UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
     }
     GeneratedPluginRegistrant.register(with: self)
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    let launched = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    // After super: the storyboard's FlutterViewController is up, so its
+    // binaryMessenger is available for the p5.4 channel.
+    registerAppIconChannel()
+    return launched
+  }
+
+  // p5.4: `olf/app_icon` — `setIcon("branded" | "notes")` swaps the home-screen
+  // icon via UIApplication.setAlternateIconName. iOS shows its own confirmation
+  // alert and keeps the app running (no task kill, unlike Android). A no-op
+  // where the OS reports no alternate-icon support.
+  private func registerAppIconChannel() {
+    guard let controller = window?.rootViewController as? FlutterViewController else { return }
+    let channel = FlutterMethodChannel(
+      name: "olf/app_icon",
+      binaryMessenger: controller.binaryMessenger
+    )
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "setIcon" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard UIApplication.shared.supportsAlternateIcons else {
+        result(FlutterError(
+          code: "unsupported",
+          message: "This device does not support alternate app icons.",
+          details: nil
+        ))
+        return
+      }
+      let id = call.arguments as? String
+      let iconName: String?
+      switch id {
+      case "branded": iconName = nil // reset to the primary icon
+      case "notes": iconName = "AppIconNotes"
+      default:
+        result(FlutterError(code: "bad_arg", message: "unknown icon id: \(id ?? "nil")", details: nil))
+        return
+      }
+      UIApplication.shared.setAlternateIconName(iconName) { error in
+        if let error = error {
+          result(FlutterError(code: "switch_failed", message: error.localizedDescription, details: nil))
+        } else {
+          result(nil)
+        }
+      }
+    }
   }
 
   override func applicationWillResignActive(_ application: UIApplication) {

@@ -35,6 +35,12 @@ be waived in CI.
       budget on a release build is Phase 5).
 - [ ] Privacy policy [`privacy-and-lock.md`](privacy-and-lock.md) and the
       in-app policy screen still match what the build actually does.
+- [ ] **Discreet app icon (p5.4) verified on a device.** On a real device or
+      emulator: Settings → Appearance → App icon → **Notes**, confirm the
+      warning, and check the home-screen icon + label actually change (Android:
+      after olf is reopened from the launcher) and that relaunch works. Switch
+      back to **Default** and confirm it restores. Do this on an Android build,
+      and on an iOS build too if iOS is in the release.
 
 ## Cutting the release (Android)
 
