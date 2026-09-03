@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../a11y/spoken_detail.dart';
+import '../appearance/app_icon.dart';
+import '../appearance/app_icon_providers.dart';
 import '../backup/backup_page.dart';
 import '../personalization/personalization_providers.dart';
 import '../prediction/accuracy_format.dart';
@@ -51,6 +54,8 @@ class SettingsPage extends ConsumerWidget {
     final reduceSpokenDetail =
         ref.watch(reduceSpokenDetailProvider).valueOrNull ?? false;
     final autoLockMinutes = ref.watch(autoLockMinutesProvider).valueOrNull ?? 0;
+    final appIcon =
+        ref.watch(appIconProvider).valueOrNull ?? AppIconOption.branded;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -68,6 +73,21 @@ class SettingsPage extends ConsumerWidget {
               showSelectedIcon: false,
               onSelectionChanged: (s) => setThemeMode(ref, s.first),
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.apps_outlined),
+            title: const Text('App icon'),
+            subtitle: Text(
+              appIcon == AppIconOption.branded
+                  ? 'The olf icon and name on your home screen.'
+                  : 'A plain, unlabelled icon — olf is less obvious at a '
+                        'glance on a shared device.',
+            ),
+            trailing: Text(
+              appIcon.label,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            onTap: () => _pickAppIcon(context, ref, appIcon),
           ),
           const _SectionHeader('Pronouns'),
           RadioGroup<Pronouns>(
@@ -357,6 +377,78 @@ class SettingsPage extends ConsumerWidget {
     if (yes != true) return;
     await ref.read(pinControllerProvider).clearDecoyPin();
     messenger.showSnackBar(const SnackBar(content: Text('Decoy PIN is off.')));
+  }
+
+  Future<void> _pickAppIcon(
+    BuildContext context,
+    WidgetRef ref,
+    AppIconOption current,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final chosen = await showDialog<AppIconOption>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('App icon'),
+        children: [
+          RadioGroup<AppIconOption>(
+            groupValue: current,
+            onChanged: (v) => Navigator.of(dialogContext).pop(v),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final o in AppIconOption.values)
+                  RadioListTile<AppIconOption>(
+                    value: o,
+                    title: Text(o.label),
+                    subtitle: Text(
+                      o == AppIconOption.branded
+                          ? 'Normal olf icon'
+                          : 'Plain "Notes" icon, no olf branding',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (chosen == null || chosen == current) return;
+
+    // Switching the enabled launcher component forces Android to stop the app;
+    // iOS shows its own confirmation and stays open. Warn only where it bites.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      if (!context.mounted) return;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('olf will close'),
+          content: const Text(
+            'Changing the icon closes olf. Reopen it from your home screen — '
+            'your data is untouched.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Change icon'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+
+    try {
+      await setAppIcon(ref, chosen);
+      messenger.showSnackBar(
+        SnackBar(content: Text('App icon set to "${chosen.label}".')),
+      );
+    } on AppIconException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _pickAutoLock(

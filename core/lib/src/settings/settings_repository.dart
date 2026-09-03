@@ -50,6 +50,12 @@ abstract final class SettingKeys {
   /// exists. The app layer (`auto_lock_providers.dart`) owns the allowed set
   /// (0 / 1 / 2 / 5 / 15) and the "default 2 when a lock is set" behaviour.
   static const String autoLockMinutes = 'auto_lock_minutes';
+
+  /// Which home-screen icon / launcher name is active (p5.4) — an
+  /// `AppIconOption` id owned by the app layer (`app_icon.dart`). Absent /
+  /// unrecognised means `'branded'`, the normal olf icon. The stored value only
+  /// advances after the platform icon switch actually succeeds.
+  static const String appIcon = 'app_icon';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).

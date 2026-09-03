@@ -293,3 +293,15 @@ The CI guard requires an entry naming the current phase.
   adds one CI job (APK size + cold-start budget) — no runtime change. **p5.6**
   is migration *tests* over the existing v1–v6 schema history — no schema
   change. No design changes required by this review.
+  **p5.4 update (2026-09-03) — watch item resolved:** the discreet-icon switch
+  is a local launcher-manager call — Android toggles two `<activity-alias>`
+  entries via `PackageManager.setComponentEnabledSetting`, iOS calls
+  `UIApplication.setAlternateIconName` — over a hand-rolled `olf/app_icon`
+  method channel. **No new `<uses-permission>`** (`activity-alias` needs none),
+  ATS in `Info.plist` untouched, so the dependency-audit permission set is
+  unchanged. The only state added is `SettingKeys.appIcon` in the existing
+  `app_settings` KV store — a non-sensitive UI token ("branded"/"notes"), no
+  schema change. **No new asset, adversary, trust boundary, or data flow**; the
+  data-flow diagram, Mitigations table, and Residual risks are unchanged. It is
+  a home-screen presence affordance with no data surface. No design changes
+  required.

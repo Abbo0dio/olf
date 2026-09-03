@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olf_app/main.dart';
+import 'package:olf_app/src/appearance/app_icon.dart';
 import 'package:olf_app/src/data/vault_database_opener.dart';
 import 'package:olf_app/src/onboarding/onboarding_providers.dart';
 import 'package:olf_app/src/providers.dart';
@@ -101,6 +102,27 @@ class FakeScreenSecurity implements ScreenSecurity {
 
   @override
   Future<void> setSecure(bool secure) async => calls.add(secure);
+}
+
+/// An in-memory [AppIconRepository] for tests (p5.4). Records every [apply]
+/// call; set [failWith] to make the next and all following calls throw, as a
+/// stand-in for a platform switch that didn't take.
+class FakeAppIconRepository implements AppIconRepository {
+  FakeAppIconRepository({this.failWith});
+
+  /// When non-null, [apply] throws `AppIconException(failWith!)` instead of
+  /// recording the call.
+  String? failWith;
+
+  final List<AppIconOption> calls = <AppIconOption>[];
+
+  AppIconOption? get last => calls.isEmpty ? null : calls.last;
+
+  @override
+  Future<void> apply(AppIconOption option) async {
+    if (failWith != null) throw AppIconException(failWith!);
+    calls.add(option);
+  }
 }
 
 /// Resolve Future/Stream microtasks and short animations. **Not**
