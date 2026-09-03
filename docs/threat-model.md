@@ -305,3 +305,44 @@ The CI guard requires an entry naming the current phase.
   data-flow diagram, Mitigations table, and Residual risks are unchanged. It is
   a home-screen presence affordance with no data surface. No design changes
   required.
+- **2026-09-03 — Phase 5 closing gate — reviewer: worker: phase5.** All eight
+  build slices p5.1a–p5.6 shipped (PRs #54–#61). Walked the Mitigations table
+  and Residual risks against what landed — **no change on either.** Phase 5
+  introduced **no new asset, adversary, trust boundary, data flow, network
+  path, dependency, or schema change**; assets, adversaries, trust boundaries,
+  and the data-flow diagram are all unchanged from the opening entry.
+  Watch items from the p5.1a opening entry, all resolved:
+  - **p5.3 (reduce spoken detail + inactivity auto-lock)** — the redaction
+    helper (`spokenLabel` / `reduceSpokenDetailProvider`) is applied at all
+    seven sensitive `Semantics` surfaces (calendar day cell, flow chip,
+    symptoms chip, recent-symptoms list, prediction card, correction notice,
+    day-sheet chips); visible text is untouched, so nothing regresses for a
+    sighted user. The inactivity auto-lock re-locks through the **same p2.4
+    `_relock()`** used by the lifecycle paused/hidden path — it clears
+    `sessionUnlockedProvider` and resets `appVaultProvider` to `AppVault.real`
+    regardless of which vault was open, and the timer, 30-second warning copy,
+    and re-lock are byte-identical for the real and the decoy/duress (p2.2)
+    sessions, so the timeout reveals nothing about which vault was unlocked.
+    The deadline maths (`nextAutoLockState`) is pure, clock-injected `core`
+    code. Both prefs (`reduceSpokenDetail`, `autoLockMinutes`) are keys in the
+    existing `app_settings` KV store — no schema change. A new `announce()`
+    helper routes the auto-lock warning and the prediction-correction notice
+    through `SemanticsService.announce`, *narrowing* (not widening) the SC
+    4.1.3 residual item.
+  - **p5.4 (discreet alternate icon)** — resolved in the p5.4 update above: a
+    local launcher-manager call, no new `<uses-permission>`, `Info.plist` ATS
+    untouched, one non-sensitive `app_settings` UI token, no data surface.
+  - **p5.5 (CI perf budget)** — the `perf-budget` job builds the release APK
+    and checks its size + cold start against a checked-in baseline. It runs
+    only in CI, adds no runtime code, no dependency, and no data surface;
+    `.github/perf-baseline.json` holds three integers and no user data.
+  - **p5.6 (migration matrix)** — test and tooling only: committed drift
+    schema snapshots for v1–v6, a reconstruction script, and
+    `migration_matrix_test.dart`. `schemaVersion` is unchanged at 6; the
+    matrix exercises the *existing* migration history and the p1.10
+    backup/restore round trip. No runtime change, no new dependency
+    (`drift_dev` was already a dev dependency).
+  The Phase 5 `§9` follow-ups (SC 2.5.7 drag-only symptom reorder; SC 4.1.3
+  routine confirmation SnackBars not yet announced) are accessibility-parity
+  items with a working AT path today and touch no health data — not
+  security-relevant. No design changes required by this review.

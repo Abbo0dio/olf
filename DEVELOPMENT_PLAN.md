@@ -153,7 +153,7 @@ A task is not `DONE` until **all** of these hold:
 | **2** | Privacy & security hardening | `DONE` | Lock + decoy + auto-delete + masking shipped and tested; standalone policy live; threat model committed; audit gate enforced as a release blocker |
 | **3** | Correctable adaptive prediction engine v2 | `DONE` | v2 shipped behind the unchanged seam: MAE beat on PCOS/postpartum + large calibration gains on every fat-tailed profile (the honest headline is "stops the false precision", per §4); corrections move v2 ~1.7–2.2× v1; no snowballing in-sample or held-out |
 | **4** | Notifications & reminders | `DONE` | Per-category channels each independently toggleable; on-device behaviour-timed delivery with a safe fallback, nothing stored; all copy reviewed + locked behind a content test, no PHI; a quiet-hours window that shifts rather than drops; a permanent "stop asking to subscribe" control gated for Phase 10 [reverted 2026-09-02, PR #52 — olf is free-forever]; the p1.7 medication reminder folded onto the one unified path |
-| **5** | Accessibility & design polish | `IN PROGRESS` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
+| **5** | Accessibility & design polish | `DONE` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
 | **6** | Health-platform interop & doctor export | `TODO` | Two-way Apple Health / Health Connect sync; doctor-ready PDF |
 | **7** | Life-stage & condition modes | `TODO` | Pregnancy, loss/birth, postpartum, PCOS, endo, PMDD, perimenopause modes shipped |
 | **8** | Passive wearable integration | `TODO` | Apple Watch companion + ≥1 third-party wearable; passive phase inference |
@@ -3246,7 +3246,7 @@ exact-alarm path is backlog (§9), not a gate.
 
 ### Phase 5 — Accessibility & design polish
 
-**Status:** IN PROGRESS (p5.6) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
+**Status:** DONE (2026-09-03) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
 
 **Phase-wide constraints:**
 - No new runtime **Dart** dependency without §5 negotiation. Two slices carry pre-approved platform/CI changes, spelled out in their rows: **p5.4** (Android `activity-alias` + iOS alternate-icon via a hand-rolled platform channel — NO Dart package; the only Phase 5 slice that edits `AndroidManifest.xml` / `Info.plist`, minimally) and **p5.5** (one new CI job measuring APK size + cold-start against a checked-in budget). No other manifest, permission, or CI-workflow change in the phase.
@@ -3486,8 +3486,8 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — merged (squash `23560d2`, PR #60). First `perf-budget` CI run measured the current `--release` APK at 69,994,505 B (+0.13% vs baseline) — no regression, no §9 follow-up. Set DONE.
 
 #### p5.6 — Data-loss resilience: migration test matrix across schema history
-- **Status:** IN REVIEW · **Depends on:** none (sequenced last)
-- **Branch / worktree:** `feat/p5.6-migration-matrix` / `../olf-wt/p5.6`
+- **Status:** DONE (2026-09-03) · **Depends on:** none (sequenced last)
+- **Branch / worktree:** `feat/p5.6-migration-matrix` / `../olf-wt/p5.6` · **squash `8644dce`**
 - **PR:** [#61](https://github.com/Abbo0dio/olf/pull/61)
 - **Owner:** worker: phase5
 - **Requirement refs:** §4 + §9(11) ("Lost 3 years of data after iOS update"), §7 (never lose data)
@@ -3515,14 +3515,26 @@ exact-alarm path is backlog (§9), not a gate.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.6`, branch `feat/p5.6-migration-matrix` off `main` @ `23560d2` (#60). Folded p5.5 → DONE (squash `23560d2`); bumped the Phase 5 header note to `IN PROGRESS (p5.6)`. Set p5.6 IN PROGRESS.
   - 2026-09-03 — built to DoD: `core/drift_schemas/drift_schema_v1..v6.json` (v6 dumped from source; v1..v5 reconstructed by `core/tool/dump_historical_schemas.dart` via strictly-additive truncation); `core/test/db/generated/` verifier helpers + `analysis_options.yaml` exclude; `core/test/db/migration_matrix_test.dart` (15 tests — full v`from`→v6 with seeded-row + integrity + repository-usability assertions, each single step v`from`→v`from`+1, and v`from`→migrate→backup→restore round trip); `docs/release-checklist.md` "Schema change" block. No migration bug found. core 514 / app 322; analyze `--fatal-infos` (core + app + `.github/scripts`) + format + dependency-audit + `build_runner` (no `.g.dart` drift) all green. PR [#61](https://github.com/Abbo0dio/olf/pull/61) opened into `main`; set IN REVIEW.
+  - 2026-09-03 — merged (squash `8644dce`, PR #61) — one review fix `af994d8` (`weirdNote` had a raw NUL byte making git treat the test file as binary → replaced with the Dart `\x00` escape, identical runtime String, source stays diffable). No migration bug found. Set DONE.
 
-**Exit gate (Phase 5):**
-- Documented WCAG 2.2 AA conformance statement (`docs/accessibility-conformance.md`), every applicable success criterion → status + evidence; automated guideline tests (labels, contrast, tap targets) green in CI across all 14 screens — p5.1a / p5.1b / p5.1c.
-- User control over verbose screen-reader output on shared devices + inactivity auto-lock with warning, decoy-safe — p5.3.
-- Caption + transcript requirement enforced at the type level for all future media — p5.2.
-- Optional discreet alternate app icon + neutral name; no new dependency, no new permission — p5.4.
-- §3 performance budget documented + enforced in CI (APK size baseline + growth gate; cold-start check; log-a-period ≤ 2 taps gate); low-end cold start verified — p5.5.
-- Migration test matrix across schema v1–v6 + backup/restore-across-migration round trip, green in CI; release checklist requires new snapshots on any future schema bump — p5.6.
+**Exit gate (Phase 5) — MET (2026-09-03):**
+- Documented WCAG 2.2 AA conformance statement (`docs/accessibility-conformance.md`), every applicable success criterion → status + evidence; automated guideline tests (labels, contrast, tap targets) green in CI across all screens — **MET: p5.1a #54 `777e02e` / p5.1b #55 `f9dfaa6` / p5.1c #56 `a9e9102`** (`docs/accessibility-conformance.md`, 50 criteria: 39 Supports / 2 Partially / 9 N/A; one `lib/` fix in p5.1b — `symptom_day_sheet` / `manage_symptoms_page` action row → `OverflowBar`/`Wrap`; contrast passes with the `fromSeed` palette untouched).
+- User control over verbose screen-reader output on shared devices + inactivity auto-lock with warning, decoy-safe — **MET: p5.3 #58 `faa03fb`** (`reduceSpokenDetail` swaps 7 sensitive `Semantics` labels; pure clock-injected `nextAutoLockState` in `core`; expiry reuses the p2.4 `_relock()` and resets `appVaultProvider` to the real vault → decoy/duress-safe; new `announce()` helper narrows the SC 4.1.3 follow-up).
+- Caption + transcript requirement enforced at the type level for all future media — **MET: p5.2 #57 `bf14dec`** (`core/lib/src/a11y/captions.dart` — `CaptionCue`/`CaptionTrack`/`MediaItem` with every field `required`; `CaptionedMedia` placeholder widget; Phase 11 gained a captions-gate paragraph — media must route through `MediaItem`/`CaptionedMedia`, missing captions/transcript is a merge blocker).
+- Optional discreet alternate app icon + neutral name; no new dependency, no new permission — **MET: p5.4 #59 `dbfd103`** (hand-rolled `olf/app_icon` `MethodChannel`, no Dart package; Android `<activity-alias>` toggled via `PackageManager.setComponentEnabledSetting`, iOS `setAlternateIconName` + `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`; dependency-audit permission diff empty; icons are placeholders pending design).
+- §3 performance budget documented + enforced in CI (APK-size baseline + growth gate; log-a-period ≤ 2 taps gate; cold-start check); low-end cold start verified — **MET: p5.5 #60 `23560d2`** (`docs/performance-budget.md`; `.github/perf-baseline.json` = real v1.0.1 APK 69904869 + 5% threshold + 2500ms emulator ceiling; `perf-budget` CI job — APK-size gate HARD in `ci-ok`, log-a-period ≤2 taps HARD in the `test` job, cold-start NON-blocking in `nightly-integration.yml`; first run measured the current `--release` APK at +0.13% — no regression).
+- Migration test matrix across schema v1–v6 + backup/restore-across-migration round trip, green in CI; release checklist requires new snapshots on any future schema bump — **MET: p5.6 #61 `8644dce`** (`core/drift_schemas/` v1–v6 snapshots + `core/tool/dump_historical_schemas.dart`; `core/test/db/migration_matrix_test.dart` — 15 tests: full v`from`→v6 + each single step + migrate→backup→restore round trip; `docs/release-checklist.md` "Schema change" block; no migration bug found).
+
+**Phase 5 — phase-wide truths (all 8 build slices p5.1a–p5.6):**
+- **Zero new runtime Dart dependency** across the whole phase. p5.6 used `drift_dev`, already a dev dependency.
+- **Zero schema change** — `schemaVersion` stayed at 6. New app-wide prefs (p5.3 `reduceSpokenDetail` / `autoLockMinutes`, p5.4 `appIcon`) all use the `app_settings` KV store; p5.6 is migration *tests* only.
+- **`core` stayed Flutter-free and `DateTime.now()`-free** — contrast maths (p5.1c), caption types (p5.2), `nextAutoLockState` (p5.3) and the migration matrix (p5.6) are all pure and clock-injected.
+- The only `AndroidManifest.xml` / `Info.plist` edit in the phase was **p5.4** — icon-alias plumbing, **no new permission** (`<uses-permission>` set unchanged, audit-verified).
+- The only CI-workflow change in the phase was **p5.5** — the `perf-budget` job (+ its `ci-ok` wiring + the widened analyze glob) and the non-blocking nightly cold-start step. `CI OK` still aggregates the same way.
+
+**Open §9 follow-ups from Phase 5 (recorded below; neither blocks the exit gate):**
+- SC 2.5.7 (Dragging Movements) — symptom-type reorder is drag-only for pointer users; no up/down affordance yet.
+- SC 4.1.3 (Status Messages) — plain confirmation SnackBars are not in a live region; **narrowed by p5.3's `announce()`** (auto-lock warning + prediction-correction notice are now announced), the remaining gap is the routine "saved" confirmations.
 
 ---
 
