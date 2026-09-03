@@ -3342,8 +3342,9 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — review PASS. Merged as `a9e9102` (squash). DONE. The p5.1a/b/c a11y audit is complete.
 
 #### p5.2 — Caption / transcript requirement stub for Phase 11 content
-- **Status:** IN PROGRESS · **Depends on:** none (sequenced after p5.1c)
+- **Status:** IN REVIEW · **Depends on:** none (sequenced after p5.1c)
 - **Branch / worktree:** `feat/p5.2-caption-stub` / `../olf-wt/p5.2`
+- **PR:** [#57](https://github.com/Abbo0dio/olf/pull/57)
 - **Owner:** worker: phase5
 - **Requirement refs:** §8 (captions for video content), forward-ref Phase 11
 - **Goal:** No media subsystem exists yet — lock in the requirement now so Phase 11 cannot ship in-app video/audio without synchronised captions + a text transcript, enforced at the type level.
@@ -3367,6 +3368,7 @@ exact-alarm path is backlog (§9), not a gate.
   - `core` stays Flutter-free / `DateTime.now()`-free (`Duration` only); no new dependency; no schema / manifest / CI-workflow change.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.2`, branch `feat/p5.2-caption-stub` off `main` @ `a9e9102` (#56). Folded p5.1c → DONE (squash `a9e9102`); bumped the Phase 5 header note to `IN PROGRESS (p5.2)`. Set p5.2 IN PROGRESS.
+  - 2026-09-03 — built to DoD: `core/lib/src/a11y/captions.dart` (`CaptionCue` / `CaptionTrack` / `MediaItem`, all `required`-gated + assert-validated) + 16 unit tests; `app/lib/src/a11y/captioned_media.dart` placeholder widget + 4 tests; conformance-doc captions rows → "enforced by design" (39/2/9 unchanged); Phase 11 captions-gate paragraph. core 489 / app 306, all gates green. PR [#57](https://github.com/Abbo0dio/olf/pull/57) opened; set IN REVIEW.
 
 #### p5.3 — Accessibility ↔ privacy balance: verbose-output control + session timeout
 - **Status:** TODO · **Depends on:** p5.1a (semantics landscape); builds on p2.1 (lock), p2.2 (decoy), p2.4 (re-lock path)
