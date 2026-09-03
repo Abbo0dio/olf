@@ -3246,7 +3246,7 @@ exact-alarm path is backlog (§9), not a gate.
 
 ### Phase 5 — Accessibility & design polish
 
-**Status:** IN PROGRESS (p5.5) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
+**Status:** IN PROGRESS (p5.6) · **Requirement refs:** §4 (UX/design), §8 (accessibility), §3 (performance budget), §9(11) (data loss on OS updates), §1.4 (a11y baseline → full audit here).
 
 **Phase-wide constraints:**
 - No new runtime **Dart** dependency without §5 negotiation. Two slices carry pre-approved platform/CI changes, spelled out in their rows: **p5.4** (Android `activity-alias` + iOS alternate-icon via a hand-rolled platform channel — NO Dart package; the only Phase 5 slice that edits `AndroidManifest.xml` / `Info.plist`, minimally) and **p5.5** (one new CI job measuring APK size + cold-start against a checked-in budget). No other manifest, permission, or CI-workflow change in the phase.
@@ -3451,7 +3451,7 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — merged (squash `dbfd103`, PR #59). The activity-alias / alternate-icon plumbing built clean on both CI build-matrix platforms and the permission diff stayed empty. Set DONE.
 
 #### p5.5 — Low-end performance verification + CI size/perf budget
-- **Status:** IN REVIEW · **Depends on:** none (sequenced after p5.4)
+- **Status:** DONE (2026-09-03) · squash `23560d2` · **Depends on:** none (sequenced after p5.4)
 - **Branch / worktree:** `feat/p5.5-perf-budget` / `../olf-wt/p5.5`
 - **PR:** [#60](https://github.com/Abbo0dio/olf/pull/60)
 - **Owner:** worker: phase5
@@ -3483,9 +3483,12 @@ exact-alarm path is backlog (§9), not a gate.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.5`, branch `feat/p5.5-perf-budget` off `main` @ `dbfd103` (#59). Folded p5.4 → DONE (squash `dbfd103`); bumped the Phase 5 header note to `IN PROGRESS (p5.5)`. Set p5.5 IN PROGRESS. Recorded the orchestrator §5 refinement (size + tap gates hard in `CI OK`; cold-start informational in nightly).
   - 2026-09-03 — built to DoD: `docs/performance-budget.md`; `.github/perf-baseline.json` (size baseline = real `v1.0.1` APK, 5% threshold, 2500ms emulator cold-start ceiling); `apk_size_budget.dart` + new `perf-budget` job wired into `ci-ok`; `cold_start_budget.dart` + non-blocking nightly step; `app/test/perf/log_period_tap_budget_test.dart` (≤2-tap gate). Release checklist updated. core 499 / app 322; analyze (incl. `.github/scripts`) + format + dependency-audit + build_runner all green. PR [#60](https://github.com/Abbo0dio/olf/pull/60) opened into `main`; set IN REVIEW. First `perf-budget` CI run reports the honest current `--release` APK size against the baseline.
+  - 2026-09-03 — merged (squash `23560d2`, PR #60). First `perf-budget` CI run measured the current `--release` APK at 69,994,505 B (+0.13% vs baseline) — no regression, no §9 follow-up. Set DONE.
 
 #### p5.6 — Data-loss resilience: migration test matrix across schema history
-- **Status:** TODO · **Depends on:** none (sequenced last)
+- **Status:** IN PROGRESS · **Depends on:** none (sequenced last)
+- **Branch / worktree:** `feat/p5.6-migration-matrix` / `../olf-wt/p5.6`
+- **Owner:** worker: phase5
 - **Requirement refs:** §4 + §9(11) ("Lost 3 years of data after iOS update"), §7 (never lose data)
 - **Goal:** Prove every drift migration (v1 → v6, each step) preserves data, with a committed test matrix, so a future schema bump can't silently corrupt or drop history. No schema change — test + tooling hardening on the existing history.
 - **Acceptance criteria:**
@@ -3496,6 +3499,20 @@ exact-alarm path is backlog (§9), not a gate.
   - If a historical migration turns out lossy/missing, that's a real bug — fix the migration (with its own test), note it prominently; don't paper over it in the snapshot.
 - **Tests required:** the migration matrix; the backup/restore-across-migration round trip; `verifySelfIntegrity` on the final schema; full core + app suites + gates green. Test-time only — no workflow change.
 - **Notes / detail:** worker picks the drift tooling layout. Small seed data, every table, a few edge values (nulls, unicode notes, boundary dates).
+- **Build detail (worker: phase5):**
+  - **Schema snapshot layout — `core/drift_schemas/`.** `drift_schema_v6.json` is dumped from source by `dart run drift_dev schema dump lib/src/db/app_database.dart drift_schemas/` — this keeps the full Dart metadata (enum `type_converter`s, `moor_type: dateTime` on date columns) that a dump from a bare `.db` file loses. `drift_dev ^2.28.0` is already a dev dependency — **no new runtime dependency, Dart or platform.**
+  - **Historical snapshots (v1..v5) are reconstructed, not dumped** — there is no source record from before p5.6. `core/tool/dump_historical_schemas.dart` rebuilds them as the v6 snapshot truncated to the first N table entities (`{1:1, 2:2, 3:3, 4:5, 5:8}`). This is provably exact because olf's migration history is **strictly additive**: every `onUpgrade` block in `app_database.dart` is `createTable`-only, never an `ALTER` (p1.11's pregnancy markers reuse the `cycle_events.type` TEXT column with no DDL), so schema vN *is* the first N waves of the v6 schema, each table byte-identical to its v6 form. The script has a doc-header spelling out the rationale and the "adding schema v7" workflow.
+  - **Verifier helpers — `core/test/db/generated/`** (`schema.dart` + `schema_v1..v6.dart`), generated by `dart run drift_dev schema generate drift_schemas/ test/db/generated/`. `GeneratedHelper implements SchemaInstantiationHelper`. Added `test/db/generated/**` to `core/analysis_options.yaml`'s `analyzer.exclude` (codegen, linted by drift's own generator).
+  - **`core/test/db/migration_matrix_test.dart`** — one `SchemaVerifier(GeneratedHelper())`, three test loops over `from` in 1..5:
+    1. **full v`from` → v6** — `verifier.schemaAt(from)`, seed representative raw-SQL rows into every table present at `from`, `AppDatabase(schema.newConnection())`, `verifier.migrateAndValidate(db, 6)` (runs the real `onUpgrade`, asserts the resulting sqlite schema equals the committed v6 snapshot), then `PRAGMA integrity_check` / `foreign_key_check` / `user_version == 6`, then per-table assertions that every seeded row survived byte-for-byte, that later-version tables are present-and-empty, and that the v1→v2 `periodStart`→`periods` carry-over and the `<4 →` built-in-symptom seed (the only two data transforms in the whole history) happened. Closes with a `DriftMedicationRepository` write/read to prove the migrated DB is usable through the real repositories.
+    2. **each single step v`from` → v`from`+1** — `migrateAndValidate` against that version's own snapshot, so a future bad step is caught in isolation.
+    3. **v`from` → migrate → backup → restore** (ties in p1.10) — migrate the seeded DB to v6, `BackupService(db).export()`, `import()` into a fresh `AppDatabase(NativeDatabase.memory())`, re-export, assert every table in `BackupService.tableOrder` is identical. This is the "OS update → migrate → restore a backup" path end to end. (`import()` requires `appSchemaVersion == 6`, so the backup is necessarily post-migration — exactly the real recovery flow.)
+  - **Seed edge values:** epoch-adjacent (`1971-02-03`) + far-future (`2099-12-31`) dates, `NULL` in every nullable column (`periods.end_date`, `daily_flows.clot_size`, `symptom_types.archived_at`), and notes with combining marks / RTL / CJK / emoji (`'Krä́mpfe — 日本語 · اختبار · 🩸'`) round-tripped through `app_settings`.
+  - **`docs/release-checklist.md`** — new "Schema change" checklist block: any PR bumping `schemaVersion` must, in the same PR, regenerate `core/drift_schemas/` + `core/test/db/generated/`, extend `migration_matrix_test.dart` and `_tableCountAtVersion`, keep the matrix + per-feature migration tests + the backup round-trip green, and never adjust a snapshot to hide a lossy step.
+  - **No migration bug found.** Every historical `onUpgrade` step is a clean additive `createTable`; the two intentional data transforms both verified.
+  - **Constraints honoured:** no `schemaVersion` change; no new dependency (Dart or platform); `core` stays Flutter-free / `DateTime.now()`-free (the matrix passes an explicit `now:` to the repo); **no CI workflow change** — the matrix runs in the existing `test` job.
+- **Log:**
+  - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.6`, branch `feat/p5.6-migration-matrix` off `main` @ `23560d2` (#60). Folded p5.5 → DONE (squash `23560d2`); bumped the Phase 5 header note to `IN PROGRESS (p5.6)`. Set p5.6 IN PROGRESS.
 
 **Exit gate (Phase 5):**
 - Documented WCAG 2.2 AA conformance statement (`docs/accessibility-conformance.md`), every applicable success criterion → status + evidence; automated guideline tests (labels, contrast, tap targets) green in CI across all 14 screens — p5.1a / p5.1b / p5.1c.
