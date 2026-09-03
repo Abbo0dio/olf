@@ -3451,8 +3451,9 @@ exact-alarm path is backlog (§9), not a gate.
   - 2026-09-03 — merged (squash `dbfd103`, PR #59). The activity-alias / alternate-icon plumbing built clean on both CI build-matrix platforms and the permission diff stayed empty. Set DONE.
 
 #### p5.5 — Low-end performance verification + CI size/perf budget
-- **Status:** IN PROGRESS · **Depends on:** none (sequenced after p5.4)
+- **Status:** IN REVIEW · **Depends on:** none (sequenced after p5.4)
 - **Branch / worktree:** `feat/p5.5-perf-budget` / `../olf-wt/p5.5`
+- **PR:** [#60](https://github.com/Abbo0dio/olf/pull/60)
 - **Owner:** worker: phase5
 - **Requirement refs:** §3 (cold start < 2s on a 2019 mid-range Android; log-a-period ≤ 2 taps & < 100ms feedback; small install size tracked in CI), §4 (anti-bloat)
 - **§5 decision (pre-approved — record in this row):** add **one new CI job** (`perf-budget`, in `ci.yml` or a sibling workflow) that (a) builds the release APK and fails if its size exceeds `baseline * (1 + threshold)` against a checked-in baseline, and (b) runs a trace-startup measurement on the existing p0.5 emulator and asserts cold start under a documented emulator-adjusted ceiling. No other CI change; `CI OK` aggregation still gates the same way.
@@ -3481,6 +3482,7 @@ exact-alarm path is backlog (§9), not a gate.
   - **Tests:** `app/test/perf/log_period_tap_budget_test.dart` (1) — the tap-count gate. Both scripts were exercised locally against fixture inputs (under/over budget → exit 0/1 for size; under/over/missing-trace → always exit 0 for cold start). core 499 / app 322; `analyze --fatal-infos` (core + app + `.github/scripts`) + `format` + `dependency-audit` + `build_runner` (no drift) all green.
 - **Log:**
   - 2026-09-03 — claimed by worker: phase5; worktree `../olf-wt/p5.5`, branch `feat/p5.5-perf-budget` off `main` @ `dbfd103` (#59). Folded p5.4 → DONE (squash `dbfd103`); bumped the Phase 5 header note to `IN PROGRESS (p5.5)`. Set p5.5 IN PROGRESS. Recorded the orchestrator §5 refinement (size + tap gates hard in `CI OK`; cold-start informational in nightly).
+  - 2026-09-03 — built to DoD: `docs/performance-budget.md`; `.github/perf-baseline.json` (size baseline = real `v1.0.1` APK, 5% threshold, 2500ms emulator cold-start ceiling); `apk_size_budget.dart` + new `perf-budget` job wired into `ci-ok`; `cold_start_budget.dart` + non-blocking nightly step; `app/test/perf/log_period_tap_budget_test.dart` (≤2-tap gate). Release checklist updated. core 499 / app 322; analyze (incl. `.github/scripts`) + format + dependency-audit + build_runner all green. PR [#60](https://github.com/Abbo0dio/olf/pull/60) opened into `main`; set IN REVIEW. First `perf-budget` CI run reports the honest current `--release` APK size against the baseline.
 
 #### p5.6 — Data-loss resilience: migration test matrix across schema history
 - **Status:** TODO · **Depends on:** none (sequenced last)
