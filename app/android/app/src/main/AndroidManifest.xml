@@ -15,7 +15,7 @@
          only returns pass/fail. Reviewed 2026-08-30 by worker: phase2. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <application
-        android:label="olf_app"
+        android:label="olf"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
@@ -52,7 +52,7 @@
             android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
-            android:label="olf_app">
+            android:label="olf">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
