@@ -1468,9 +1468,10 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   - 2026-08-30 — PR #20 squash-merged to `main`; CI green on `main`. Set **DONE**.
 
 #### p1.12 — Cycle phase wheel: circular, color-coded phase view with a correctable indicator
-- **Status:** IN PROGRESS · **Depends on:** none (built on the existing `Cycle` / `CyclePrediction`
+- **Status:** IN REVIEW · **Depends on:** none (built on the existing `Cycle` / `CyclePrediction`
   data — no new domain engine)
 - **Branch / worktree:** `feat/p1.12-cycle-wheel` / `../olf-wt/p1.12`
+- **PR:** [#64](https://github.com/Abbo0dio/olf/pull/64)
 - **Owner:** worker: phase1
 - **Requirement refs:** §1 (Stage 1 — correctable cycle info, never a fabricated date), §4
   (UX/design), §8 (accessibility — WCAG: color is never the only signal, contrast, tap targets,
@@ -1594,6 +1595,8 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
   - 2026-09-05 — built to DoD. core 531 (+17) / app 339 (+17, incl. the new contrast pair); analyze
     `--fatal-infos` (core + app) + format + dependency-audit (38 rules) + `build_runner` (no
     `.g.dart` drift) + `pubspec.lock` diff-clean all green. Opening PR.
+  - 2026-09-05 — PR [#64](https://github.com/Abbo0dio/olf/pull/64) opened into `main`; set
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
 
 **Phase 1 exit gate:** a new user can log periods/symptoms/BBT/meds, gets correctable range
 predictions, can lock the app, can back up and restore, and can log a loss/birth — all offline,
