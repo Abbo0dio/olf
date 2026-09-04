@@ -21,7 +21,8 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 16 surfaces. The dispatch inventory named `security/screen_security`, which
+/// 17 surfaces (p1.12 added the cycle-wheel active-phase one). The dispatch
+/// inventory named `security/screen_security`, which
 /// is the non-visual `ScreenSecurity` platform seam; `symptom_day_sheet` and
 /// `flow_quick_log` (the flow/spotting/clot chip surface) stand in its place.
 typedef SurfaceCheck = Future<void> Function(WidgetTester tester);
@@ -59,6 +60,20 @@ Future<void> _seedHistory(AppDatabase db) async {
   }
 }
 
+/// Six periods, a regular 28 days apart, the most recent starting 20 days
+/// ago — relative to `DateTime.now()` (unlike [_seedHistory]'s fixed dates)
+/// so "today" always lands solidly inside a real, non-overdue cycle phase.
+Future<void> _seedRecentCycle(AppDatabase db) async {
+  final repo = DriftPeriodRepository(db);
+  var start = _daysAgo(20 + 28 * 5);
+  for (var i = 0; i < 6; i++) {
+    await repo.addPeriod(
+      PeriodDraft(start: start, end: start.add(const Duration(days: 3))),
+    );
+    start = start.add(const Duration(days: 28));
+  }
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
@@ -92,6 +107,28 @@ final List<Surface> screenSurfaces = <Surface>[
   Surface('period_calendar_page — with cycle history', (tester, check) async {
     final db = memoryDb();
     await _seedHistory(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        expect(find.text('History'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  // p1.12: `_seedHistory`'s fixed 2025 dates are stale by the time this runs,
+  // so its cycle is always flagged a likely-missed-entry gap and the cycle
+  // wheel above only ever renders its no-anchor placeholder there. This
+  // surface seeds a regular, `_daysAgo`-relative history so "today" sits
+  // inside a real phase, exercising the wheel's actual arcs/marker/labels
+  // through the same guideline/label/contrast/keyboard-nav/text-scaling sweep.
+  Surface('period_calendar_page — cycle wheel (active phase)', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await _seedRecentCycle(db);
     await pumpOlf(
       tester,
       overrides: screenNavOverrides(db),
