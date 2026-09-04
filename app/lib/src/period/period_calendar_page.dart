@@ -8,6 +8,7 @@ import '../a11y/announce.dart';
 import '../a11y/spoken_detail.dart';
 import '../cycle/cycle_format.dart';
 import '../cycle/cycle_providers.dart';
+import '../cycle/cycle_wheel.dart';
 import '../flow/flow_format.dart';
 import '../flow/flow_providers.dart';
 import '../bbt/bbt_chart_widget.dart';
@@ -258,6 +259,11 @@ class _LoadedState extends ConsumerState<_Loaded> {
     final tempUnit =
         ref.watch(temperatureUnitProvider).value ?? TemperatureUnit.celsius;
     final currentCycle = cycles.isEmpty ? null : cycles.first;
+    final cyclePhase = currentCyclePhase(
+      cycle: currentCycle,
+      prediction: prediction,
+      today: today,
+    );
     final bbtPoints = currentCycle == null
         ? const <BbtChartPoint>[]
         : bbtChartForCycle(currentCycle, bbtEntries);
@@ -277,6 +283,12 @@ class _LoadedState extends ConsumerState<_Loaded> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          CycleWheel(
+            phase: cyclePhase,
+            reduceSpoken: reduceSpoken,
+            onTap: () => showFlowQuickLog(context, date: today),
+          ),
+          const SizedBox(height: 16),
           _Summary(
             periods: _periods,
             today: today,

@@ -14,6 +14,10 @@ import 'package:olf_core/olf_core.dart';
 ///
 /// A failing pair is fixed by adjusting the token in `olf_theme.dart`, never by
 /// lowering the threshold or excluding the pair.
+///
+/// p1.12: the cycle-phase wheel's four arc colours (`primary`, `secondary`,
+/// `tertiary`, `outline`, each on `surface`) are all checked here rather than
+/// in a separate wheel-specific test — see `cycle_wheel.dart`.
 void main() {
   int argb(Color c) => c.toARGB32();
 
@@ -117,6 +121,8 @@ void main() {
         pair('primary / surface', (s) => s.primary, (s) => s.surface),
         pair('error / surface', (s) => s.error, (s) => s.surface),
         pair('tertiary / surface', (s) => s.tertiary, (s) => s.surface),
+        // p1.12: also the cycle-wheel's follicular arc colour.
+        pair('secondary / surface', (s) => s.secondary, (s) => s.surface),
         // Borders, dividers, unfilled outlines — non-text UI components.
         pair(
           'outline / surface',

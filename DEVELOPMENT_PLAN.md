@@ -1467,6 +1467,137 @@ and inclusivity basics, all free. After this phase the app is a genuinely useful
     **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
   - 2026-08-30 — PR #20 squash-merged to `main`; CI green on `main`. Set **DONE**.
 
+#### p1.12 — Cycle phase wheel: circular, color-coded phase view with a correctable indicator
+- **Status:** IN REVIEW · **Depends on:** none (built on the existing `Cycle` / `CyclePrediction`
+  data — no new domain engine)
+- **Branch / worktree:** `feat/p1.12-cycle-wheel` / `../olf-wt/p1.12`
+- **PR:** [#64](https://github.com/Abbo0dio/olf/pull/64)
+- **Owner:** worker: phase1
+- **Requirement refs:** §1 (Stage 1 — correctable cycle info, never a fabricated date), §4
+  (UX/design), §8 (accessibility — WCAG: color is never the only signal, contrast, tap targets,
+  text-scaling; must go through the p5.1 test harness like every other screen)
+- **Goal:** a glanceable circular visualization on the home/calendar screen — the cycle divided
+  into color-coded phase arcs (menstrual / follicular / ovulatory / luteal) with a marker showing
+  today's position — that the user can correct with a tap, the same way every other reading in
+  this app is correctable.
+- **Design (orchestrator, 2026-09-05 — user-requested):**
+  - **No new predictor.** Phase boundaries are a pure **derivation** from data the app already
+    computes: the current `Cycle` (`periodStart`/`periodEnd`) and the current `CyclePrediction`
+    (`nextPeriod`, `fertileWindow`, `nextPeriodExpected`). Menstrual = the logged/ongoing period;
+    follicular = period end → `fertileWindow.start`; ovulatory = `fertileWindow`; luteal =
+    `fertileWindow.end` → `nextPeriodExpected`. New pure function in `core`
+    (`core/lib/src/cycle/cycle_phase.dart`, house style — no `DateTime.now()`, `today` injected),
+    unit-tested standalone. **Personalized, not generic**: arc widths reflect the user's own
+    predicted phase lengths, not fixed textbook proportions — consistent with the Phase 3 "no
+    false precision" gate. When there's no current cycle to anchor on (nothing logged yet, or the
+    latest cycle `isLikelyGap`/`isPregnancyGap`), the function returns `null` and the widget shows
+    an honest "log a period to see this" placeholder ring — never a fabricated phase.
+  - **"Correctable" = the existing quick-log entry points, not a new mechanism.** Tapping the
+    wheel opens the same today flow-quick-log / symptom-day-sheet actions `_Summary` already
+    wires up (`onLogTodayFlow` / `onLogTodaySymptoms`) — logging or editing today's entry is what
+    corrects the wheel, exactly like it already corrects the prediction card and triggers the
+    Phase 3 correction-notice loop. No parallel "tell us we're wrong" UI to build or maintain.
+  - **Placement:** new widget at the top of `period_calendar_page.dart`'s scroll column, above
+    `_Summary` — the primary at-a-glance visual; the existing text `_PredictionCard` stays for
+    the detailed dates/confidence/basedOnCycles readout, unchanged.
+  - **Accessibility (non-negotiable, ties into the Phase 5 harness):** phase is never conveyed by
+    color alone — each arc/segment also carries a text label reachable by screen readers, and the
+    center readout states the phase name and day-in-phase as text. Contrast checked against
+    `core`'s `contrast.dart` (WCAG AA) for both themes; tap target ≥48dp; add this screen state to
+    `app/test/support/screen_nav.dart`'s `screenSurfaces` so it rides the existing guideline /
+    label / contrast / keyboard-nav / text-scaling sweep — do not hand-roll a separate a11y test
+    path for it. Respect `reduceSpokenDetail` (p5.3): the semantic label redacts to a generic form
+    when it's on, same as every other reading on this screen; visible text is unaffected.
+  - **No new dependency** — drawn with `CustomPainter`/`Canvas.drawArc`, standard Flutter, no
+    chart package. **No schema change** — purely derived, nothing new stored.
+- **Acceptance criteria:**
+  - `core/lib/src/cycle/cycle_phase.dart` — pure `currentCyclePhase({cycle, prediction, today})`
+    (or equivalent), returns phase kind + day-in-phase + the boundary dates used, `null` when
+    there's no safe anchor; exported from `olf_core.dart`.
+  - New `app` widget (e.g. `app/lib/src/cycle/cycle_wheel.dart`) rendering the four-phase ring +
+    today marker + center text readout + the `null` placeholder state; wired into
+    `period_calendar_page.dart` above `_Summary`.
+  - Tap anywhere on the wheel reaches the same today quick-log / symptom-sheet actions as
+    `_Summary`.
+  - Added to `screen_nav.dart`'s surface inventory; passes the existing guideline, semantics-label,
+    contrast, keyboard-nav, and text-scaling (to 2.0×) sweeps with no skips.
+  - `reduceSpokenDetail` redacts the wheel's semantic label; visible text unchanged.
+- **Tests required:** `core/test/cycle/cycle_phase_test.dart` (each phase, the boundary days,
+  the gap/no-anchor → `null` case, a pregnancy-gap cycle → `null`); an `app` widget test for the
+  wheel (renders each phase, tap reaches quick-log, `null` state renders the placeholder,
+  `reduceSpokenDetail` redaction); the four Phase 5 sweep suites pick it up via `screen_nav.dart`
+  with no new skips. Existing core + app suites stay green.
+- **Notes / detail:** worker picks the exact visual treatment (colors, stroke width, marker
+  shape) within the theme's existing palette and the WCAG AA contrast constraint above — no need
+  to ask back on cosmetic choices. If the four-arc geometry can't be made cleanly proportional
+  when a phase length estimate is very short (e.g. a compressed follicular phase), a sane minimum
+  arc width for legibility is fine; note the tradeoff in the build log rather than treating it as
+  a §5 item.
+- **Build detail (worker: phase1):**
+  - **`core/lib/src/cycle/cycle_phase.dart`** — `CyclePhaseKind` (menstrual/follicular/ovulatory/
+    luteal) + `.label`; `CyclePhaseSegment` (kind, start, end; `lengthInDays` floors at 0 rather
+    than going negative; `contains(day)`); `CyclePhase` (today, the 4 segments in cycle order,
+    `currentIndex` → `.current`/`.dayInPhase`). `currentCyclePhase({cycle, prediction, today})`:
+    menstrual end = `cycle.periodEnd ?? today` (an open period draws through today rather than
+    guessing an end); follicular = menstrual-end+1 → `fertileWindow.start`-1; ovulatory =
+    `fertileWindow`; luteal = `fertileWindow.end`+1 → `max(nextPeriodExpected, lutealStart)` (a
+    1-day floor if the estimate is degenerate). Returns `null` for no cycle/prediction, a likely
+    or pregnancy gap cycle, a future-dated period, or a fertile window that doesn't actually sit
+    after the period (a malformed estimate) — never a fabricated phase. An overdue today (past
+    every segment) lands on `luteal` (`indexWhere` → `-1` fallback) with `dayInPhase` honestly
+    exceeding `lengthInDays`, rather than inventing a fifth phase.
+  - **`app/lib/src/cycle/cycle_wheel.dart`** — `CycleWheel(phase, reduceSpoken, onTap)`. Ring:
+    `CustomPaint`/`Canvas.drawArc`, 180dp diameter, one `InkWell(customBorder: CircleBorder())`
+    (≥48dp tap target, comfortably) wrapped in an outer `Semantics(button: true, label:, onTap:)`
+    with the visual subtree `ExcludeSemantics`'d so a screen reader sees exactly one node. Colors:
+    menstrual→`primary`, follicular→`secondary`, ovulatory→`tertiary`, luteal→`outline` — all four
+    already ≥3:1 (component) or ≥4.5:1 (text) against `surface` in both themes (verified; added
+    `secondary/surface` to `theme_contrast_test.dart`, the other three were already checked). A
+    zero/near-zero-length phase (e.g. a compressed follicular estimate) gets a 6%-of-circle minimum
+    sweep, the whole ring renormalized back to 360° — a drawing trade-off (shrinks the other arcs a
+    little), day counts in the caption are never adjusted. Today's marker: an `onSurface` dot on a
+    `surface`-colored halo, so it reads against any of the four arc colors by construction (the
+    halo color already clears contrast against every arc color). Caption below the ring (never
+    overlaid on it, so 2.0× text scaling just grows the column — no `RenderFlex` overflow risk):
+    phase name + "Day N". Placeholder (`phase == null`): a plain `surfaceContainerHighest` ring +
+    "Log a period to see this", still tappable → the same `onTap`. Non-reduced semantic label spells
+    out all four segments' date spans as text (WCAG "never color-only", reachable by screen
+    readers); reduced label is generic ("Cycle phase available. Tap to log today's flow.").
+  - **`period_calendar_page.dart`** — one `CyclePhase? cyclePhase = currentCyclePhase(cycle:
+    currentCycle, prediction:, today:)` computed inline (same pattern as the existing
+    `bbtPoints`/`currentCycle` locals); `CycleWheel` placed above `_Summary`, `onTap` reuses the
+    exact `showFlowQuickLog(context, date: today)` closure `_Summary.onLogTodayFlow` uses — tapping
+    the wheel is not a second, parallel implementation of "log today".
+  - **`app/test/support/screen_nav.dart`** — new `_seedRecentCycle` (six periods, a regular 28
+    days apart, most recent starting 20 days ago via the existing `_daysAgo` helper) and a new
+    surface `'period_calendar_page — cycle wheel (active phase)'`. The existing `_seedHistory`
+    surface uses fixed 2025 dates that are stale by now, so its cycle is always a likely-gap and
+    the wheel there only ever shows its placeholder — this new surface is `_daysAgo`-relative so
+    "today" always lands inside a real phase, and the sweep actually exercises the ring's
+    arcs/marker/label, not just the placeholder. 17 surfaces total now (comment updated).
+  - **`app/test/a11y/theme_contrast_test.dart`** — added the `secondary / surface` pair (the
+    follicular arc color; `outline`/`primary`/`tertiary` were already checked).
+  - **Tests:** `core/test/cycle/cycle_phase_test.dart` (17 — no cycle/prediction, gap cycle,
+    pregnancy gap, future-dated period, degenerate fertile window, each phase incl. boundary
+    days, overdue-stays-luteal, ongoing-period-runs-through-today, zero-length-follicular,
+    segment-order); `app/test/cycle/cycle_wheel_test.dart` (10 — each phase renders, placeholder
+    never fabricates a phase, tap reaches the quick-log callback from both the active and
+    placeholder states, `reduceSpokenDetail` on/off, dark mode). Full a11y sweep (guideline,
+    semantics-label, contrast incl. the new pair, keyboard-nav, text-scaling to 2.0×, both new
+    surfaces) green — no new skips.
+  - **Constraints honoured:** no new dependency (Dart or platform); no schema change; `core`
+    stays Flutter-free / `DateTime.now()`-free.
+- **Log:**
+  - 2026-09-05 — created and claimed by worker: phase1 in the same step (orchestrator-drafted
+    row, transcribed verbatim per dispatch); worktree `../olf-wt/p1.12`, branch
+    `feat/p1.12-cycle-wheel` off `main` @ `6820cd2`. No prior slice to fold forward — the last
+    merge to `main` (v1.1.0, PR #63) was release housekeeping, not a task row.
+  - 2026-09-05 — built to DoD. core 531 (+17) / app 339 (+17, incl. the new contrast pair); analyze
+    `--fatal-infos` (core + app) + format + dependency-audit (38 rules) + `build_runner` (no
+    `.g.dart` drift) + `pubspec.lock` diff-clean all green. Opening PR.
+  - 2026-09-05 — PR [#64](https://github.com/Abbo0dio/olf/pull/64) opened into `main`; set
+    **IN REVIEW** — awaiting CI + orchestrator merge. Do not self-merge.
+
 **Phase 1 exit gate:** a new user can log periods/symptoms/BBT/meds, gets correctable range
 predictions, can lock the app, can back up and restore, and can log a loss/birth — all offline,
 free, in dark mode, with inclusive copy. Retention + a working correction loop are the product
@@ -1480,6 +1611,9 @@ reminder, anonymous-by-default + optional PIN + first-run privacy explainer, neu
 dark mode + inclusive copy, encrypted backup/restore, and pregnancy-loss/birth/postpartum
 events that break the cycle chain — all on-device and free. Outstanding non-blockers carried
 forward: the p0.5 manual physical-device smoke table, and the per-slice §9 follow-ups.
+
+*(p1.12 — cycle phase wheel — added later as a Phase 1 core-tracking-UX sibling, user-requested
+2026-09-05; not a gate item.)*
 
 ---
 
