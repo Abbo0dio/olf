@@ -69,7 +69,13 @@ be waived in CI.
 
 Once the blockers and checks above are green:
 
-1. Bump `app/pubspec.yaml` `version:` and merge that to `main`.
+1. Bump `app/pubspec.yaml` `version:` and merge that to `main`. **Version number
+   is chosen manually** per the versioning policy in `DEVELOPMENT_PLAN.md` §7
+   (2026-09-04 entry): `1.x.x` = alpha (until every phase is `DONE`), `2.0.0` =
+   the beta cut the moment the last phase closes; inside `1.x`, minor = new
+   features shipped, patch = bug-fixes-only. `scripts/cut_release.sh` automates
+   steps 1–3 below once the version bump (and any other release-prep edits) are
+   committed on a branch.
 2. Tag the release commit on `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`
    (`X.Y.Z` must match `app/pubspec.yaml` — the workflow emits a `::warning::` on
    mismatch, it does not hard-fail).

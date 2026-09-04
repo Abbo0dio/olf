@@ -3724,6 +3724,46 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-04 — **Versioning policy: `1.x.x` is the alpha stage (spans every phase
+  until the plan's last phase is `DONE`); `2.0.0` is cut the moment the final
+  phase closes, marking the move to beta. Inside `1.x`, a minor bump (`1.Y.0`)
+  means new user-facing features shipped since the last release; a patch bump
+  (`1.Y.Z`) means bug fixes only, no new features. The version number is chosen
+  manually by the Orchestrator for each release — never auto-computed from
+  commit count, phase count, or any formula.** Rationale: (1) The product is
+  still being built out phase by phase (Phases 0–5 of 13 done as of this entry)
+  — calling any of that a "1.0" in the conventional sense would overclaim
+  finish; `2.0.0` is reserved as the one meaningful signal that every planned
+  phase has shipped and the app has moved from "being built" (alpha) to "built,
+  now hardening/polishing in the open" (beta). Post-`2.0.0` versioning (whether
+  it continues semver or starts a new scheme) is a future decision, not decided
+  here. (2) **Manual, not automatic**, because "new feature vs. bug fix" is a
+  judgment call only a human/reviewer can make honestly — a slice can *look*
+  small (one file) and still be a feature, or *look* big (a refactor) and still
+  be zero user-facing change. The Orchestrator makes the call at release-cut
+  time by reading what actually shipped since the last tag. (3) **This
+  release, `v1.1.0`** (bumped from `v1.0.1`): a minor bump, not a patch — Phases
+  2–5 shipped substantial new user-facing surface (biometric/decoy lock,
+  retention/masking + export purge, standalone privacy policy + consent
+  switches, TLS-only transport baseline, committed threat model,
+  un-waivable dependency-audit release gate, the `AdaptivePredictor` v2
+  engine with a visible correction loop, per-category notification channels +
+  quiet hours, and all of Phase 5 — WCAG 2.2 AA audit, reduce-spoken-detail +
+  auto-lock, caption/transcript type gate, discreet alternate icon, CI
+  perf/size budget, migration test matrix) with zero breaking change and zero
+  schema change across all of it — a clean minor bump. Also folded into the
+  same release-prep commit: the shipped app's display name was `olf_app`
+  (the Dart package / Android `applicationId` name leaking into the Android
+  `android:label` and the iOS `CFBundleDisplayName`/`CFBundleName`) — fixed to
+  the intended `olf` in both `AndroidManifest.xml` (both the main
+  `<application>` and the p5.4 `MainActivityBranded` alias — the "Notes"
+  decoy-presence alias is deliberately untouched, its whole point is to
+  *not* say "olf") and `Info.plist`. The package/namespace identifiers
+  (`com.olf.olf_app`, the Dart package name `olf_app`) are internal and
+  unaffected — changing those is a different, far more invasive change with no
+  user-facing benefit. — orchestrator, with the user's explicit versioning
+  scheme (2026-09-04).
+
 - 2026-08-31 — **p2.2 decoy PIN routes to a physically separate, separately-keyed database;
   no schema change, no new deps.** Rationale: (1) **Two vaults, not a filtered view.** A decoy
   session must be unable to *reach or detect* the real data even by a determined coerced user,
