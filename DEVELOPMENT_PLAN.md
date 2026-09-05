@@ -4020,7 +4020,9 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   - 2026-09-05 — [PR #66](https://github.com/Abbo0dio/olf/pull/66) opened, p6.2
     IN REVIEW. Local: format / analyze (core + app + scripts) / build_runner
     (no `.g.dart` drift) / core 567 / app 381 / dependency-audit PASS / pubspec
-    locks clean — all green. CI running.
+    locks clean. **CI all 9 checks green incl. `CI OK` and
+    `Build (macos-latest, ios)`** (run 33977728379). Awaiting orchestrator
+    review + merge.
 
 #### p6.3 — Android Health Connect gateway
 - **Status:** `TODO` · **Depends on:** p6.1; shares the dependency decision with p6.2
