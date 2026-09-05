@@ -14,6 +14,12 @@
 	<string>6.0</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Unlock olf with Face ID instead of typing your PIN.</string>
+	<!-- p6.2: shown only if the user taps "Connect Apple Health" in Settings.
+	     olf keeps this off by default and touches just two data types. -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>olf can read menstrual flow and basal body temperature from Apple Health so entries you already logged elsewhere appear in olf.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>olf can save the menstrual flow and basal body temperature you log here to Apple Health so other apps you choose can use them.</string>
 	<!-- Transport security baseline (p2.6). App Transport Security is left fully
 	     strict: arbitrary loads off, no per-domain exceptions, no web/media/
 	     local-networking relaxations. Nothing in olf calls the network yet; this

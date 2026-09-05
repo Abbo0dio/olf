@@ -29,6 +29,7 @@ What an adversary would want, roughly in order of sensitivity.
 | Preferences (theme, pronouns, reminder settings, retention window) | unencrypted `SharedPreferences` / `NSUserDefaults` | Low sensitivity on their own, but pronouns and a tight retention window are weak signals. |
 | `.olfbackup` export files | wherever the user saved them via the OS share sheet — local disk, cloud drive, messaging app | Encrypted (AES-GCM, user passphrase), but now outside app control. |
 | Derived predictions (next period, fertile window) | recomputed in memory from entries; not separately stored | Same sensitivity as the entries they come from. |
+| Menstrual-flow & basal-body-temperature samples in the **OS health store** (Apple Health; Health Connect in p6.3) | the platform's own encrypted store, reached over local IPC only when the user has turned on "Connect Apple Health" (p6.2) | Same sensitivity as the olf entries — but now also readable by any *other* app the user has granted the same HealthKit permissions, and governed by the OS's sharing UI rather than olf's. Default off. |
 | Source repository & dependency graph | GitHub, `pubspec.lock` | A malicious dependency could exfiltrate any of the above from a future build. |
 
 ---
@@ -76,6 +77,16 @@ so the boundary is honest, not because they are unimportant.
    `OlfHttpClient` (p2.6), which refuses non-HTTPS before a socket opens.
 7. **Repo ↔ dependency graph.** Every transitive package is trusted at build
    time. Crossing point: `pubspec.lock` + the CI dependency-audit (p0.3, p2.9).
+8. **App ↔ OS health platform (p6.2).** When — and only when — the user turns
+   on "Connect Apple Health", olf reads and writes menstrual flow and basal
+   body temperature to Apple Health over a **local IPC** channel (the
+   hand-rolled `olf/health` `MethodChannel` → HealthKit; no CocoaPod, no
+   network). What crosses is scoped to those two types; the user grants and
+   revokes it in the OS Health app, and olf treats a revoked / empty read as
+   "nothing to import", never an error. Crossing point: the `core`
+   `HealthPlatformGateway` seam and its iOS `HealthKitGateway` implementation.
+   Not present on any platform where the gateway binds to
+   `UnavailableHealthGateway` (Android until p6.3, desktop, web).
 
 ---
 
@@ -108,6 +119,10 @@ flowchart TD
 
     UI -.->|no calls today| Net["OlfHttpClient seam<br/>TLS-only, p2.6"]
     Net -.->|would be| NoBackend["(no backend)"]
+
+    UI -->|"opt-in: Connect Apple Health (p6.2)"| HKBridge{{"olf/health MethodChannel<br/>HealthPlatformGateway seam"}}
+    HKBridge <-->|"flow + BBT, local IPC"| HealthStore[["Apple Health store<br/>(OS-governed, per-app grants)"]]
+    HKBridge -->|"reconcile, never clobber manual"| RealVault
 ```
 
 ASCII fallback (same flow, for viewers without Mermaid):
@@ -133,6 +148,11 @@ ASCII fallback (same flow, for viewers without Mermaid):
    app backgrounded --> [ screen mask + FLAG_SECURE, p2.4 ]
 
    network: none today. Only path = OlfHttpClient (TLS-only, p2.6) --> (no backend)
+
+   health platform (p6.2, opt-in, default off):
+     [ Flutter UI ] <--> [ olf/health MethodChannel = HealthPlatformGateway ]
+                          <--> [ Apple Health store ]   (flow + BBT, local IPC)
+                     import --> [ ImportReconciler ] --> olf.db  (never clobbers a manual row)
 ```
 
 ---
@@ -160,6 +180,7 @@ cross-reference the phase-gate review walks.
 | TLS-only platform config + `OlfHttpClient` chokepoint + transport gate | p2.6 | future network attacker; prevents a later feature silently using cleartext |
 | In-app privacy education (HIPAA gap, law-enforcement reality, how to delete everything) | p2.7 | the ~9%-take-action finding; corrects the "HIPAA covers this" misconception (§3, §9(8)) |
 | This threat model + its CI guard | p2.8 | keeps the security design written down and reviewed each phase |
+| Health-platform bridge is opt-in / default-off / revocable, scoped to exactly two data types, hand-rolled channel (no SDK, no CocoaPod), no network; imported rows land in the same `bbt_entries` / `daily_flows` tables the p2.3 retention sweep already covers | p6.2 | the new App ↔ OS health platform boundary (#8) — minimises what crosses it and keeps the user in control of when it is open |
 
 ---
 
@@ -382,3 +403,40 @@ The CI guard requires an entry naming the current phase.
   user-initiated export egress path, same class as the p1.10 backup export —
   neutral filename, retention-trimmed, `pdf` dependency pending the same gate).
   No design changes required by this review.
+- **2026-09-05 — Phase 6 / p6.2 landing — reviewer: worker: p6.2.** The
+  **App ↔ OS health platform** boundary from the p6.1 watch list is now open on
+  iOS, exactly as scoped: opt-in, default-off, one "Connect Apple Health" tile
+  under a new "Apps & export" Settings section, revocable in-app plus a pointer
+  to the system Health app. Added to this document: **Assets** — the Apple
+  Health store as an asset olf both reads and writes; **Trust boundaries** —
+  new boundary #8 (`HealthPlatformGateway` seam → `HealthKitGateway`);
+  **Data flow** — the `olf/health` channel arrows in the Mermaid and ASCII
+  diagrams; **Mitigations** — the p6.2 row. **§5 ruling reversal:** the
+  `health` pub package (the p6.1 watch item's "first runtime dependency since
+  Phase 1") was **rejected** — it forces an SDK-floor bump and cannot map basal
+  body temperature at all — so the bridge is a **hand-rolled `olf/health`
+  `MethodChannel`** (Swift on the Runner, the p5.4 `olf/app_icon` pattern).
+  **No dependency added** (`git diff --exit-code app/pubspec.lock` clean), no
+  `compileSdk` / min-iOS bump. The channel speaks HealthKit-native numbers;
+  every unit/scale decision is pure Dart (`flow_mapping.dart`, the channel
+  codec). New iOS surface: the **HealthKit entitlement**
+  (`com.apple.developer.healthkit`) in a new `Runner.entitlements` +
+  `CODE_SIGN_ENTITLEMENTS` in the three Runner build configs, and
+  `NSHealthShareUsageDescription` / `NSHealthUpdateUsageDescription` in
+  `Info.plist` (honest, non-marketing copy). **ATS is untouched** — still fully
+  strict — because the bridge is local IPC, no network. Only the two shared
+  types cross (`menstrualFlow` ↔ `HKCategoryTypeIdentifier.menstrualFlow`,
+  `basalBodyTemperature` ↔ `HKQuantityTypeIdentifier.basalBodyTemperature`);
+  the other three model types stay declared on the `core` interface but the iOS
+  bridge returns empty / no-ops them with a logged note. Import goes through the
+  pure `ImportReconciler` (p6.1) so a `source == manual` row is **never**
+  auto-overwritten — a disagreement is surfaced for review (p6.4), never
+  applied. Imported rows carry `source = 'appleHealth'` + the HealthKit sample
+  UUID in the schema-v7 provenance columns and land in the same
+  `bbt_entries` / `daily_flows` tables the p2.3 retention sweep already covers.
+  `core` interface additions this slice, flagged for the phase gate:
+  `BbtRepository.setTemp` / `DailyFlowRepository.setFlow` gained defaulted
+  `source` / `externalId` params (the provenance write path p6.1 deferred), and
+  each repo gained a one-shot `allEntries()` / `allFlows()` read. **No new
+  adversary; no new network path.** Watch items p6.3 / p6.4 / p6.5 unchanged.
+  No further design changes required by this review.

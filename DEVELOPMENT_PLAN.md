@@ -3724,7 +3724,7 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   ambiguous.
 
 #### p6.1 — Interop foundation: gateway interface, sample model, reconciliation engine, provenance schema (v7)
-- **Status:** `IN REVIEW` · **Depends on:** none (first Phase 6 slice; carries `main` from the Phase 5 close + p1.12)
+- **Status:** `DONE (2026-09-05)` · squash `ed81ac5` · PR #65 · **Depends on:** none (first Phase 6 slice; carries `main` from the Phase 5 close + p1.12)
 - **Owner:** worker: phase1
 - **Branch / worktree:** `feat/p6.1-interop-foundation` · `../olf-wt/p6.1` off `main` @ `f9780bd` (#64)
 - **Requirement refs:** §2, §3, §9(11); §1.4 DoD (schema change ⇒ migration + test)
@@ -3900,30 +3900,41 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     `dependency-audit` (PASS, 38 rules) + `build_runner` (no `.g.dart` drift) +
     `git diff core/pubspec.lock app/pubspec.lock` (empty) all green. `source`-flip-on-edit
     deferred to p6.4. PR [#65](https://github.com/Abbo0dio/olf/pull/65) opened into `main`; set IN REVIEW.
+  - 2026-09-05 — **merged (squash `ed81ac5`, PR #65)** by orchestrator. Two doc-only review
+    fixes folded in on the branch first (`e7b308d`): a §9 Backlog entry recording the
+    `migration_matrix_test` single-step narrowing (v2→v3 / v4→v5 no longer validated in
+    isolation — proper fix is drift `stepByStep`, its own slice), and a correction to the
+    `app_database.dart` Build-detail bullet to match the shipped guarded migration. All CI
+    green incl. `CI OK`. **Phase 6 header stays `TODO`** (not a phase close). Set DONE.
 
 #### p6.2 — Apple HealthKit gateway (iOS)
-- **Status:** `TODO` · **Depends on:** p6.1
+- **Status:** `IN REVIEW` ([PR #66](https://github.com/Abbo0dio/olf/pull/66)) · **Depends on:** p6.1
 - **Requirement refs:** §2, §3, §4
 - **Goal:** a real `HealthPlatformGateway` for iOS — read + write menstrual flow, BBT / body /
   wrist temperature, sleep — reachable from a default-off, opt-in "Connect Apple Health" control
   that runs one reconciled import.
 - **Design (orchestrator, 2026-09-05):**
-  - **Dependency (§5, pre-approved *pending audit*):** add **`health`** (pub.dev, Cachet / DTU)
-    — one API over HealthKit *and* Health Connect, exactly the swap-friendly shape this phase
-    needs, and it saves hand-maintaining two native bridges. The claiming PR must paste: resolved
-    version, full `flutter pub deps` transitive subtree, the `dependency-audit` result (green,
-    not skipped), and the licence. **Gate:** denylist-clean transitively, GPLv3-compatible
-    licence, no ad/analytics/telemetry. On failure: fall back to a hand-rolled `olf/health`
-    `MethodChannel` (p5.4 pattern), iOS side only in this slice; note the decision in the log.
-    Either way the `core` interface is unchanged; the impl lives in `app/lib/src/health/`.
+  - **Platform bridge (orchestrator §5 ruling, 2026-09-05):** hand-rolled **`olf/health`
+    `MethodChannel`** (Swift, on the Runner target — p5.4 pattern), **not** the `health` pub
+    package. Worker's §5 audit found `health` (13.3.1 pinned / 13.3.2 latest) exposes **no
+    `BASAL_BODY_TEMPERATURE`** in any version — olf's primary temperature signal (`bbt_entries`)
+    would need a hand-rolled channel regardless — and adopting it would also force
+    iOS 14→15-equivalent + Android `minSdk` 24→26 floor bumps and add 6 transitive packages,
+    all for menstrual-flow sync only. A focused bridge we fully control is the better trade for
+    olf's deliberately narrow sync surface (flow + BBT, foreground only). The channel methods
+    mirror the `core` `HealthPlatformGateway`: `requestAuthorization` / `authorizationStatus` /
+    `read` / `write` / `delete`. **No new pubspec dependency. No SDK-floor bump.** The `core`
+    interface is unchanged; the Dart impl lives in `app/lib/src/health/`.
   - **iOS native:** HealthKit capability + entitlement on the Runner target;
     `NSHealthShareUsageDescription` + `NSHealthUpdateUsageDescription` in `Info.plist` with
-    honest, non-marketing copy. No new CocoaPods beyond what `health` pulls. ATS stays strict.
-  - **Type mapping:** `menstrualFlow` ↔ `HKCategoryTypeIdentifier.menstrualFlow`,
-    `basalBodyTemperature` ↔ `HKQuantityTypeIdentifier.basalBodyTemperature`, `bodyTemperature`
-    ↔ `.bodyTemperature`, `wristTemperature` ↔ `.appleSleepingWristTemperature` (read-only on
-    iOS — document it; `write` of that type is a no-op that doesn't throw), `sleep` ↔
-    `.sleepAnalysis`. Unit conversions centralised and unit-tested.
+    honest, non-marketing copy. No new CocoaPods. ATS stays strict.
+  - **Type mapping (hand-rolled channel):** `menstrualFlow` ↔
+    `HKCategoryTypeIdentifier.menstrualFlow`, `basalBodyTemperature` ↔
+    `HKQuantityTypeIdentifier.basalBodyTemperature`. The other three p6.1 model types
+    (`bodyTemperature`, `wristTemperature`, `sleep`) stay declared in the `core` interface but
+    the iOS bridge returns unsupported / empty for them with a logged note — they have no olf
+    table yet; wire them when a consuming feature lands. Unit conversions centralised and
+    unit-tested on the Dart side.
   - **UI:** a single "Connect Apple Health" tile in Settings → new "Apps & export" section.
     Default off. Tapping it explains what flows **in** and **out**, then triggers
     `requestAuthorization(readWrite)`; on grant, reads the last N months, feeds the
@@ -3931,8 +3942,9 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     summary ("added 12, updated 3, 2 need your review"). Revoking is "disconnect" + a pointer to
     iOS Settings. a11y: tile + summary go through `screen_nav.dart` (new surface); dark mode;
     `reduceSpokenDetail` on the summary if it names counts of a health type.
-  - **Android:** `health` reports HealthKit unavailable → tile hidden on Android (p6.3 adds the
-    Health Connect equivalent). `isAvailable == false` path tested.
+  - **Non-iOS:** the `olf/health` channel is unimplemented off iOS (`MissingPluginException` →
+    the gateway reports `isAvailable == false`), so the tile is hidden on Android / desktop.
+    p6.3 adds the Health Connect equivalent. `isAvailable == false` path tested.
   - **threat-model:** update Assets (HealthKit store), Trust boundaries (iOS Health sandbox),
     Data flow (new in/out arrows), Mitigations (opt-in, scoped types, no network).
     `release-checklist.md`: HealthKit entitlement + usage-string device check.
@@ -3940,8 +3952,9 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   - iOS HealthKit impl behind the p6.1 interface; DI wires the real gateway on iOS, an
     `unavailable` gateway elsewhere.
   - `Info.plist` usage strings + entitlement present; `flutter analyze` + both CI build-matrix
-    jobs (apk + ios) green; `dependency-audit` green with the new dep, permission-diff
-    clean/explained.
+    jobs (apk + ios) green; `dependency-audit` green (no new pubspec dependency — hand-rolled
+    channel per the §5 ruling; iOS permission surface is the HealthKit entitlement + the two
+    usage strings, no `<uses-permission>` change).
   - Settings tile default-off, opt-in, revocable; first connect runs a reconciled import + a
     summary; no crash when permission denied.
   - New `screen_nav.dart` surface; all five sweeps green, no new skips.
@@ -3952,8 +3965,64 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   `screen_nav.dart`. Native HealthKit auth on a real device → p0.5-style manual smoke list (no
   Xcode in CI/worker env — CI validates the build only).
 - **Notes / detail:** worker owns the Settings section layout and the first-import month count
-  (propose, note it). If `health` needs a `compileSdk` / min-iOS bump → §5 stop, report it.
-- **Log:** 2026-09-05 — created (orchestrator, Phase 6 expansion).
+  (propose, note it). If the Swift bridge surfaces something structural (a Swift-version pin, a
+  new entitlement class beyond HealthKit, an AGP bump) → §5 stop, report it.
+- **Log:**
+  - 2026-09-05 — created (orchestrator, Phase 6 expansion).
+  - 2026-09-05 — §5 (worker: phase1): evaluated the `health` pub package, **rejected** — no
+    `BASAL_BODY_TEMPERATURE` in any version, would force iOS/Android SDK-floor bumps + 6
+    transitive packages for flow-only sync. Orchestrator §5 re-ruling: hand-roll `olf/health`
+    `MethodChannel` (flow + BBT) behind the p6.1 interface, no dep, no floor bump. Row's
+    Dependency / iOS-native / Type-mapping / Android bullets updated accordingly;
+    §7 Decisions Log entry added.
+  - 2026-09-05 — claimed by worker: phase1; worktree `../olf-wt/p6.2`, branch
+    `feat/p6.2-healthkit-gateway` off `main` @ `ed81ac5` (#65). Folded p6.1 → DONE
+    (squash `ed81ac5`). Set p6.2 IN PROGRESS.
+  - 2026-09-05 — built (worker: phase1). **`core`:** `BbtRepository.setTemp` /
+    `DailyFlowRepository.setFlow` gained defaulted `source` / `externalId` params
+    (the schema-v7 provenance write path p6.1 deferred; every existing caller
+    unchanged); each repo gained a one-shot `allEntries()` / `allFlows()` read;
+    `healthDataSourceFromStorage()` helper on `health_sample.dart`; two new
+    `SettingKeys` (`appleHealthConnected`, `appleHealthLastSync`). **`app/lib/src/health/`:**
+    `flow_mapping.dart` (pure HK `HKCategoryValueMenstrualFlow` ↔ `FlowIntensity`;
+    `unspecified`↔`spotting`, `none`→skip), `health_channel.dart` (`olf/health`
+    `MethodChannel` wrapper + pure wire codec — speaks HealthKit-native numbers,
+    `MissingPluginException` / `PlatformException` → `HealthPlatformUnavailable`),
+    `healthkit_gateway.dart` (`HealthKitGateway implements HealthPlatformGateway`,
+    `isAvailable => true`, filters to the two supported types with a logged note),
+    `unavailable_health_gateway.dart` (`isAvailable => false`, everything throws),
+    `health_import.dart` (`HealthImportService`: authorize → read window → build
+    `LocalSampleView`s → `ImportReconciler` → apply inserts + non-conflicting
+    updates → push the user's own manual rows the platform is missing back out →
+    `HealthSyncSummary`; conflicts counted, never applied), `health_providers.dart`
+    (`healthPlatformGatewayProvider` = iOS→`HealthKitGateway` else→`UnavailableHealthGateway`;
+    `healthAvailableProvider`; `appleHealthConnected/LastSync` stream providers;
+    `connect/sync/disconnectAppleHealth` actions). **Settings:** new "Apps & export"
+    section (hidden when `!isAvailable`) + default-off "Connect Apple Health"
+    `SwitchListTile` + "Sync Apple Health now"; opt-in dialog names in **and** out;
+    grant → import → summary dialog; denied / unreachable → calm SnackBar, nothing
+    persisted; disconnect confirm + pointer to the iOS Health app; subtitle
+    summary redacted from screen readers under `reduceSpokenDetail`. **iOS:**
+    `AppDelegate.swift` `registerHealthChannel()` + `HealthKitBridge` (HKCategory
+    menstrualFlow + HKQuantity basalBodyTemperature °C, `deleteObjects` scoped to
+    olf-authored samples, all `result()` on the main queue); new
+    `Runner.entitlements` (`com.apple.developer.healthkit`) + `CODE_SIGN_ENTITLEMENTS`
+    in the 3 Runner build configs; `NSHealthShareUsageDescription` +
+    `NSHealthUpdateUsageDescription` in `Info.plist`; ATS untouched; no CocoaPod,
+    no deployment-target bump. **a11y:** new `screen_nav.dart` surface
+    (`settings_page — Apps & export (Apple Health connected)`), doc count 17→18.
+    **docs:** `threat-model.md` — Assets + Trust boundary #8 + Data-flow arrows
+    (Mermaid + ASCII) + Mitigations row + a p6.2 Review-log entry;
+    `release-checklist.md` — iOS HealthKit entitlement / usage-string device check.
+    **Tests:** `app/test/health/{flow_mapping,healthkit_gateway,health_import,connect_health_flow}_test.dart`
+    + `core` repo provenance / one-shot-read tests + `healthDataSourceFromStorage`
+    tests. `git diff app/pubspec.lock` clean — no dependency added.
+  - 2026-09-05 — [PR #66](https://github.com/Abbo0dio/olf/pull/66) opened, p6.2
+    IN REVIEW. Local: format / analyze (core + app + scripts) / build_runner
+    (no `.g.dart` drift) / core 567 / app 381 / dependency-audit PASS / pubspec
+    locks clean. **CI all 9 checks green incl. `CI OK` and
+    `Build (macos-latest, ios)`** (run 33977728379). Awaiting orchestrator
+    review + merge.
 
 #### p6.3 — Android Health Connect gateway
 - **Status:** `TODO` · **Depends on:** p6.1; shares the dependency decision with p6.2
@@ -4282,6 +4351,14 @@ Maintain a table (fill as work lands): requirement → where addressed → statu
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-05 — **Evaluated the `health` package for p6.2 health-platform interop; rejected.**
+  It exposes no `BASAL_BODY_TEMPERATURE` (olf's primary temperature signal) in any version, so
+  BBT sync would need a hand-rolled channel regardless; adopting it would additionally force
+  iOS deployment target 14→15-equivalent and Android `minSdk` 24→26 and add 6 transitive
+  packages, for menstrual-flow sync only. Chose a focused hand-rolled `olf/health`
+  `MethodChannel` (flow + BBT) behind the p6.1 `HealthPlatformGateway` interface. Android
+  Health Connect (p6.3) hand-rolls its Kotlin half against `androidx.health.connect` — its own
+  §5 conversation. — orchestrator, §5 ruling during p6.2.
 - 2026-09-04 — **Versioning policy: `1.x.x` is the alpha stage (spans every phase
   until the plan's last phase is `DONE`); `2.0.0` is cut the moment the final
   phase closes, marking the move to beta. Inside `1.x`, a minor bump (`1.Y.0`)

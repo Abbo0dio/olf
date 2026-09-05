@@ -124,4 +124,19 @@ void main() {
       },
     );
   });
+
+  group('healthDataSourceFromStorage', () {
+    test('round-trips every enum name', () {
+      for (final source in HealthDataSource.values) {
+        expect(healthDataSourceFromStorage(source.name), source);
+      }
+    });
+
+    test('maps null / unknown / legacy tokens to manual', () {
+      expect(healthDataSourceFromStorage(null), HealthDataSource.manual);
+      expect(healthDataSourceFromStorage(''), HealthDataSource.manual);
+      expect(healthDataSourceFromStorage('garmin'), HealthDataSource.manual);
+      expect(healthDataSourceFromStorage('MANUAL'), HealthDataSource.manual);
+    });
+  });
 }

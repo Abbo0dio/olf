@@ -8,6 +8,8 @@ import '../a11y/spoken_detail.dart';
 import '../appearance/app_icon.dart';
 import '../appearance/app_icon_providers.dart';
 import '../backup/backup_page.dart';
+import '../health/health_import.dart';
+import '../health/health_providers.dart';
 import '../personalization/personalization_providers.dart';
 import '../prediction/accuracy_format.dart';
 import '../prediction/accuracy_page.dart';
@@ -56,6 +58,12 @@ class SettingsPage extends ConsumerWidget {
     final autoLockMinutes = ref.watch(autoLockMinutesProvider).valueOrNull ?? 0;
     final appIcon =
         ref.watch(appIconProvider).valueOrNull ?? AppIconOption.branded;
+    final healthAvailable = ref.watch(healthAvailableProvider);
+    final appleHealthConnected =
+        ref.watch(appleHealthConnectedProvider).valueOrNull ?? false;
+    final appleHealthLastSync = ref
+        .watch(appleHealthLastSyncProvider)
+        .valueOrNull;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -273,9 +281,176 @@ class SettingsPage extends ConsumerWidget {
               context,
             ).push(MaterialPageRoute<void>(builder: (_) => const BackupPage())),
           ),
+          if (healthAvailable) ...[
+            const _SectionHeader('Apps & export'),
+            SwitchListTile(
+              secondary: const Icon(Icons.sync_outlined),
+              value: appleHealthConnected,
+              title: const Text('Connect Apple Health'),
+              subtitle: _appleHealthSubtitle(
+                connected: appleHealthConnected,
+                lastSync: appleHealthLastSync,
+                reduceSpokenDetail: reduceSpokenDetail,
+              ),
+              onChanged: (want) => want
+                  ? _connectAppleHealth(context, ref)
+                  : _disconnectAppleHealth(context, ref),
+            ),
+            if (appleHealthConnected)
+              ListTile(
+                leading: const Icon(Icons.refresh),
+                title: const Text('Sync Apple Health now'),
+                onTap: () => _syncAppleHealth(context, ref),
+              ),
+          ],
         ],
       ),
     );
+  }
+
+  /// Subtitle for the "Connect Apple Health" tile. When connected and a sync
+  /// has run it names the counts; under "Reduce spoken detail" the screen
+  /// reader hears only that the bridge is on.
+  Widget _appleHealthSubtitle({
+    required bool connected,
+    required HealthSyncSummary? lastSync,
+    required bool reduceSpokenDetail,
+  }) {
+    if (!connected) {
+      return const Text("Off. olf isn't reading or writing Apple Health.");
+    }
+    final visible = lastSync == null
+        ? 'On. Sharing menstrual flow and basal body temperature.'
+        : 'On. Last sync: added ${lastSync.added}, updated '
+              '${lastSync.updated}, ${lastSync.needsReview} need review.';
+    return Text(
+      visible,
+      semanticsLabel: spokenLabel(
+        reduceSpokenDetail,
+        redacted: 'Apple Health is connected.',
+      ),
+    );
+  }
+
+  Future<void> _connectAppleHealth(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Connect Apple Health'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'olf and Apple Health will share two things: menstrual flow and '
+            'basal body temperature.\n\n'
+            'In — entries already in Apple Health appear in olf.\n'
+            'Out — what you log in olf is saved to Apple Health.\n\n'
+            'Nothing else is shared and nothing leaves your device. You can '
+            'turn this off here at any time; to fully revoke access, use the '
+            "Health app on your iPhone (Sharing › Apps).",
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Connect'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      final summary = await connectAppleHealth(ref);
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Apple Health connected'),
+          content: Text(_summarySentence(summary)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } on HealthAuthorizationDenied {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Apple Health access was not granted. Nothing changed.',
+          ),
+        ),
+      );
+    } on HealthPlatformUnavailable {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't reach Apple Health. Nothing changed."),
+        ),
+      );
+    }
+  }
+
+  Future<void> _syncAppleHealth(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final summary = await syncAppleHealth(ref);
+      messenger.showSnackBar(
+        SnackBar(content: Text(_summarySentence(summary))),
+      );
+    } on HealthPlatformUnavailable {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't reach Apple Health. Nothing changed."),
+        ),
+      );
+    }
+  }
+
+  Future<void> _disconnectAppleHealth(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Disconnect Apple Health?'),
+        content: const Text(
+          'olf will stop reading and writing Apple Health data. Entries '
+          'already saved on each side stay where they are. To fully revoke '
+          "olf's access, use the Health app on your iPhone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    await disconnectAppleHealth(ref);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Apple Health disconnected.')),
+    );
+  }
+
+  String _summarySentence(HealthSyncSummary summary) {
+    if (summary.nothingChanged) return 'No new entries to bring in.';
+    final review = summary.needsReview > 0
+        ? ', ${summary.needsReview} need review.'
+        : '.';
+    return 'Added ${summary.added}, updated ${summary.updated}$review';
   }
 
   Future<void> _setPin(

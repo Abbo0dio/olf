@@ -1,4 +1,5 @@
 import Flutter
+import HealthKit
 import UIKit
 
 @main
@@ -23,6 +24,7 @@ import UIKit
     // After super: the storyboard's FlutterViewController is up, so its
     // binaryMessenger is available for the p5.4 channel.
     registerAppIconChannel()
+    registerHealthChannel()
     return launched
   }
 
@@ -68,6 +70,26 @@ import UIKit
     }
   }
 
+  // p6.2: `olf/health` — a hand-rolled bridge to Apple HealthKit for the
+  // opt-in "Connect Apple Health" feature. Mirrors the `core`
+  // HealthPlatformGateway: isAvailable / requestAuthorization /
+  // authorizationStatus / read / write / delete. Only two types are mapped —
+  // `menstrualFlow` (HKCategoryType) and `basalBodyTemperature`
+  // (HKQuantityType, °C). The channel speaks HealthKit-native numbers; olf's
+  // Dart side owns the scale translation. Nothing here touches the network.
+  private let healthBridge = HealthKitBridge()
+
+  private func registerHealthChannel() {
+    guard let controller = window?.rootViewController as? FlutterViewController else { return }
+    let channel = FlutterMethodChannel(
+      name: "olf/health",
+      binaryMessenger: controller.binaryMessenger
+    )
+    channel.setMethodCallHandler { [healthBridge] call, result in
+      healthBridge.handle(call, result: result)
+    }
+  }
+
   override func applicationWillResignActive(_ application: UIApplication) {
     super.applicationWillResignActive(application)
     showPrivacyCover()
@@ -100,5 +122,213 @@ import UIKit
   private func hidePrivacyCover() {
     privacyCover?.removeFromSuperview()
     privacyCover = nil
+  }
+}
+
+// MARK: - HealthKit bridge (p6.2)
+
+/// Backs the `olf/health` method channel. Kept deliberately thin: it maps the
+/// two shared data types to their HealthKit identifiers, marshals samples to
+/// plain dictionaries, and lets olf's Dart side do every unit / scale decision.
+final class HealthKitBridge {
+  private let store = HKHealthStore()
+
+  /// Wire tokens (the `core` HealthSampleType enum names) → HealthKit types.
+  private var categoryType: HKCategoryType? {
+    HKObjectType.categoryType(forIdentifier: .menstrualFlow)
+  }
+  private var quantityType: HKQuantityType? {
+    HKObjectType.quantityType(forIdentifier: .basalBodyTemperature)
+  }
+
+  private func sampleType(for token: String) -> HKSampleType? {
+    switch token {
+    case "menstrualFlow": return categoryType
+    case "basalBodyTemperature": return quantityType
+    default: return nil
+    }
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard HKHealthStore.isHealthDataAvailable() || call.method == "isAvailable" else {
+      result(FlutterError(code: "unavailable", message: "HealthKit is not available on this device.", details: nil))
+      return
+    }
+
+    switch call.method {
+    case "isAvailable":
+      result(HKHealthStore.isHealthDataAvailable())
+
+    case "requestAuthorization":
+      let types = sampleTypes(from: call.arguments)
+      guard !types.isEmpty else { result("denied"); return }
+      let share = Set(types)
+      let read = Set(types.map { $0 as HKObjectType })
+      store.requestAuthorization(toShare: share, read: read) { ok, error in
+        DispatchQueue.main.async {
+          result(ok && error == nil ? "granted" : "denied")
+        }
+      }
+
+    case "authorizationStatus":
+      let types = sampleTypes(from: call.arguments)
+      guard !types.isEmpty else { result("denied"); return }
+      // HealthKit only reports share (write) status; read is opaque by design.
+      let statuses = types.map { store.authorizationStatus(for: $0) }
+      if statuses.contains(.sharingDenied) {
+        result("denied")
+      } else if statuses.allSatisfy({ $0 == .sharingAuthorized }) {
+        result("granted")
+      } else {
+        result("notDetermined")
+      }
+
+    case "read":
+      read(call.arguments, result: result)
+
+    case "write":
+      write(call.arguments, result: result)
+
+    case "delete":
+      delete(call.arguments, result: result)
+
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  // MARK: helpers
+
+  private func sampleTypes(from arguments: Any?) -> [HKSampleType] {
+    guard let map = arguments as? [String: Any],
+          let tokens = map["types"] as? [String] else { return [] }
+    return tokens.compactMap { sampleType(for: $0) }
+  }
+
+  private func dateRange(from map: [String: Any]) -> (Date, Date)? {
+    guard let fromMs = map["fromMs"] as? NSNumber,
+          let toMs = map["toMs"] as? NSNumber else { return nil }
+    return (
+      Date(timeIntervalSince1970: fromMs.doubleValue / 1000),
+      Date(timeIntervalSince1970: toMs.doubleValue / 1000)
+    )
+  }
+
+  private func ms(_ date: Date) -> Int { Int(date.timeIntervalSince1970 * 1000) }
+
+  private func read(_ arguments: Any?, result: @escaping FlutterResult) {
+    guard let map = arguments as? [String: Any],
+          let (start, end) = dateRange(from: map) else {
+      result(FlutterError(code: "bad_arg", message: "read needs types + fromMs/toMs", details: nil))
+      return
+    }
+    let types = sampleTypes(from: arguments)
+    guard !types.isEmpty else { result([[String: Any]]()); return }
+
+    let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+    let group = DispatchGroup()
+    var rows: [[String: Any]] = []
+    let lock = NSLock()
+
+    for type in types {
+      group.enter()
+      let query = HKSampleQuery(
+        sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil
+      ) { _, samples, _ in
+        for sample in samples ?? [] {
+          guard let row = self.row(for: sample) else { continue }
+          lock.lock(); rows.append(row); lock.unlock()
+        }
+        group.leave()
+      }
+      store.execute(query)
+    }
+
+    group.notify(queue: .main) { result(rows) }
+  }
+
+  private func row(for sample: HKSample) -> [String: Any]? {
+    let id = sample.sampleType.identifier
+    if let category = sample as? HKCategorySample,
+       id == HKCategoryTypeIdentifier.menstrualFlow.rawValue {
+      return [
+        "type": "menstrualFlow",
+        "startMs": ms(category.startDate),
+        "endMs": ms(category.endDate),
+        "value": Double(category.value),
+        "externalId": category.uuid.uuidString,
+      ]
+    }
+    if let quantity = sample as? HKQuantitySample,
+       id == HKQuantityTypeIdentifier.basalBodyTemperature.rawValue {
+      return [
+        "type": "basalBodyTemperature",
+        "startMs": ms(quantity.startDate),
+        "endMs": ms(quantity.endDate),
+        "value": quantity.quantity.doubleValue(for: .degreeCelsius()),
+        "externalId": quantity.uuid.uuidString,
+      ]
+    }
+    return nil
+  }
+
+  private func write(_ arguments: Any?, result: @escaping FlutterResult) {
+    guard let map = arguments as? [String: Any],
+          let raw = map["samples"] as? [[String: Any]] else {
+      result(FlutterError(code: "bad_arg", message: "write needs samples", details: nil))
+      return
+    }
+
+    var toSave: [HKObject] = []
+    for entry in raw {
+      guard let token = entry["type"] as? String,
+            let startMs = entry["startMs"] as? NSNumber,
+            let endMs = entry["endMs"] as? NSNumber,
+            let value = entry["value"] as? NSNumber else { continue }
+      let start = Date(timeIntervalSince1970: startMs.doubleValue / 1000)
+      let end = Date(timeIntervalSince1970: endMs.doubleValue / 1000)
+
+      switch token {
+      case "menstrualFlow":
+        if let type = categoryType {
+          toSave.append(HKCategorySample(
+            type: type, value: value.intValue, start: start, end: end
+          ))
+        }
+      case "basalBodyTemperature":
+        if let type = quantityType {
+          let quantity = HKQuantity(unit: .degreeCelsius(), doubleValue: value.doubleValue)
+          toSave.append(HKQuantitySample(type: type, quantity: quantity, start: start, end: end))
+        }
+      default:
+        continue // an unmapped type — silent no-op, matches the Dart contract
+      }
+    }
+
+    guard !toSave.isEmpty else { result(nil); return }
+    store.save(toSave) { ok, error in
+      DispatchQueue.main.async {
+        if ok && error == nil {
+          result(nil)
+        } else {
+          result(FlutterError(code: "write_failed", message: error?.localizedDescription, details: nil))
+        }
+      }
+    }
+  }
+
+  private func delete(_ arguments: Any?, result: @escaping FlutterResult) {
+    guard let map = arguments as? [String: Any],
+          let token = map["type"] as? String,
+          let type = sampleType(for: token),
+          let (start, end) = dateRange(from: map) else {
+      result(nil) // unmapped type / bad args → no-op
+      return
+    }
+    let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+    // Only olf-authored samples are deletable; HealthKit enforces that.
+    store.deleteObjects(of: type, predicate: predicate) { _, _, _ in
+      DispatchQueue.main.async { result(nil) }
+    }
   }
 }

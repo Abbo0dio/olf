@@ -96,6 +96,52 @@ void main() {
     expect(counts, [0, 1, 2, 1]);
   });
 
+  test('setFlow defaults provenance to manual with no external id', () async {
+    await repo.setFlow(DateTime(2026, 8, 20), intensity: FlowIntensity.light);
+    final row = (await repo.flowOn(DateTime(2026, 8, 20)))!;
+    expect(row.source, 'manual');
+    expect(row.externalId, isNull);
+  });
+
+  test('setFlow records an imported source and external id (p6.2)', () async {
+    await repo.setFlow(
+      DateTime(2026, 8, 20),
+      intensity: FlowIntensity.medium,
+      source: HealthDataSource.appleHealth,
+      externalId: 'HK-flow-1',
+    );
+    final row = (await repo.flowOn(DateTime(2026, 8, 20)))!;
+    expect(row.source, 'appleHealth');
+    expect(row.externalId, 'HK-flow-1');
+  });
+
+  test('setFlow upsert can flip a manual row to imported provenance', () async {
+    await repo.setFlow(DateTime(2026, 8, 20), intensity: FlowIntensity.light);
+    await repo.setFlow(
+      DateTime(2026, 8, 20),
+      intensity: FlowIntensity.heavy,
+      source: HealthDataSource.appleHealth,
+      externalId: 'HK-flow-2',
+    );
+    final row = (await repo.flowOn(DateTime(2026, 8, 20)))!;
+    expect(row.source, 'appleHealth');
+    expect(row.externalId, 'HK-flow-2');
+    expect(row.intensity, FlowIntensity.heavy);
+  });
+
+  test('allFlows returns a one-shot snapshot, newest day first', () async {
+    await repo.setFlow(DateTime(2026, 8, 10), intensity: FlowIntensity.light);
+    await repo.setFlow(DateTime(2026, 8, 25), intensity: FlowIntensity.heavy);
+    await repo.setFlow(DateTime(2026, 8, 15), intensity: FlowIntensity.medium);
+
+    final rows = await repo.allFlows();
+    expect(rows.map((r) => r.date), [
+      DateTime(2026, 8, 25),
+      DateTime(2026, 8, 15),
+      DateTime(2026, 8, 10),
+    ]);
+  });
+
   test('flow is independent of periods (no cascade)', () async {
     final periods = DriftPeriodRepository(db, now: () => now);
     final id = await periods.addPeriod(

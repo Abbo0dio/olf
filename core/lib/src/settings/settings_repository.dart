@@ -56,6 +56,18 @@ abstract final class SettingKeys {
   /// unrecognised means `'branded'`, the normal olf icon. The stored value only
   /// advances after the platform icon switch actually succeeds.
   static const String appIcon = 'app_icon';
+
+  /// `'true'` once the user has turned on the Apple Health bridge (p6.2). Absent
+  /// / anything else means off — the default. While off, olf never opens the
+  /// `olf/health` channel. iOS access can also be revoked in the system Health
+  /// app; olf treats an empty read as "nothing to import", not an error.
+  static const String appleHealthConnected = 'apple_health_connected';
+
+  /// The last Apple Health sync outcome (p6.2), as `"<added>,<updated>,<review>"`
+  /// counts — e.g. `'2,1,0'`. Absent means "connected, not synced yet". Owned by
+  /// the app layer (`health_providers.dart`); shown as the tile subtitle and
+  /// redacted from screen readers under [reduceSpokenDetail].
+  static const String appleHealthLastSync = 'apple_health_last_sync';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).

@@ -35,6 +35,17 @@ enum HealthUnit { celsius, flowLevel, minutes }
 ///    [HealthPlatformGateway].
 enum HealthDataSource { manual, appleHealth, healthConnect }
 
+/// Parse a stored provenance token (the `source` column on `bbt_entries` /
+/// `daily_flows`, schema v7). Anything unrecognised — including `null` from a
+/// pre-v7 row that somehow escaped the migration default — is treated as
+/// [HealthDataSource.manual], the safe assumption (never auto-overwritten).
+HealthDataSource healthDataSourceFromStorage(String? value) {
+  for (final source in HealthDataSource.values) {
+    if (source.name == value) return source;
+  }
+  return HealthDataSource.manual;
+}
+
 /// Read / write intent for [HealthPlatformGateway.requestAuthorization] and
 /// [HealthPlatformGateway.authorizationStatus].
 enum HealthAccess { read, write, readWrite }
