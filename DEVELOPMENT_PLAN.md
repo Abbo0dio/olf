@@ -4026,7 +4026,7 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     header stays `TODO` (not a phase close).
 
 #### p6.3 — Android Health Connect gateway
-- **Status:** `IN PROGRESS` · **Depends on:** p6.1, p6.2 (shared `olf/health` wire contract + Dart gateway/codec)
+- **Status:** `IN REVIEW` · **PR:** [#67](https://github.com/Abbo0dio/olf/pull/67) · **Depends on:** p6.1, p6.2 (shared `olf/health` wire contract + Dart gateway/codec)
 - **Requirement refs:** §2, §3, §4
 - **Goal:** the Android half — a real `HealthPlatformGateway` over Health Connect for the two
   wired types, the same opt-in tile now enabled on Android, plus the Google Fit deprecation note.
@@ -4145,6 +4145,8 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     (402), `dependency_audit.dart` PASS (permission-diff = the four health perms only),
     `pubspec.lock` diff clean. **Kotlin compiles only in CI** — no Android SDK in the worker
     env; the `Build (ubuntu-latest, apk)` job validates it.
+  - 2026-09-05 — PR [#67](https://github.com/Abbo0dio/olf/pull/67) opened into `main`; set
+    p6.3 IN REVIEW. Awaiting CI + orchestrator review.
 
 #### p6.4 — Two-way sync + visible sync status
 - **Status:** `TODO` · **Depends on:** p6.2, p6.3
