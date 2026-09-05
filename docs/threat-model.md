@@ -29,7 +29,7 @@ What an adversary would want, roughly in order of sensitivity.
 | Preferences (theme, pronouns, reminder settings, retention window) | unencrypted `SharedPreferences` / `NSUserDefaults` | Low sensitivity on their own, but pronouns and a tight retention window are weak signals. |
 | `.olfbackup` export files | wherever the user saved them via the OS share sheet — local disk, cloud drive, messaging app | Encrypted (AES-GCM, user passphrase), but now outside app control. |
 | Derived predictions (next period, fertile window) | recomputed in memory from entries; not separately stored | Same sensitivity as the entries they come from. |
-| Menstrual-flow & basal-body-temperature samples in the **OS health store** (Apple Health; Health Connect in p6.3) | the platform's own encrypted store, reached over local IPC only when the user has turned on "Connect Apple Health" (p6.2) | Same sensitivity as the olf entries — but now also readable by any *other* app the user has granted the same HealthKit permissions, and governed by the OS's sharing UI rather than olf's. Default off. |
+| Menstrual-flow & basal-body-temperature samples in the **OS health store** — Apple Health on iOS (p6.2), Android Health Connect on Android (p6.3) | the platform's own encrypted store, reached over local IPC only when the user has turned on "Connect a health app" | Same sensitivity as the olf entries — but now also readable by any *other* app the user has granted the same health permissions, and governed by the OS's sharing UI rather than olf's. Default off. |
 | Source repository & dependency graph | GitHub, `pubspec.lock` | A malicious dependency could exfiltrate any of the above from a future build. |
 
 ---
@@ -77,16 +77,25 @@ so the boundary is honest, not because they are unimportant.
    `OlfHttpClient` (p2.6), which refuses non-HTTPS before a socket opens.
 7. **Repo ↔ dependency graph.** Every transitive package is trusted at build
    time. Crossing point: `pubspec.lock` + the CI dependency-audit (p0.3, p2.9).
-8. **App ↔ OS health platform (p6.2).** When — and only when — the user turns
-   on "Connect Apple Health", olf reads and writes menstrual flow and basal
-   body temperature to Apple Health over a **local IPC** channel (the
-   hand-rolled `olf/health` `MethodChannel` → HealthKit; no CocoaPod, no
-   network). What crosses is scoped to those two types; the user grants and
-   revokes it in the OS Health app, and olf treats a revoked / empty read as
-   "nothing to import", never an error. Crossing point: the `core`
-   `HealthPlatformGateway` seam and its iOS `HealthKitGateway` implementation.
-   Not present on any platform where the gateway binds to
-   `UnavailableHealthGateway` (Android until p6.3, desktop, web).
+8. **App ↔ OS health platform, both OSes (p6.2 iOS, p6.3 Android).** When — and
+   only when — the user turns on "Connect a health app", olf reads and writes
+   menstrual flow and basal body temperature to the OS health store over a
+   **local IPC** channel: the hand-rolled `olf/health` `MethodChannel` →
+   HealthKit on iOS (no CocoaPod), → Android Health Connect on Android (the
+   `androidx.health.connect:connect-client` Gradle dependency, **not** a pub
+   package — `pubspec.lock` unchanged). No network on either side. What crosses
+   is scoped to those two types; the user grants and revokes it in the OS health
+   settings (the iOS Health app / Health Connect), and olf treats a revoked /
+   empty read as "nothing to import", never an error. Crossing point: the `core`
+   `HealthPlatformGateway` seam and its `HealthKitGateway` (iOS) /
+   `HealthConnectGateway` (Android) implementations. The Android manifest gains
+   exactly four `android.permission.health.*` entries (read + write for the two
+   wired types, each `audited:`), a Health Connect permissions-rationale
+   `<intent-filter>`, and one `<queries><package>` for provider visibility;
+   `minSdk` rises 24 → 26 to match what `connect-client` needs (olf already
+   documents "Android 8+ / API 26+" as its minimum — this only aligns the
+   actual config). Not present where the gateway binds to
+   `UnavailableHealthGateway` (desktop, web, tests).
 
 ---
 
@@ -120,8 +129,8 @@ flowchart TD
     UI -.->|no calls today| Net["OlfHttpClient seam<br/>TLS-only, p2.6"]
     Net -.->|would be| NoBackend["(no backend)"]
 
-    UI -->|"opt-in: Connect Apple Health (p6.2)"| HKBridge{{"olf/health MethodChannel<br/>HealthPlatformGateway seam"}}
-    HKBridge <-->|"flow + BBT, local IPC"| HealthStore[["Apple Health store<br/>(OS-governed, per-app grants)"]]
+    UI -->|"opt-in: Connect a health app (p6.2 iOS / p6.3 Android)"| HKBridge{{"olf/health MethodChannel<br/>HealthPlatformGateway seam"}}
+    HKBridge <-->|"flow + BBT, local IPC"| HealthStore[["OS health store<br/>Apple Health / Health Connect<br/>(OS-governed, per-app grants)"]]
     HKBridge -->|"reconcile, never clobber manual"| RealVault
 ```
 
@@ -149,9 +158,9 @@ ASCII fallback (same flow, for viewers without Mermaid):
 
    network: none today. Only path = OlfHttpClient (TLS-only, p2.6) --> (no backend)
 
-   health platform (p6.2, opt-in, default off):
+   health platform (p6.2 iOS / p6.3 Android, opt-in, default off):
      [ Flutter UI ] <--> [ olf/health MethodChannel = HealthPlatformGateway ]
-                          <--> [ Apple Health store ]   (flow + BBT, local IPC)
+                          <--> [ OS health store: Apple Health / Health Connect ]  (flow + BBT, local IPC)
                      import --> [ ImportReconciler ] --> olf.db  (never clobbers a manual row)
 ```
 
@@ -181,6 +190,7 @@ cross-reference the phase-gate review walks.
 | In-app privacy education (HIPAA gap, law-enforcement reality, how to delete everything) | p2.7 | the ~9%-take-action finding; corrects the "HIPAA covers this" misconception (§3, §9(8)) |
 | This threat model + its CI guard | p2.8 | keeps the security design written down and reviewed each phase |
 | Health-platform bridge is opt-in / default-off / revocable, scoped to exactly two data types, hand-rolled channel (no SDK, no CocoaPod), no network; imported rows land in the same `bbt_entries` / `daily_flows` tables the p2.3 retention sweep already covers | p6.2 | the new App ↔ OS health platform boundary (#8) — minimises what crosses it and keeps the user in control of when it is open |
+| Android half of the same bridge hand-rolled in Kotlin against Health Connect — the manifest carries **exactly four** `android.permission.health.*` entries (read + write for the two wired types, each `audited:` and checked by the dependency-audit permission-diff), no pub package (`pubspec.lock` unchanged), no network; runtime `getSdkStatus` probe hides the tile when Health Connect is absent | p6.3 | extends boundary #8 to Android with the same minimal, user-controlled, auditable surface as iOS |
 
 ---
 
@@ -440,3 +450,54 @@ The CI guard requires an entry naming the current phase.
   each repo gained a one-shot `allEntries()` / `allFlows()` read. **No new
   adversary; no new network path.** Watch items p6.3 / p6.4 / p6.5 unchanged.
   No further design changes required by this review.
+- **2026-09-05 — Phase 6 / p6.3 landing — reviewer: worker: phase1.** The
+  **App ↔ OS health platform** boundary (#8) is now open on **Android** too,
+  same shape as iOS: opt-in, default-off, one "Connect a health app" tile under
+  "Apps & export", revocable in-app plus a pointer to Health Connect's own
+  settings. Updated in this document: **Assets** — the health-store row now
+  names Apple Health *and* Android Health Connect and drops the iOS-only
+  wording; **Trust boundaries** — #8 retitled "App ↔ OS health platform, both
+  OSes (p6.2 iOS, p6.3 Android)" and expanded with the Android specifics (four
+  `android.permission.health.*` entries, the rationale `<intent-filter>`, the
+  `<queries><package>`, `minSdk` 24 → 26); **Data flow** — the Mermaid and ASCII
+  diagrams now read "OS health store: Apple Health / Health Connect";
+  **Mitigations** — a p6.3 row. The Android half is a **hand-rolled Kotlin
+  bridge** on `MainActivity` over the same `olf/health` `MethodChannel` and the
+  identical wire contract as p6.2 — the Dart channel wrapper, pure codec,
+  `HealthImportService`, and Settings widget are **reused unchanged**; only the
+  native peer differs, and the Kotlin side translates Health Connect's
+  menstrual-flow scale to/from the HealthKit wire scale the shared codec speaks.
+  **§5 ruling (pre-authorized in-row):** the `health` pub package stays rejected
+  (p6.2); Android talks to Health Connect through
+  **`androidx.health.connect:connect-client:1.1.0`** — a **Gradle dependency,
+  not a pub package**, so `app/pubspec.yaml` / `pubspec.lock` are untouched
+  (`git diff --exit-code` clean). It requires API 26+, so **`minSdk` rises
+  24 → 26** in `build.gradle.kts` — this only *aligns the actual build floor*
+  with the minimum olf has always documented ("Android 8+ / API 26+" in
+  `DEVELOPMENT_PLAN.md` and `docs/performance-budget.md`); the documented target
+  is unchanged. The Android manifest gains **exactly four**
+  `android.permission.health.*` entries — `READ`/`WRITE` × `MENSTRUATION` /
+  `BASAL_BODY_TEMPERATURE`, the read+write set for the two wired types and
+  nothing broader — each with an adjacent `audited:` justification the
+  dependency-audit permission-diff checks; plus a
+  `androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE` `<intent-filter>`
+  on `.MainActivity` and one `<queries><package android:name=
+  "com.google.android.apps.healthdata" />` for Android 11+ provider visibility
+  (neither is a permission). **No network** (local IPC through
+  `androidx.health.connect`), ATS / `network_security_config` untouched. Health
+  Connect is an installable system app: a runtime
+  `HealthConnectClient.getSdkStatus(...) == SDK_AVAILABLE` probe
+  (`healthAvailableProvider`, now a `FutureProvider<bool>`) hides the whole
+  "Apps & export" section when it is absent. Only the same two types cross
+  (`menstrualFlow` ↔ `MenstruationFlowRecord`, `basalBodyTemperature` ↔
+  `BasalBodyTemperatureRecord`); the other three model types stay declared on
+  the `core` interface and the Android bridge returns empty / no-ops them with a
+  logged note, same as iOS. The iOS-vs-Android capability asymmetry (Health
+  Connect has a general-purpose `SkinTemperatureRecord`; HealthKit wrist
+  temperature is sleeping-wear-only / read-only) is written down once in the new
+  `docs/health-platform-interop.md`, alongside the Google Fit deprecation note
+  (Fit APIs shut down 2026; Health Connect is the sole Android path, no Google
+  Fit integration by design). Import still goes through the pure
+  `ImportReconciler` (p6.1) — a `source == manual` row is **never**
+  auto-overwritten. **No new asset, adversary, or network path.** Watch items
+  p6.4 / p6.5 unchanged. No further design changes required by this review.

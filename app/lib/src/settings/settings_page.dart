@@ -58,12 +58,12 @@ class SettingsPage extends ConsumerWidget {
     final autoLockMinutes = ref.watch(autoLockMinutesProvider).valueOrNull ?? 0;
     final appIcon =
         ref.watch(appIconProvider).valueOrNull ?? AppIconOption.branded;
-    final healthAvailable = ref.watch(healthAvailableProvider);
-    final appleHealthConnected =
-        ref.watch(appleHealthConnectedProvider).valueOrNull ?? false;
-    final appleHealthLastSync = ref
-        .watch(appleHealthLastSyncProvider)
-        .valueOrNull;
+    final healthAvailable =
+        ref.watch(healthAvailableProvider).valueOrNull ?? false;
+    final healthName = ref.watch(healthPlatformNameProvider);
+    final healthConnected =
+        ref.watch(healthConnectedProvider).valueOrNull ?? false;
+    final healthLastSync = ref.watch(healthLastSyncProvider).valueOrNull;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -285,22 +285,23 @@ class SettingsPage extends ConsumerWidget {
             const _SectionHeader('Apps & export'),
             SwitchListTile(
               secondary: const Icon(Icons.sync_outlined),
-              value: appleHealthConnected,
-              title: const Text('Connect Apple Health'),
-              subtitle: _appleHealthSubtitle(
-                connected: appleHealthConnected,
-                lastSync: appleHealthLastSync,
+              value: healthConnected,
+              title: const Text('Connect a health app'),
+              subtitle: _healthSubtitle(
+                name: healthName,
+                connected: healthConnected,
+                lastSync: healthLastSync,
                 reduceSpokenDetail: reduceSpokenDetail,
               ),
               onChanged: (want) => want
-                  ? _connectAppleHealth(context, ref)
-                  : _disconnectAppleHealth(context, ref),
+                  ? _connectHealth(context, ref)
+                  : _disconnectHealth(context, ref),
             ),
-            if (appleHealthConnected)
+            if (healthConnected)
               ListTile(
                 leading: const Icon(Icons.refresh),
-                title: const Text('Sync Apple Health now'),
-                onTap: () => _syncAppleHealth(context, ref),
+                title: const Text('Sync now'),
+                onTap: () => _syncHealth(context, ref),
               ),
           ],
         ],
@@ -308,45 +309,48 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  /// Subtitle for the "Connect Apple Health" tile. When connected and a sync
+  /// Subtitle for the "Connect a health app" tile. When connected and a sync
   /// has run it names the counts; under "Reduce spoken detail" the screen
   /// reader hears only that the bridge is on.
-  Widget _appleHealthSubtitle({
+  Widget _healthSubtitle({
+    required String name,
     required bool connected,
     required HealthSyncSummary? lastSync,
     required bool reduceSpokenDetail,
   }) {
     if (!connected) {
-      return const Text("Off. olf isn't reading or writing Apple Health.");
+      return Text("Off. olf isn't reading or writing $name.");
     }
     final visible = lastSync == null
-        ? 'On. Sharing menstrual flow and basal body temperature.'
+        ? 'On. Sharing menstrual flow and basal body temperature with $name.'
         : 'On. Last sync: added ${lastSync.added}, updated '
               '${lastSync.updated}, ${lastSync.needsReview} need review.';
     return Text(
       visible,
       semanticsLabel: spokenLabel(
         reduceSpokenDetail,
-        redacted: 'Apple Health is connected.',
+        redacted: '$name is connected.',
       ),
     );
   }
 
-  Future<void> _connectAppleHealth(BuildContext context, WidgetRef ref) async {
+  Future<void> _connectHealth(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
+    final name = ref.read(healthPlatformNameProvider);
+    final revokeHint = ref.read(healthRevokeHintProvider);
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Connect Apple Health'),
-        content: const SingleChildScrollView(
+        title: Text('Connect $name'),
+        content: SingleChildScrollView(
           child: Text(
-            'olf and Apple Health will share two things: menstrual flow and '
+            'olf and $name will share two things: menstrual flow and '
             'basal body temperature.\n\n'
-            'In — entries already in Apple Health appear in olf.\n'
-            'Out — what you log in olf is saved to Apple Health.\n\n'
+            'In — entries already in $name appear in olf.\n'
+            'Out — what you log in olf is saved to $name.\n\n'
             'Nothing else is shared and nothing leaves your device. You can '
-            'turn this off here at any time; to fully revoke access, use the '
-            "Health app on your iPhone (Sharing › Apps).",
+            'turn this off here at any time; to fully revoke access, use '
+            '$revokeHint.',
           ),
         ),
         actions: [
@@ -364,12 +368,12 @@ class SettingsPage extends ConsumerWidget {
     if (ok != true) return;
 
     try {
-      final summary = await connectAppleHealth(ref);
+      final summary = await connectHealthPlatform(ref);
       if (!context.mounted) return;
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Apple Health connected'),
+          title: Text('$name connected'),
           content: Text(_summarySentence(summary)),
           actions: [
             TextButton(
@@ -381,50 +385,44 @@ class SettingsPage extends ConsumerWidget {
       );
     } on HealthAuthorizationDenied {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Apple Health access was not granted. Nothing changed.',
-          ),
+        SnackBar(
+          content: Text('$name access was not granted. Nothing changed.'),
         ),
       );
     } on HealthPlatformUnavailable {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text("Couldn't reach Apple Health. Nothing changed."),
-        ),
+        SnackBar(content: Text("Couldn't reach $name. Nothing changed.")),
       );
     }
   }
 
-  Future<void> _syncAppleHealth(BuildContext context, WidgetRef ref) async {
+  Future<void> _syncHealth(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
+    final name = ref.read(healthPlatformNameProvider);
     try {
-      final summary = await syncAppleHealth(ref);
+      final summary = await syncHealthPlatform(ref);
       messenger.showSnackBar(
         SnackBar(content: Text(_summarySentence(summary))),
       );
     } on HealthPlatformUnavailable {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text("Couldn't reach Apple Health. Nothing changed."),
-        ),
+        SnackBar(content: Text("Couldn't reach $name. Nothing changed.")),
       );
     }
   }
 
-  Future<void> _disconnectAppleHealth(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _disconnectHealth(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
+    final name = ref.read(healthPlatformNameProvider);
+    final revokeHint = ref.read(healthRevokeHintProvider);
     final yes = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Disconnect Apple Health?'),
-        content: const Text(
-          'olf will stop reading and writing Apple Health data. Entries '
-          'already saved on each side stay where they are. To fully revoke '
-          "olf's access, use the Health app on your iPhone.",
+        title: Text('Disconnect $name?'),
+        content: Text(
+          'olf will stop reading and writing $name data. Entries already '
+          'saved on each side stay where they are. To fully revoke '
+          "olf's access, use $revokeHint.",
         ),
         actions: [
           TextButton(
@@ -439,10 +437,8 @@ class SettingsPage extends ConsumerWidget {
       ),
     );
     if (yes != true) return;
-    await disconnectAppleHealth(ref);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Apple Health disconnected.')),
-    );
+    await disconnectHealthPlatform(ref);
+    messenger.showSnackBar(SnackBar(content: Text('$name disconnected.')));
   }
 
   String _summarySentence(HealthSyncSummary summary) {

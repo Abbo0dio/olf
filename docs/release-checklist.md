@@ -86,6 +86,24 @@ be waived in CI.
       message and stays disconnected — no crash. ATS in the built `Info.plist`
       is still fully strict (no `NSExceptionDomains`, nothing flipped to
       `<true/>`).
+- [ ] **Health Connect bridge (p6.3) verified on an Android device** *(Android
+      releases)*. On a device or emulator **with Health Connect installed and
+      set up** (Android 14+ has it built in; older needs the Health Connect app):
+      confirm the built manifest carries **exactly the four**
+      `android.permission.health.*` entries (`READ`/`WRITE` × `MENSTRUATION` /
+      `BASAL_BODY_TEMPERATURE`) — no more — plus the
+      `SHOW_PERMISSIONS_RATIONALE` `<intent-filter>` and the
+      `com.google.android.apps.healthdata` `<queries>` entry, and that
+      `dependency-audit` was green on the release commit (the permission-diff is
+      part of that gate). In-app: Settings → Apps & export → **Connect a health
+      app**, confirm the opt-in sheet names both directions, grant the Health
+      Connect permission sheet, and check a menstrual-flow / basal-body-
+      temperature entry made in Health Connect shows up in olf and vice versa
+      (watch the flow level round-trips — light / medium / heavy, and spotting →
+      "unspecified"). Deny the sheet (or revoke in Health Connect) and confirm
+      olf shows the calm "not granted" message and stays disconnected — no
+      crash. On a device **without** Health Connect, confirm the "Apps & export"
+      section is hidden entirely. `minSdk` in the built APK is `26`.
 
 ## Cutting the release (Android)
 

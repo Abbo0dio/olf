@@ -4116,6 +4116,35 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   - 2026-09-05 — claimed by worker: phase1; worktree `../olf-wt/p6.3`, branch
     `feat/p6.3-health-connect-gateway` off `main` @ `76c31cd` (#66). Folded p6.2 → DONE
     (squash `76c31cd`). Set p6.3 IN PROGRESS.
+  - 2026-09-05 — built by worker: phase1. **Native:** `MainActivity.kt` gains the Android
+    half of `olf/health` — a Kotlin Health Connect bridge (`isAvailable` via
+    `getSdkStatus`, `requestAuthorization` via `registerForActivityResult` +
+    `PermissionController`, `authorizationStatus`, `read` / `write` / `delete` over
+    `HealthConnectClient`), `CoroutineScope(Dispatchers.Default + SupervisorJob())` +
+    `runOnUiThread` replies, `hcFlowToWire` / `wireFlowToHc` scale translation. **Dep:**
+    `androidx.health.connect:connect-client:1.1.0` (**GA** on Google's Maven was confirmed
+    available, so pinned the stable tag rather than an rc — still "explicit, non-dynamic"; it
+    needs API 26+, not >26, so no §5 STOP) in `build.gradle.kts`; `pubspec.lock` untouched.
+    `minSdk` 24 → 26. **Manifest:** the four `android.permission.health.*` entries (each
+    `audited:`), the `SHOW_PERMISSIONS_RATIONALE` `<intent-filter>` on `.MainActivity`, the
+    `com.google.android.apps.healthdata` `<queries>` entry. **Dart (all platforms):**
+    `HealthConnectGateway` + shared `MethodChannelHealthGateway` base gains a `sourceTag`
+    (`appleHealth` / `healthConnect`) threaded through `healthSampleFromRaw`, and
+    `HealthImportService._apply` now writes `sample.source` instead of a hardcoded
+    `appleHealth` so an imported row records its real platform; `healthPlatformNameProvider` /
+    `healthRevokeHintProvider` key off `defaultTargetPlatform`; `healthAvailableProvider` is a
+    `FutureProvider<bool>` (Android runtime SDK probe); Settings copy + providers renamed
+    neutral (storage keys unchanged). **Docs:** new `docs/health-platform-interop.md` (Google
+    Fit deprecation + capability-asymmetry table), `release-checklist.md` Android device check,
+    `threat-model.md` boundary #8 / Assets / Data flow / Mitigations + p6.3 Review-log entry.
+    **Tests:** `app/test/health/health_connect_gateway_test.dart` (new),
+    `core/test/health_interop_doc_test.dart` (new), `connect_health_flow_test.dart` +
+    `screen_nav.dart` updated for the neutral copy. Local gates green: `flutter analyze` /
+    `dart analyze` (core + app + `.github/scripts`, `--fatal-infos`), `dart format
+    --set-exit-if-changed`, `build_runner` (no `.g.dart` drift), core suite (571) + app suite
+    (402), `dependency_audit.dart` PASS (permission-diff = the four health perms only),
+    `pubspec.lock` diff clean. **Kotlin compiles only in CI** — no Android SDK in the worker
+    env; the `Build (ubuntu-latest, apk)` job validates it.
 
 #### p6.4 — Two-way sync + visible sync status
 - **Status:** `TODO` · **Depends on:** p6.2, p6.3
