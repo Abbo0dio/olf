@@ -8,8 +8,8 @@ void main() {
   setUp(() => db = AppDatabase(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  test('schemaVersion is 6', () {
-    expect(db.schemaVersion, 6);
+  test('schemaVersion is 7', () {
+    expect(db.schemaVersion, 7);
   });
 
   test(
@@ -90,6 +90,10 @@ void main() {
       expect(columns['date'], ('INTEGER', true, true)); // primary key
       expect(columns['intensity'], ('TEXT', true, false));
       expect(columns['clot_size'], ('TEXT', false, false)); // nullable
+      // v7 (p6.1) provenance columns.
+      expect(columns.keys, containsAll(<String>{'source', 'external_id'}));
+      expect(columns['source'], ('TEXT', true, false)); // NOT NULL, default
+      expect(columns['external_id'], ('TEXT', false, false)); // nullable
     },
   );
 
@@ -204,6 +208,10 @@ void main() {
       );
       expect(columns['date'], ('INTEGER', true, true)); // primary key
       expect(columns['temp_celsius'], ('REAL', true, false));
+      // v7 (p6.1) provenance columns.
+      expect(columns.keys, containsAll(<String>{'source', 'external_id'}));
+      expect(columns['source'], ('TEXT', true, false)); // NOT NULL, default
+      expect(columns['external_id'], ('TEXT', false, false)); // nullable
     },
   );
 

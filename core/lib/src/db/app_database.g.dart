@@ -685,6 +685,27 @@ class $DailyFlowsTable extends DailyFlows
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       ).withConverter<ClotSize?>($DailyFlowsTable.$converterclotSizen);
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('manual'),
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -714,6 +735,8 @@ class $DailyFlowsTable extends DailyFlows
     date,
     intensity,
     clotSize,
+    source,
+    externalId,
     createdAt,
     updatedAt,
   ];
@@ -736,6 +759,18 @@ class $DailyFlowsTable extends DailyFlows
       );
     } else if (isInserting) {
       context.missing(_dateMeta);
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
     }
     if (data.containsKey('created_at')) {
       context.handle(
@@ -774,6 +809,14 @@ class $DailyFlowsTable extends DailyFlows
           data['${effectivePrefix}clot_size'],
         ),
       ),
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -803,12 +846,25 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
   final DateTime date;
   final FlowIntensity intensity;
   final ClotSize? clotSize;
+
+  /// Provenance (schema v7, p6.1). `'manual'` for a value the user logged in
+  /// olf; `'appleHealth'` / `'healthConnect'` for a day imported over a
+  /// `HealthPlatformGateway`. Stored as the `HealthDataSource` enum name; kept
+  /// as plain text so the DB layer stays decoupled from the health model.
+  final String source;
+
+  /// The health platform's stable identifier for the imported sample, so a
+  /// later sync matches instead of duplicating. `null` for manual rows.
+  /// (schema v7, p6.1)
+  final String? externalId;
   final DateTime createdAt;
   final DateTime updatedAt;
   const DailyFlow({
     required this.date,
     required this.intensity,
     this.clotSize,
+    required this.source,
+    this.externalId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -826,6 +882,10 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
         $DailyFlowsTable.$converterclotSizen.toSql(clotSize),
       );
     }
+    map['source'] = Variable<String>(source);
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -838,6 +898,10 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
       clotSize: clotSize == null && nullToAbsent
           ? const Value.absent()
           : Value(clotSize),
+      source: Value(source),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -856,6 +920,8 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
       clotSize: $DailyFlowsTable.$converterclotSizen.fromJson(
         serializer.fromJson<String?>(json['clotSize']),
       ),
+      source: serializer.fromJson<String>(json['source']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -871,6 +937,8 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
       'clotSize': serializer.toJson<String?>(
         $DailyFlowsTable.$converterclotSizen.toJson(clotSize),
       ),
+      'source': serializer.toJson<String>(source),
+      'externalId': serializer.toJson<String?>(externalId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -880,12 +948,16 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
     DateTime? date,
     FlowIntensity? intensity,
     Value<ClotSize?> clotSize = const Value.absent(),
+    String? source,
+    Value<String?> externalId = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => DailyFlow(
     date: date ?? this.date,
     intensity: intensity ?? this.intensity,
     clotSize: clotSize.present ? clotSize.value : this.clotSize,
+    source: source ?? this.source,
+    externalId: externalId.present ? externalId.value : this.externalId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -894,6 +966,10 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
       date: data.date.present ? data.date.value : this.date,
       intensity: data.intensity.present ? data.intensity.value : this.intensity,
       clotSize: data.clotSize.present ? data.clotSize.value : this.clotSize,
+      source: data.source.present ? data.source.value : this.source,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -905,6 +981,8 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
           ..write('date: $date, ')
           ..write('intensity: $intensity, ')
           ..write('clotSize: $clotSize, ')
+          ..write('source: $source, ')
+          ..write('externalId: $externalId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -912,8 +990,15 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(date, intensity, clotSize, createdAt, updatedAt);
+  int get hashCode => Object.hash(
+    date,
+    intensity,
+    clotSize,
+    source,
+    externalId,
+    createdAt,
+    updatedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -921,6 +1006,8 @@ class DailyFlow extends DataClass implements Insertable<DailyFlow> {
           other.date == this.date &&
           other.intensity == this.intensity &&
           other.clotSize == this.clotSize &&
+          other.source == this.source &&
+          other.externalId == this.externalId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -929,6 +1016,8 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
   final Value<DateTime> date;
   final Value<FlowIntensity> intensity;
   final Value<ClotSize?> clotSize;
+  final Value<String> source;
+  final Value<String?> externalId;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -936,6 +1025,8 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
     this.date = const Value.absent(),
     this.intensity = const Value.absent(),
     this.clotSize = const Value.absent(),
+    this.source = const Value.absent(),
+    this.externalId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -944,6 +1035,8 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
     required DateTime date,
     required FlowIntensity intensity,
     this.clotSize = const Value.absent(),
+    this.source = const Value.absent(),
+    this.externalId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -953,6 +1046,8 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
     Expression<DateTime>? date,
     Expression<String>? intensity,
     Expression<String>? clotSize,
+    Expression<String>? source,
+    Expression<String>? externalId,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -961,6 +1056,8 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
       if (date != null) 'date': date,
       if (intensity != null) 'intensity': intensity,
       if (clotSize != null) 'clot_size': clotSize,
+      if (source != null) 'source': source,
+      if (externalId != null) 'external_id': externalId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -971,6 +1068,8 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
     Value<DateTime>? date,
     Value<FlowIntensity>? intensity,
     Value<ClotSize?>? clotSize,
+    Value<String>? source,
+    Value<String?>? externalId,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -979,6 +1078,8 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
       date: date ?? this.date,
       intensity: intensity ?? this.intensity,
       clotSize: clotSize ?? this.clotSize,
+      source: source ?? this.source,
+      externalId: externalId ?? this.externalId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -1001,6 +1102,12 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
         $DailyFlowsTable.$converterclotSizen.toSql(clotSize.value),
       );
     }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1019,6 +1126,8 @@ class DailyFlowsCompanion extends UpdateCompanion<DailyFlow> {
           ..write('date: $date, ')
           ..write('intensity: $intensity, ')
           ..write('clotSize: $clotSize, ')
+          ..write('source: $source, ')
+          ..write('externalId: $externalId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -1788,6 +1897,27 @@ class $BbtEntriesTable extends BbtEntries
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('manual'),
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1816,6 +1946,8 @@ class $BbtEntriesTable extends BbtEntries
   List<GeneratedColumn> get $columns => [
     date,
     tempCelsius,
+    source,
+    externalId,
     createdAt,
     updatedAt,
   ];
@@ -1850,6 +1982,18 @@ class $BbtEntriesTable extends BbtEntries
     } else if (isInserting) {
       context.missing(_tempCelsiusMeta);
     }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1879,6 +2023,14 @@ class $BbtEntriesTable extends BbtEntries
         DriftSqlType.double,
         data['${effectivePrefix}temp_celsius'],
       )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1903,11 +2055,24 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
   /// Basal temperature in °C. Plausible range is enforced in the repository
   /// (`validateCelsius`), not by a DB constraint.
   final double tempCelsius;
+
+  /// Provenance (schema v7, p6.1). `'manual'` for a value the user logged in
+  /// olf; `'appleHealth'` / `'healthConnect'` for a reading imported over a
+  /// `HealthPlatformGateway`. Stored as the `HealthDataSource` enum name; kept
+  /// as plain text so the DB layer stays decoupled from the health model.
+  final String source;
+
+  /// The health platform's stable identifier for the imported sample, so a
+  /// later sync matches instead of duplicating. `null` for manual rows.
+  /// (schema v7, p6.1)
+  final String? externalId;
   final DateTime createdAt;
   final DateTime updatedAt;
   const BbtEntry({
     required this.date,
     required this.tempCelsius,
+    required this.source,
+    this.externalId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -1916,6 +2081,10 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     final map = <String, Expression>{};
     map['date'] = Variable<DateTime>(date);
     map['temp_celsius'] = Variable<double>(tempCelsius);
+    map['source'] = Variable<String>(source);
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -1925,6 +2094,10 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     return BbtEntriesCompanion(
       date: Value(date),
       tempCelsius: Value(tempCelsius),
+      source: Value(source),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -1938,6 +2111,8 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     return BbtEntry(
       date: serializer.fromJson<DateTime>(json['date']),
       tempCelsius: serializer.fromJson<double>(json['tempCelsius']),
+      source: serializer.fromJson<String>(json['source']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1948,6 +2123,8 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     return <String, dynamic>{
       'date': serializer.toJson<DateTime>(date),
       'tempCelsius': serializer.toJson<double>(tempCelsius),
+      'source': serializer.toJson<String>(source),
+      'externalId': serializer.toJson<String?>(externalId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1956,11 +2133,15 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
   BbtEntry copyWith({
     DateTime? date,
     double? tempCelsius,
+    String? source,
+    Value<String?> externalId = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => BbtEntry(
     date: date ?? this.date,
     tempCelsius: tempCelsius ?? this.tempCelsius,
+    source: source ?? this.source,
+    externalId: externalId.present ? externalId.value : this.externalId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1970,6 +2151,10 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
       tempCelsius: data.tempCelsius.present
           ? data.tempCelsius.value
           : this.tempCelsius,
+      source: data.source.present ? data.source.value : this.source,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1980,6 +2165,8 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     return (StringBuffer('BbtEntry(')
           ..write('date: $date, ')
           ..write('tempCelsius: $tempCelsius, ')
+          ..write('source: $source, ')
+          ..write('externalId: $externalId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1987,13 +2174,16 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
   }
 
   @override
-  int get hashCode => Object.hash(date, tempCelsius, createdAt, updatedAt);
+  int get hashCode =>
+      Object.hash(date, tempCelsius, source, externalId, createdAt, updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is BbtEntry &&
           other.date == this.date &&
           other.tempCelsius == this.tempCelsius &&
+          other.source == this.source &&
+          other.externalId == this.externalId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -2001,12 +2191,16 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
 class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
   final Value<DateTime> date;
   final Value<double> tempCelsius;
+  final Value<String> source;
+  final Value<String?> externalId;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
   const BbtEntriesCompanion({
     this.date = const Value.absent(),
     this.tempCelsius = const Value.absent(),
+    this.source = const Value.absent(),
+    this.externalId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2014,6 +2208,8 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
   BbtEntriesCompanion.insert({
     required DateTime date,
     required double tempCelsius,
+    this.source = const Value.absent(),
+    this.externalId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2022,6 +2218,8 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
   static Insertable<BbtEntry> custom({
     Expression<DateTime>? date,
     Expression<double>? tempCelsius,
+    Expression<String>? source,
+    Expression<String>? externalId,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -2029,6 +2227,8 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
     return RawValuesInsertable({
       if (date != null) 'date': date,
       if (tempCelsius != null) 'temp_celsius': tempCelsius,
+      if (source != null) 'source': source,
+      if (externalId != null) 'external_id': externalId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -2038,6 +2238,8 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
   BbtEntriesCompanion copyWith({
     Value<DateTime>? date,
     Value<double>? tempCelsius,
+    Value<String>? source,
+    Value<String?>? externalId,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -2045,6 +2247,8 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
     return BbtEntriesCompanion(
       date: date ?? this.date,
       tempCelsius: tempCelsius ?? this.tempCelsius,
+      source: source ?? this.source,
+      externalId: externalId ?? this.externalId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -2059,6 +2263,12 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
     }
     if (tempCelsius.present) {
       map['temp_celsius'] = Variable<double>(tempCelsius.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -2077,6 +2287,8 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
     return (StringBuffer('BbtEntriesCompanion(')
           ..write('date: $date, ')
           ..write('tempCelsius: $tempCelsius, ')
+          ..write('source: $source, ')
+          ..write('externalId: $externalId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -4422,6 +4634,8 @@ typedef $$DailyFlowsTableCreateCompanionBuilder =
       required DateTime date,
       required FlowIntensity intensity,
       Value<ClotSize?> clotSize,
+      Value<String> source,
+      Value<String?> externalId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -4431,6 +4645,8 @@ typedef $$DailyFlowsTableUpdateCompanionBuilder =
       Value<DateTime> date,
       Value<FlowIntensity> intensity,
       Value<ClotSize?> clotSize,
+      Value<String> source,
+      Value<String?> externalId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -4461,6 +4677,16 @@ class $$DailyFlowsTableFilterComposer
         column: $table.clotSize,
         builder: (column) => ColumnWithTypeConverterFilters(column),
       );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
@@ -4497,6 +4723,16 @@ class $$DailyFlowsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -4525,6 +4761,14 @@ class $$DailyFlowsTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<ClotSize?, String> get clotSize =>
       $composableBuilder(column: $table.clotSize, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -4567,6 +4811,8 @@ class $$DailyFlowsTableTableManager
                 Value<DateTime> date = const Value.absent(),
                 Value<FlowIntensity> intensity = const Value.absent(),
                 Value<ClotSize?> clotSize = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -4574,6 +4820,8 @@ class $$DailyFlowsTableTableManager
                 date: date,
                 intensity: intensity,
                 clotSize: clotSize,
+                source: source,
+                externalId: externalId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -4583,6 +4831,8 @@ class $$DailyFlowsTableTableManager
                 required DateTime date,
                 required FlowIntensity intensity,
                 Value<ClotSize?> clotSize = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -4590,6 +4840,8 @@ class $$DailyFlowsTableTableManager
                 date: date,
                 intensity: intensity,
                 clotSize: clotSize,
+                source: source,
+                externalId: externalId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -5034,6 +5286,8 @@ typedef $$BbtEntriesTableCreateCompanionBuilder =
     BbtEntriesCompanion Function({
       required DateTime date,
       required double tempCelsius,
+      Value<String> source,
+      Value<String?> externalId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -5042,6 +5296,8 @@ typedef $$BbtEntriesTableUpdateCompanionBuilder =
     BbtEntriesCompanion Function({
       Value<DateTime> date,
       Value<double> tempCelsius,
+      Value<String> source,
+      Value<String?> externalId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -5063,6 +5319,16 @@ class $$BbtEntriesTableFilterComposer
 
   ColumnFilters<double> get tempCelsius => $composableBuilder(
     column: $table.tempCelsius,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5096,6 +5362,16 @@ class $$BbtEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -5121,6 +5397,14 @@ class $$BbtEntriesTableAnnotationComposer
 
   GeneratedColumn<double> get tempCelsius => $composableBuilder(
     column: $table.tempCelsius,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
     builder: (column) => column,
   );
 
@@ -5161,12 +5445,16 @@ class $$BbtEntriesTableTableManager
               ({
                 Value<DateTime> date = const Value.absent(),
                 Value<double> tempCelsius = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BbtEntriesCompanion(
                 date: date,
                 tempCelsius: tempCelsius,
+                source: source,
+                externalId: externalId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -5175,12 +5463,16 @@ class $$BbtEntriesTableTableManager
               ({
                 required DateTime date,
                 required double tempCelsius,
+                Value<String> source = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BbtEntriesCompanion.insert(
                 date: date,
                 tempCelsius: tempCelsius,
+                source: source,
+                externalId: externalId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
