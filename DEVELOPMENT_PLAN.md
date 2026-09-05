@@ -3724,7 +3724,7 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   ambiguous.
 
 #### p6.1 — Interop foundation: gateway interface, sample model, reconciliation engine, provenance schema (v7)
-- **Status:** `IN REVIEW` · **Depends on:** none (first Phase 6 slice; carries `main` from the Phase 5 close + p1.12)
+- **Status:** `DONE (2026-09-05)` · squash `ed81ac5` · PR #65 · **Depends on:** none (first Phase 6 slice; carries `main` from the Phase 5 close + p1.12)
 - **Owner:** worker: phase1
 - **Branch / worktree:** `feat/p6.1-interop-foundation` · `../olf-wt/p6.1` off `main` @ `f9780bd` (#64)
 - **Requirement refs:** §2, §3, §9(11); §1.4 DoD (schema change ⇒ migration + test)
@@ -3900,6 +3900,12 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     `dependency-audit` (PASS, 38 rules) + `build_runner` (no `.g.dart` drift) +
     `git diff core/pubspec.lock app/pubspec.lock` (empty) all green. `source`-flip-on-edit
     deferred to p6.4. PR [#65](https://github.com/Abbo0dio/olf/pull/65) opened into `main`; set IN REVIEW.
+  - 2026-09-05 — **merged (squash `ed81ac5`, PR #65)** by orchestrator. Two doc-only review
+    fixes folded in on the branch first (`e7b308d`): a §9 Backlog entry recording the
+    `migration_matrix_test` single-step narrowing (v2→v3 / v4→v5 no longer validated in
+    isolation — proper fix is drift `stepByStep`, its own slice), and a correction to the
+    `app_database.dart` Build-detail bullet to match the shipped guarded migration. All CI
+    green incl. `CI OK`. **Phase 6 header stays `TODO`** (not a phase close). Set DONE.
 
 #### p6.2 — Apple HealthKit gateway (iOS)
 - **Status:** `TODO` · **Depends on:** p6.1
