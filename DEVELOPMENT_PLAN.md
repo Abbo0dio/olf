@@ -3908,7 +3908,7 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     green incl. `CI OK`. **Phase 6 header stays `TODO`** (not a phase close). Set DONE.
 
 #### p6.2 — Apple HealthKit gateway (iOS)
-- **Status:** `IN REVIEW` ([PR #66](https://github.com/Abbo0dio/olf/pull/66)) · **Depends on:** p6.1
+- **Status:** `DONE (2026-09-05)` · squash `76c31cd` · [PR #66](https://github.com/Abbo0dio/olf/pull/66) · **Depends on:** p6.1
 - **Requirement refs:** §2, §3, §4
 - **Goal:** a real `HealthPlatformGateway` for iOS — read + write menstrual flow, BBT / body /
   wrist temperature, sleep — reachable from a default-off, opt-in "Connect Apple Health" control
@@ -4021,52 +4021,132 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     IN REVIEW. Local: format / analyze (core + app + scripts) / build_runner
     (no `.g.dart` drift) / core 567 / app 381 / dependency-audit PASS / pubspec
     locks clean. **CI all 9 checks green incl. `CI OK` and
-    `Build (macos-latest, ios)`** (run 33977728379). Awaiting orchestrator
-    review + merge.
+    `Build (macos-latest, ios)`** (run 33977728379).
+  - 2026-09-05 — **DONE**, orchestrator-merged (squash `76c31cd`, PR #66). Phase 6
+    header stays `TODO` (not a phase close).
 
 #### p6.3 — Android Health Connect gateway
-- **Status:** `TODO` · **Depends on:** p6.1; shares the dependency decision with p6.2
+- **Status:** `IN REVIEW` · **PR:** [#67](https://github.com/Abbo0dio/olf/pull/67) · **Depends on:** p6.1, p6.2 (shared `olf/health` wire contract + Dart gateway/codec)
 - **Requirement refs:** §2, §3, §4
-- **Goal:** the Android half — Health Connect read + write for the same five types, the same
-  opt-in tile, plus the Google Fit deprecation note.
-- **Design (orchestrator, 2026-09-05):**
-  - **Dependency:** the same `health` package resolved in p6.2 (no *new* dep if p6.2 landed it;
-    if p6.2 hand-rolled, this slice hand-rolls the Android `MethodChannel` half). No standalone
-    `androidx.health.connect` Gradle add unless `health` doesn't bundle it — if a direct add is
-    needed it is noted, audited, and permission-diffed like any dep.
-  - **Android native:** Health Connect permissions in `AndroidManifest.xml`
-    (`android.permission.health.READ_*` / `WRITE_*` for exactly the five types — menstruation,
-    basal body temperature, body temperature, skin/wrist temperature, sleep), the
-    `<intent-filter>` for the permissions-rationale activity, and the availability check (not
-    installed / unsupported → tile hidden, `isAvailable == false`). Target the
-    `androidx.health.connect` client version `health` expects. **No broad or unrelated
-    permission** — the `dependency-audit` permission-diff must show only the `health.*` set and
-    be explained in the PR.
-  - **Type + unit mapping** mirrors p6.2; wrist/skin temperature is `SkinTemperatureRecord`
-    (read + write both available on Health Connect, unlike iOS — document the asymmetry in one
-    place).
-  - **UI:** the same "Connect" tile, now enabled on Android; identical reconciled-import flow +
-    summary. One shared widget, two gateways.
-  - **Docs:** a short `docs/health-platform-interop.md` (or a section in an existing doc) noting
-    Google Fit APIs are deprecated (shut down 2026) and Health Connect is the sole Android path
-    — so there is deliberately no Google Fit integration. `release-checklist.md` gets the Health
-    Connect permission-set check.
-  - **threat-model:** update the same four sections for the Health Connect boundary.
+- **Goal:** the Android half — a real `HealthPlatformGateway` over Health Connect for the two
+  wired types, the same opt-in tile now enabled on Android, plus the Google Fit deprecation note.
+- **Design (orchestrator §5 re-ruling, 2026-09-05 — supersedes the `health`-package framing,
+  consistent with the §7 `health` evaluate-and-reject entry):**
+  - **Platform bridge:** hand-roll the **Android half of `olf/health`** in **Kotlin** on
+    `MainActivity`, mirroring p6.2's Swift `HealthKitBridge`. Same channel methods
+    (`isAvailable` / `requestAuthorization` / `authorizationStatus` / `read` / `write` /
+    `delete`) and the **same wire contract** as p6.2's `health_channel.dart` — the Dart side
+    (channel wrapper + pure codec + `HealthImportService` + Settings widget) is reused unchanged;
+    only the native peer differs. The Kotlin bridge translates Health Connect's menstruation-flow
+    scale (`unknown=0/light=1/medium=2/heavy=3`) to and from the HealthKit wire scale the Dart
+    codec speaks (`unspecified=1/light=2/medium=3/heavy=4`), so the shared codec needs no change.
+    **No `health` pub package** (rejected in p6.2).
+  - **Gradle dependency (§5, pre-authorized in-row):** add
+    **`androidx.health.connect:connect-client`** (Google first-party AndroidX — the only
+    supported Android health API; Google Fit APIs shut down 2026). A Gradle/AGP dep declared in
+    `app/android/app/build.gradle.kts`, **not** a pub package → `app/pubspec.yaml` /
+    `pubspec.lock` stay clean. Pinned to an explicit stable version (no `+`/dynamic). **Gate:**
+    the `dependency-audit` permission-diff must show *only* the Health Connect permission set for
+    the wired types + the rationale `<intent-filter>` — nothing broader — explained in the PR body.
+  - **`minSdk` 24 → 26 (§5, pre-authorized in-row):** `connect-client` requires API 26+. Bump
+    `minSdk` to `26` in `build.gradle.kts`. This *aligns* the actual build floor with the
+    already-documented minimum (`DEVELOPMENT_PLAN.md` Non-negotiables + `docs/performance-budget.md`
+    both say "Android 8+ (API 26+)") — no doc change for the target; the actual-config bump is
+    noted in the Log line + the threat-model entry. (This is the floor bump p6.2 avoided because
+    the hand-rolled HealthKit bridge didn't need it — Health Connect genuinely does.)
+  - **Wired types — match p6.2 exactly:** only `menstruation` (Health Connect
+    `MenstruationFlowRecord` ↔ p6.1 `menstrualFlow`) and `BasalBodyTemperatureRecord` (↔
+    `basalBodyTemperature`). The other three p6.1 model types (`bodyTemperature`,
+    `wristTemperature`, `sleep`) stay declared in the `core` interface; the Android gateway
+    returns unsupported/empty for them with a logged note — same as the iOS bridge — keeping the
+    shared `ImportReconciler` + Settings widget symmetric. The iOS-vs-Android capability
+    asymmetry (Health Connect *does* have `SkinTemperatureRecord` read+write; HealthKit's wrist
+    temperature is sleeping-only / read-only) is noted in one place in
+    `docs/health-platform-interop.md` for when a consuming feature lands.
+  - **Android manifest:** exactly `android.permission.health.READ_MENSTRUATION` /
+    `WRITE_MENSTRUATION` / `READ_BASAL_BODY_TEMPERATURE` / `WRITE_BASAL_BODY_TEMPERATURE` — those
+    four, for the two wired types, each with an adjacent `audited:` comment. Plus the Health
+    Connect permissions-rationale `<intent-filter>`
+    (`androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE`) on `.MainActivity`, and a
+    `<queries><package android:name="com.google.android.apps.healthdata" />` entry so
+    `getSdkStatus` can see the provider on API 30+ (package-visibility, not a permission).
+    Availability: Health Connect not installed / SDK unavailable → tile hidden,
+    runtime `isAvailable == false`.
+  - **UI:** the same tile pattern as p6.2, now enabled on Android. One shared widget; a
+    `healthPlatformNameProvider` supplies "Apple Health" / "Health Connect" / "your health app"
+    for the copy, and a matching revoke-hint string. `healthPlatformGatewayProvider` picks
+    `HealthConnectGateway` on Android / `HealthKitGateway` on iOS / `UnavailableHealthGateway`
+    elsewhere; `healthAvailableProvider` becomes a `FutureProvider<bool>` so the Android runtime
+    SDK probe can gate the section. Same reconciled-import → summary flow,
+    `reduceSpokenDetail` redaction, calm SnackBars on denied/unavailable.
+  - **Docs:** new `docs/health-platform-interop.md` — Google Fit deprecation note (APIs shut
+    down 2026, Health Connect is the sole Android path, no Google Fit integration by design) +
+    the one-place iOS-vs-Android capability asymmetry table. `release-checklist.md` — Health
+    Connect permission-set + rationale-intent device check. `threat-model.md` — extend Trust
+    boundary #8 to "App ↔ OS health platform (both OSes)", update Assets / Data flow /
+    Mitigations, and add a "2026-09-05 — Phase 6 / p6.3 landing" Review-log entry.
 - **Acceptance criteria:**
-  - Android impl behind the p6.1 interface; DI wires it on Android; iOS unaffected.
-  - Manifest carries exactly the five-type health permission set + rationale activity;
-    `dependency-audit` green, permission-diff explained; both build-matrix jobs green.
+  - Android impl behind the p6.1 interface over the hand-rolled channel; DI wires it on Android;
+    iOS unaffected.
+  - Manifest carries exactly the four-name health permission set (each `audited:`) + the
+    rationale `<intent-filter>`; `dependency-audit` green, permission-diff explained in the PR;
+    both build-matrix jobs green (`connect-client` resolves from `google()`).
   - Tile works on Android (opt-in, revocable, reconciled import + summary); hidden when Health
     Connect is unavailable.
-  - The p6.2 `screen_nav.dart` surface now exercises the Android path in CI too (or a second
-    seeded variant); sweeps green.
-- **Tests required:** `app/test/health/health_connect_gateway_test.dart` (mapping, unavailable
-  path), extend `connect_health_flow_test.dart` for the Android gateway, a cheap `dart:io`
-  doc-presence test for the Google Fit note. Real-device Health Connect auth → manual smoke list.
-- **Notes / detail:** if `health`'s Health Connect support lags a record type we need (e.g.
-  wrist temperature), degrade that one type to read-only / unsupported with a logged note —
-  don't block the slice or add a second package.
-- **Log:** 2026-09-05 — created (orchestrator, Phase 6 expansion).
+  - `screen_nav.dart` sweeps green (the existing "Apple Health connected" surface still passes
+    via the `FakeHealthPlatformGateway` override; no Android-specific surface needed since the
+    widget is shared).
+- **Tests required:** `app/test/health/health_connect_gateway_test.dart` (HC↔wire flow-scale
+  mapping + unavailable path — mock the `olf/health` channel like `healthkit_gateway_test.dart`);
+  extend `connect_health_flow_test.dart` for the Android gateway path (tile label via the name
+  provider, connect flow, denied path); a `dart:io` doc-presence test asserting
+  `docs/health-platform-interop.md` exists and carries the Google Fit deprecation note. Real
+  Health Connect auth on a device → p0.5-style manual smoke list (no Android device in
+  CI/worker env — CI validates the build only).
+- **§5 STOP for any wall not covered above:** a `connect-client` version requiring
+  `minSdk > 26`; an AGP or Kotlin-plugin version bump; a Gradle dep beyond `connect-client`; any
+  permission outside the four-name set. Report, don't work around.
+- **Log:**
+  - 2026-09-05 — created (orchestrator, Phase 6 expansion).
+  - 2026-09-05 — §5 re-ruling (orchestrator): hand-roll the Kotlin half of `olf/health` to
+    match p6.2 (no `health` pkg); `androidx.health.connect:connect-client` Gradle dep
+    pre-authorized (permission-diff gated, not a pub package — locks stay clean); `minSdk` 24→26
+    pre-authorized to align the actual build floor with the already-documented Android 8+ (API
+    26+) minimum. Row Dependency/native/type-mapping/UI/docs bullets rewritten accordingly.
+  - 2026-09-05 — claimed by worker: phase1; worktree `../olf-wt/p6.3`, branch
+    `feat/p6.3-health-connect-gateway` off `main` @ `76c31cd` (#66). Folded p6.2 → DONE
+    (squash `76c31cd`). Set p6.3 IN PROGRESS.
+  - 2026-09-05 — built by worker: phase1. **Native:** `MainActivity.kt` gains the Android
+    half of `olf/health` — a Kotlin Health Connect bridge (`isAvailable` via
+    `getSdkStatus`, `requestAuthorization` via `registerForActivityResult` +
+    `PermissionController`, `authorizationStatus`, `read` / `write` / `delete` over
+    `HealthConnectClient`), `CoroutineScope(Dispatchers.Default + SupervisorJob())` +
+    `runOnUiThread` replies, `hcFlowToWire` / `wireFlowToHc` scale translation. **Dep:**
+    `androidx.health.connect:connect-client:1.1.0` (**GA** on Google's Maven was confirmed
+    available, so pinned the stable tag rather than an rc — still "explicit, non-dynamic"; it
+    needs API 26+, not >26, so no §5 STOP) in `build.gradle.kts`; `pubspec.lock` untouched.
+    `minSdk` 24 → 26. **Manifest:** the four `android.permission.health.*` entries (each
+    `audited:`), the `SHOW_PERMISSIONS_RATIONALE` `<intent-filter>` on `.MainActivity`, the
+    `com.google.android.apps.healthdata` `<queries>` entry. **Dart (all platforms):**
+    `HealthConnectGateway` + shared `MethodChannelHealthGateway` base gains a `sourceTag`
+    (`appleHealth` / `healthConnect`) threaded through `healthSampleFromRaw`, and
+    `HealthImportService._apply` now writes `sample.source` instead of a hardcoded
+    `appleHealth` so an imported row records its real platform; `healthPlatformNameProvider` /
+    `healthRevokeHintProvider` key off `defaultTargetPlatform`; `healthAvailableProvider` is a
+    `FutureProvider<bool>` (Android runtime SDK probe); Settings copy + providers renamed
+    neutral (storage keys unchanged). **Docs:** new `docs/health-platform-interop.md` (Google
+    Fit deprecation + capability-asymmetry table), `release-checklist.md` Android device check,
+    `threat-model.md` boundary #8 / Assets / Data flow / Mitigations + p6.3 Review-log entry.
+    **Tests:** `app/test/health/health_connect_gateway_test.dart` (new),
+    `core/test/health_interop_doc_test.dart` (new), `connect_health_flow_test.dart` +
+    `screen_nav.dart` updated for the neutral copy. Local gates green: `flutter analyze` /
+    `dart analyze` (core + app + `.github/scripts`, `--fatal-infos`), `dart format
+    --set-exit-if-changed`, `build_runner` (no `.g.dart` drift), core suite (571) + app suite
+    (402), `dependency_audit.dart` PASS (permission-diff = the four health perms only),
+    `pubspec.lock` diff clean. **Kotlin compiles only in CI** — no Android SDK in the worker
+    env; the `Build (ubuntu-latest, apk)` job validates it.
+  - 2026-09-05 — PR [#67](https://github.com/Abbo0dio/olf/pull/67) opened into `main`; set
+    p6.3 IN REVIEW. Awaiting CI + orchestrator review.
 
 #### p6.4 — Two-way sync + visible sync status
 - **Status:** `TODO` · **Depends on:** p6.2, p6.3
@@ -4359,6 +4439,22 @@ Append-only. Newest first. Each entry: date, decision, rationale, who/what decid
   `MethodChannel` (flow + BBT) behind the p6.1 `HealthPlatformGateway` interface. Android
   Health Connect (p6.3) hand-rolls its Kotlin half against `androidx.health.connect` — its own
   §5 conversation. — orchestrator, §5 ruling during p6.2.
+- 2026-09-05 — **p6.3 Android Health Connect: hand-roll the Kotlin half of `olf/health`;
+  add `androidx.health.connect:connect-client` (Gradle) + bump `minSdk` 24→26.** Follows the
+  p6.2 rejection of `health` (no `BASAL_BODY_TEMPERATURE`, forces SDK floors, 6 transitive pub
+  packages). The Android bridge lives in `MainActivity.kt`, mirrors the Swift `HealthKitBridge`,
+  and speaks the identical `olf/health` wire contract so the Dart channel wrapper + codec +
+  `HealthImportService` + Settings widget are reused unchanged (the Kotlin side translates
+  Health Connect's flow scale to/from the HealthKit wire scale). `connect-client` is a
+  first-party AndroidX Gradle dep, **not** a pub package — `pubspec.lock` stays clean — pinned
+  to an explicit non-dynamic version and permission-diff-gated by `dependency-audit` (exactly
+  `android.permission.health.{READ,WRITE}_{MENSTRUATION,BASAL_BODY_TEMPERATURE}` + the
+  `SHOW_PERMISSIONS_RATIONALE` intent-filter, nothing broader). `minSdk` 24→26 *aligns* the
+  actual build floor with the already-documented "Android 8+ (API 26+)" minimum — Health Connect
+  genuinely requires 26 (this is the floor bump p6.2 avoided because the hand-rolled HealthKit
+  bridge did not need it). Google Fit APIs shut down 2026 → Health Connect is the sole Android
+  path, no Google Fit integration by design (`docs/health-platform-interop.md`).
+  — orchestrator, §5 re-ruling during p6.3.
 - 2026-09-04 — **Versioning policy: `1.x.x` is the alpha stage (spans every phase
   until the plan's last phase is `DONE`); `2.0.0` is cut the moment the final
   phase closes, marking the move to beta. Inside `1.x`, a minor bump (`1.Y.0`)

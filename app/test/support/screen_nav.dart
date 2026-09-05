@@ -23,7 +23,8 @@ import 'harness.dart';
 /// `body`, before its teardown).
 ///
 /// 18 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
-/// "Apps & export" / Apple Health connected one). The dispatch inventory named
+/// "Apps & export" / health-app-connected one — still shared and unchanged in
+/// p6.3, the tile is platform-neutral). The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
 /// flow/spotting/clot chip surface) stand in its place.
@@ -76,11 +77,11 @@ Future<void> _seedRecentCycle(AppDatabase db) async {
   }
 }
 
-/// Put the app in the "Apple Health already connected" state so the
+/// Put the app in the "health app already connected" state so the
 /// "Apps & export" section renders its full form (summary subtitle + "Sync
 /// now"). A `FakeHealthPlatformGateway` override makes `healthAvailableProvider`
 /// true; the stored keys stand in for a sync that already ran.
-Future<void> _seedAppleHealthConnected(AppDatabase db) async {
+Future<void> _seedHealthAppConnected(AppDatabase db) async {
   final settings = DriftSettingsRepository(db);
   await settings.set(SettingKeys.appleHealthConnected, 'true');
   await settings.set(SettingKeys.appleHealthLastSync, '2,1,0');
@@ -186,12 +187,12 @@ final List<Surface> screenSurfaces = <Surface>[
     );
   }),
 
-  Surface('settings_page — Apps & export (Apple Health connected)', (
+  Surface('settings_page — Apps & export (health app connected)', (
     tester,
     check,
   ) async {
     final db = memoryDb();
-    await _seedAppleHealthConnected(db);
+    await _seedHealthAppConnected(db);
     await pumpOlf(
       tester,
       overrides: [
@@ -203,7 +204,7 @@ final List<Surface> screenSurfaces = <Surface>[
       body: () async {
         await _openSettings(tester);
         await tester.scrollUntilVisible(
-          find.text('Connect Apple Health'),
+          find.text('Connect a health app'),
           200,
           scrollable: find.byType(Scrollable).first,
         );

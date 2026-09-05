@@ -154,12 +154,15 @@ class HealthImportService {
   }
 
   Future<void> _apply(HealthSample sample) async {
+    // Provenance comes from the sample itself — `appleHealth` from the iOS
+    // gateway, `healthConnect` from the Android one (p6.3) — so an imported row
+    // records which platform it came from.
     switch (sample.type) {
       case HealthSampleType.basalBodyTemperature:
         await _bbt.setTemp(
           sample.day,
           sample.value,
-          source: HealthDataSource.appleHealth,
+          source: sample.source,
           externalId: sample.externalId,
         );
       case HealthSampleType.menstrualFlow:
@@ -170,7 +173,7 @@ class HealthImportService {
         await _flow.setFlow(
           sample.day,
           intensity: FlowIntensity.values[idx],
-          source: HealthDataSource.appleHealth,
+          source: sample.source,
           externalId: sample.externalId,
         );
       case HealthSampleType.bodyTemperature:

@@ -40,7 +40,11 @@ android {
         applicationId = "com.olf.olf_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // p6.3: Health Connect (androidx.health.connect:connect-client) requires
+        // API 26+. This raises the actual build floor to match the minimum olf
+        // has always documented — "Android 8+ (API 26+)" in DEVELOPMENT_PLAN.md
+        // and docs/performance-budget.md.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -79,4 +83,13 @@ dependencies {
     // Backports java.time for flutter_local_notifications (p1.7). Version per
     // the plugin's README.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // p6.3: the hand-rolled `olf/health` bridge in MainActivity.kt talks to
+    // Android Health Connect through Google's first-party AndroidX client. This
+    // is a Gradle dependency, NOT a Flutter/pub package — app/pubspec.yaml and
+    // pubspec.lock are untouched. Pinned to an explicit, non-dynamic stable
+    // version (GA on Google's Maven). Health Connect is the only supported
+    // Android health API (the Google Fit APIs shut down in 2026); see
+    // docs/health-platform-interop.md.
+    implementation("androidx.health.connect:connect-client:1.1.0")
 }

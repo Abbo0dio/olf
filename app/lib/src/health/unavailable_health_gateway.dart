@@ -1,12 +1,12 @@
 import 'package:olf_core/olf_core.dart';
 
-/// The [HealthPlatformGateway] bound on every platform that has no OS health
-/// store olf talks to yet — Android (until p6.3), desktop, web, and the test
-/// binding by default.
+/// The [HealthPlatformGateway] bound on every platform with no OS health store
+/// olf talks to — desktop, web, and the test binding by default. iOS uses
+/// `HealthKitGateway` (p6.2) and Android `HealthConnectGateway` (p6.3).
 ///
 /// Honours the `core` availability contract to the letter: [isAvailable] is
 /// `false` and every other method throws [HealthPlatformUnavailable] rather than
-/// silently doing nothing. The Settings "Connect Apple Health" tile is hidden
+/// silently doing nothing. The Settings "Connect a health app" tile is hidden
 /// whenever this gateway is in effect.
 class UnavailableHealthGateway implements HealthPlatformGateway {
   const UnavailableHealthGateway();

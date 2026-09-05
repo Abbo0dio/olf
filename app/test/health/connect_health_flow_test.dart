@@ -6,7 +6,11 @@ import 'package:olf_core/olf_core.dart';
 import '../support/harness.dart';
 
 void main() {
-  final tile = find.widgetWithText(SwitchListTile, 'Connect Apple Health');
+  // The tile title is a stable, platform-neutral constant; the per-platform
+  // name ("Apple Health" / "Health Connect") comes from `healthPlatformName
+  // Provider`. Widget tests run as `TargetPlatform.android`, so the copy under
+  // test here is the Health Connect (p6.3) wording.
+  final tile = find.widgetWithText(SwitchListTile, 'Connect a health app');
 
   Future<void> openSettings(WidgetTester tester) async {
     await tester.tap(find.byTooltip('Settings'));
@@ -15,7 +19,7 @@ void main() {
 
   Future<void> scrollToTile(WidgetTester tester) async {
     await tester.scrollUntilVisible(
-      find.text('Connect Apple Health'),
+      find.text('Connect a health app'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
@@ -28,7 +32,7 @@ void main() {
     at: day,
     value: celsius,
     unit: HealthUnit.celsius,
-    source: HealthDataSource.appleHealth,
+    source: HealthDataSource.healthConnect,
     externalId: id,
   );
 
@@ -41,7 +45,7 @@ void main() {
       body: () async {
         await openSettings(tester);
         expect(find.text('Apps & export'), findsNothing);
-        expect(find.text('Connect Apple Health'), findsNothing);
+        expect(find.text('Connect a health app'), findsNothing);
       },
     );
   });
@@ -64,7 +68,9 @@ void main() {
     );
   });
 
-  testWidgets('the opt-in dialog names both directions', (tester) async {
+  testWidgets('the opt-in dialog names the platform and both directions', (
+    tester,
+  ) async {
     await pumpOlf(
       tester,
       overrides: [
@@ -79,8 +85,10 @@ void main() {
         await tester.tap(tile);
         await tester.pumpAndSettle();
 
+        // The name provider resolves to "Health Connect" on Android.
+        expect(find.text('Connect Health Connect'), findsOneWidget);
         expect(
-          find.textContaining('In — entries already in Apple Health'),
+          find.textContaining('In — entries already in Health Connect'),
           findsOneWidget,
         );
         expect(
@@ -115,7 +123,7 @@ void main() {
         await tester.tap(find.widgetWithText(TextButton, 'Connect'));
         await flush(tester, 50);
 
-        expect(find.text('Apple Health connected'), findsOneWidget);
+        expect(find.text('Health Connect connected'), findsOneWidget);
         expect(find.textContaining('Added 1, updated 0'), findsOneWidget);
 
         await tester.tap(find.widgetWithText(TextButton, 'OK'));
@@ -124,7 +132,7 @@ void main() {
         expect(await settings.get(SettingKeys.appleHealthConnected), 'true');
         final row = (await bbt.tempOn(day))!;
         expect(row.tempCelsius, 36.7);
-        expect(row.source, 'appleHealth');
+        expect(row.source, 'healthConnect');
       },
     );
   });
@@ -151,11 +159,38 @@ void main() {
         await flush(tester, 50);
 
         expect(
-          find.textContaining('Apple Health access was not granted'),
+          find.textContaining('Health Connect access was not granted'),
           findsOneWidget,
         );
         expect(tester.widget<SwitchListTile>(tile).value, isFalse);
         expect(await settings.get(SettingKeys.appleHealthConnected), isNull);
+      },
+    );
+  });
+
+  testWidgets('disconnect confirmation names the platform and revoke hint', (
+    tester,
+  ) async {
+    final db = memoryDb();
+    final settings = DriftSettingsRepository(db);
+    await settings.set(SettingKeys.appleHealthConnected, 'true');
+
+    await pumpOlf(
+      tester,
+      overrides: [
+        dbOverride(db),
+        healthPlatformGatewayProvider.overrideWithValue(
+          FakeHealthPlatformGateway(),
+        ),
+      ],
+      body: () async {
+        await openSettings(tester);
+        await scrollToTile(tester);
+        await tester.tap(tile);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Disconnect Health Connect?'), findsOneWidget);
+        expect(find.textContaining('Manage app permissions'), findsOneWidget);
       },
     );
   });
@@ -184,7 +219,7 @@ void main() {
         expect(subtitle, findsOneWidget);
         expect(
           tester.widget<Text>(subtitle).semanticsLabel,
-          'Apple Health is connected.',
+          'Health Connect is connected.',
         );
       },
     );

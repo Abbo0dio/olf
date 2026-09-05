@@ -83,7 +83,15 @@ class RawHealthSample {
 /// unit/scale translation the `core` model expects. Returns `null` when the raw
 /// value carries nothing to store (HealthKit "no flow" marker, or a type this
 /// build does not map).
-HealthSample? healthSampleFromRaw(RawHealthSample raw) {
+///
+/// [source] tags the provenance column on the imported row — `appleHealth` from
+/// the iOS bridge, `healthConnect` from the Android one. The wire numbers are
+/// identical either way (the Kotlin peer translates Health Connect's own scale
+/// natively); only the label differs.
+HealthSample? healthSampleFromRaw(
+  RawHealthSample raw, {
+  HealthDataSource source = HealthDataSource.appleHealth,
+}) {
   final start = DateTime.fromMillisecondsSinceEpoch(raw.startMsEpoch);
   final end = DateTime.fromMillisecondsSinceEpoch(raw.endMsEpoch);
   switch (raw.type) {
@@ -94,7 +102,7 @@ HealthSample? healthSampleFromRaw(RawHealthSample raw) {
         endAt: end,
         value: raw.value,
         unit: HealthUnit.celsius,
-        source: HealthDataSource.appleHealth,
+        source: source,
         externalId: raw.externalId,
       );
     case HealthSampleType.menstrualFlow:
@@ -106,7 +114,7 @@ HealthSample? healthSampleFromRaw(RawHealthSample raw) {
         endAt: end,
         value: intensity.index.toDouble(),
         unit: HealthUnit.flowLevel,
-        source: HealthDataSource.appleHealth,
+        source: source,
         externalId: raw.externalId,
       );
     case HealthSampleType.bodyTemperature:
