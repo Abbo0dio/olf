@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:olf_app/src/health/health_providers.dart';
 import 'package:olf_app/src/period/period_format.dart';
 import 'package:olf_app/src/prediction/accuracy_format.dart';
 import 'package:olf_app/src/privacy/privacy_education_content.dart';
@@ -21,10 +22,11 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 17 surfaces (p1.12 added the cycle-wheel active-phase one). The dispatch
-/// inventory named `security/screen_security`, which
-/// is the non-visual `ScreenSecurity` platform seam; `symptom_day_sheet` and
-/// `flow_quick_log` (the flow/spotting/clot chip surface) stand in its place.
+/// 18 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// "Apps & export" / Apple Health connected one). The dispatch inventory named
+/// `security/screen_security`, which is the non-visual `ScreenSecurity`
+/// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
+/// flow/spotting/clot chip surface) stand in its place.
 typedef SurfaceCheck = Future<void> Function(WidgetTester tester);
 
 class Surface {
@@ -72,6 +74,16 @@ Future<void> _seedRecentCycle(AppDatabase db) async {
     );
     start = start.add(const Duration(days: 28));
   }
+}
+
+/// Put the app in the "Apple Health already connected" state so the
+/// "Apps & export" section renders its full form (summary subtitle + "Sync
+/// now"). A `FakeHealthPlatformGateway` override makes `healthAvailableProvider`
+/// true; the stored keys stand in for a sync that already ran.
+Future<void> _seedAppleHealthConnected(AppDatabase db) async {
+  final settings = DriftSettingsRepository(db);
+  await settings.set(SettingKeys.appleHealthConnected, 'true');
+  await settings.set(SettingKeys.appleHealthLastSync, '2,1,0');
 }
 
 Future<void> _openSettings(WidgetTester tester) async {
@@ -169,6 +181,32 @@ final List<Surface> screenSurfaces = <Surface>[
       body: () async {
         await _openSettings(tester);
         expect(find.text('Appearance'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('settings_page — Apps & export (Apple Health connected)', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await _seedAppleHealthConnected(db);
+    await pumpOlf(
+      tester,
+      overrides: [
+        ...screenNavOverrides(db),
+        healthPlatformGatewayProvider.overrideWithValue(
+          FakeHealthPlatformGateway(),
+        ),
+      ],
+      body: () async {
+        await _openSettings(tester);
+        await tester.scrollUntilVisible(
+          find.text('Connect Apple Health'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
         await check(tester);
       },
     );

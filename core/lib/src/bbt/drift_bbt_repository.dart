@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../date_math.dart';
 import '../db/app_database.dart';
+import '../health/health_sample.dart';
 import 'bbt_repository.dart';
 import 'temperature.dart';
 
@@ -30,7 +31,20 @@ class DriftBbtRepository implements BbtRepository {
   }
 
   @override
-  Future<void> setTemp(DateTime date, double celsius) async {
+  Future<List<BbtEntry>> allEntries() {
+    return (_db.select(_db.bbtEntries)..orderBy([
+          (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
+        ]))
+        .get();
+  }
+
+  @override
+  Future<void> setTemp(
+    DateTime date,
+    double celsius, {
+    HealthDataSource source = HealthDataSource.manual,
+    String? externalId,
+  }) async {
     final error = validateCelsius(celsius);
     if (error != null) throw BbtException(error);
 
@@ -45,6 +59,8 @@ class DriftBbtRepository implements BbtRepository {
             BbtEntriesCompanion.insert(
               date: day,
               tempCelsius: celsius,
+              source: Value(source.name),
+              externalId: Value(externalId),
               createdAt: Value(stamp),
               updatedAt: Value(stamp),
             ),
@@ -55,6 +71,8 @@ class DriftBbtRepository implements BbtRepository {
       )..where((t) => t.date.equals(day))).write(
         BbtEntriesCompanion(
           tempCelsius: Value(celsius),
+          source: Value(source.name),
+          externalId: Value(externalId),
           updatedAt: Value(stamp),
         ),
       );

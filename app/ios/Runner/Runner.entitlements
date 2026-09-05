@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- p6.2: HealthKit access for the opt-in "Connect Apple Health" bridge.
+	     olf reads menstrual flow and basal body temperature from, and writes
+	     the same two types back to, the on-device Health store over local IPC
+	     (`olf/health` MethodChannel). No clinical-records or background-delivery
+	     entitlement is requested. The bridge stays dormant until the user turns
+	     it on in Settings; nothing here weakens the strict ATS posture. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+</dict>
+</plist>

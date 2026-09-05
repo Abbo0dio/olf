@@ -72,6 +72,20 @@ be waived in CI.
       after olf is reopened from the launcher) and that relaunch works. Switch
       back to **Default** and confirm it restores. Do this on an Android build,
       and on an iOS build too if iOS is in the release.
+- [ ] **Apple Health bridge (p6.2) verified on an iOS device** *(iOS releases
+      only)*. On a real iPhone (HealthKit is unavailable on the simulator):
+      confirm the signed build carries the **HealthKit entitlement**
+      (`com.apple.developer.healthkit` — the provisioning profile must include
+      the HealthKit capability) and that
+      `NSHealthShareUsageDescription` / `NSHealthUpdateUsageDescription` are in
+      the built `Info.plist`. In-app: Settings → Apps & export → **Connect
+      Apple Health**, confirm the opt-in sheet names both directions, grant the
+      OS prompt, and check that a menstrual-flow / basal-body-temperature entry
+      made in the Health app shows up in olf and vice versa. Deny the prompt (or
+      revoke in the Health app) and confirm olf shows the calm "not granted"
+      message and stays disconnected — no crash. ATS in the built `Info.plist`
+      is still fully strict (no `NSExceptionDomains`, nothing flipped to
+      `<true/>`).
 
 ## Cutting the release (Android)
 

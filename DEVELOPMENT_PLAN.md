@@ -3978,6 +3978,45 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   - 2026-09-05 — claimed by worker: phase1; worktree `../olf-wt/p6.2`, branch
     `feat/p6.2-healthkit-gateway` off `main` @ `ed81ac5` (#65). Folded p6.1 → DONE
     (squash `ed81ac5`). Set p6.2 IN PROGRESS.
+  - 2026-09-05 — built (worker: phase1). **`core`:** `BbtRepository.setTemp` /
+    `DailyFlowRepository.setFlow` gained defaulted `source` / `externalId` params
+    (the schema-v7 provenance write path p6.1 deferred; every existing caller
+    unchanged); each repo gained a one-shot `allEntries()` / `allFlows()` read;
+    `healthDataSourceFromStorage()` helper on `health_sample.dart`; two new
+    `SettingKeys` (`appleHealthConnected`, `appleHealthLastSync`). **`app/lib/src/health/`:**
+    `flow_mapping.dart` (pure HK `HKCategoryValueMenstrualFlow` ↔ `FlowIntensity`;
+    `unspecified`↔`spotting`, `none`→skip), `health_channel.dart` (`olf/health`
+    `MethodChannel` wrapper + pure wire codec — speaks HealthKit-native numbers,
+    `MissingPluginException` / `PlatformException` → `HealthPlatformUnavailable`),
+    `healthkit_gateway.dart` (`HealthKitGateway implements HealthPlatformGateway`,
+    `isAvailable => true`, filters to the two supported types with a logged note),
+    `unavailable_health_gateway.dart` (`isAvailable => false`, everything throws),
+    `health_import.dart` (`HealthImportService`: authorize → read window → build
+    `LocalSampleView`s → `ImportReconciler` → apply inserts + non-conflicting
+    updates → push the user's own manual rows the platform is missing back out →
+    `HealthSyncSummary`; conflicts counted, never applied), `health_providers.dart`
+    (`healthPlatformGatewayProvider` = iOS→`HealthKitGateway` else→`UnavailableHealthGateway`;
+    `healthAvailableProvider`; `appleHealthConnected/LastSync` stream providers;
+    `connect/sync/disconnectAppleHealth` actions). **Settings:** new "Apps & export"
+    section (hidden when `!isAvailable`) + default-off "Connect Apple Health"
+    `SwitchListTile` + "Sync Apple Health now"; opt-in dialog names in **and** out;
+    grant → import → summary dialog; denied / unreachable → calm SnackBar, nothing
+    persisted; disconnect confirm + pointer to the iOS Health app; subtitle
+    summary redacted from screen readers under `reduceSpokenDetail`. **iOS:**
+    `AppDelegate.swift` `registerHealthChannel()` + `HealthKitBridge` (HKCategory
+    menstrualFlow + HKQuantity basalBodyTemperature °C, `deleteObjects` scoped to
+    olf-authored samples, all `result()` on the main queue); new
+    `Runner.entitlements` (`com.apple.developer.healthkit`) + `CODE_SIGN_ENTITLEMENTS`
+    in the 3 Runner build configs; `NSHealthShareUsageDescription` +
+    `NSHealthUpdateUsageDescription` in `Info.plist`; ATS untouched; no CocoaPod,
+    no deployment-target bump. **a11y:** new `screen_nav.dart` surface
+    (`settings_page — Apps & export (Apple Health connected)`), doc count 17→18.
+    **docs:** `threat-model.md` — Assets + Trust boundary #8 + Data-flow arrows
+    (Mermaid + ASCII) + Mitigations row + a p6.2 Review-log entry;
+    `release-checklist.md` — iOS HealthKit entitlement / usage-string device check.
+    **Tests:** `app/test/health/{flow_mapping,healthkit_gateway,health_import,connect_health_flow}_test.dart`
+    + `core` repo provenance / one-shot-read tests + `healthDataSourceFromStorage`
+    tests. `git diff app/pubspec.lock` clean — no dependency added.
 
 #### p6.3 — Android Health Connect gateway
 - **Status:** `TODO` · **Depends on:** p6.1; shares the dependency decision with p6.2

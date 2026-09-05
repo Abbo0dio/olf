@@ -70,6 +70,52 @@ void main() {
     ]);
   });
 
+  test('setTemp defaults provenance to manual with no external id', () async {
+    await repo.setTemp(DateTime(2026, 8, 20), 36.6);
+    final row = (await repo.tempOn(DateTime(2026, 8, 20)))!;
+    expect(row.source, 'manual');
+    expect(row.externalId, isNull);
+  });
+
+  test('setTemp records an imported source and external id (p6.2)', () async {
+    await repo.setTemp(
+      DateTime(2026, 8, 20),
+      36.72,
+      source: HealthDataSource.appleHealth,
+      externalId: 'HK-bbt-1',
+    );
+    final row = (await repo.tempOn(DateTime(2026, 8, 20)))!;
+    expect(row.source, 'appleHealth');
+    expect(row.externalId, 'HK-bbt-1');
+  });
+
+  test('setTemp upsert can flip a manual row to imported provenance', () async {
+    await repo.setTemp(DateTime(2026, 8, 20), 36.4);
+    await repo.setTemp(
+      DateTime(2026, 8, 20),
+      36.9,
+      source: HealthDataSource.appleHealth,
+      externalId: 'HK-bbt-2',
+    );
+    final row = (await repo.tempOn(DateTime(2026, 8, 20)))!;
+    expect(row.source, 'appleHealth');
+    expect(row.externalId, 'HK-bbt-2');
+    expect(row.tempCelsius, 36.9);
+  });
+
+  test('allEntries returns a one-shot snapshot, newest day first', () async {
+    await repo.setTemp(DateTime(2026, 8, 10), 36.3);
+    await repo.setTemp(DateTime(2026, 8, 25), 36.8);
+    await repo.setTemp(DateTime(2026, 8, 15), 36.5);
+
+    final rows = await repo.allEntries();
+    expect(rows.map((r) => r.date), [
+      DateTime(2026, 8, 25),
+      DateTime(2026, 8, 15),
+      DateTime(2026, 8, 10),
+    ]);
+  });
+
   test('BBT is independent of periods (no cascade)', () async {
     final periods = DriftPeriodRepository(db, now: () => now);
     final id = await periods.addPeriod(
