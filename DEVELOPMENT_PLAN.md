@@ -3841,10 +3841,13 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     `TextColumn get source => text().withDefault(const Constant('manual'))();` and
     `TextColumn get externalId => text().nullable()();`.
   - **`core/lib/src/db/app_database.dart`** — `schemaVersion => 7`; `onUpgrade` gains a trailing
-    `if (from <= 6) { await m.addColumn(bbtEntries, bbtEntries.source); await
-    m.addColumn(bbtEntries, bbtEntries.externalId); await m.addColumn(dailyFlows,
-    dailyFlows.source); await m.addColumn(dailyFlows, dailyFlows.externalId); }`. Regenerated
-    `app_database.g.dart` via `build_runner`.
+    `if (from < 7 && to >= 7) { … }` block that does `m.addColumn` ×4, **guarded**: an inner
+    `if (from >= 3)` adds `source` + `external_id` to `daily_flows` (introduced v3) and an
+    `if (from >= 5)` adds them to `bbt_entries` (introduced v5). When `from` predates a table's
+    own version the earlier `m.createTable` already builds it in the v7 shape, so an
+    unconditional `addColumn` would duplicate a column; the outer `to >= 7` guard keeps the
+    single-step `migration_matrix_test` targets (`to < 7`) from acquiring the v7 columns early.
+    Regenerated `app_database.g.dart` via `build_runner` (no `.g.dart` drift).
   - **`core/tool/dump_historical_schemas.dart`** — reworked: `_reconstructFromV6` truncates the
     committed **v6** snapshot's `entities` / `fixed_sql` to `_tableCountAtVersion[v]` for
     v ∈ 1..5 (unchanged counts `{1:1, 2:2, 3:3, 4:5, 5:8}`); v6 is copied through verbatim; v7
@@ -4939,6 +4942,16 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   through `announce()` too, with a test asserting the announcement fires. Working AT
   path today, no health data, does not block the Phase 5 exit gate. — noted by
   worker: phase5 during p5.1c, narrowed during p5.3.
+- **p6.1 (2026-09-05): `migration_matrix_test` single-step coverage no longer validates
+  v2→v3 and v4→v5 in isolation.** drift's `onUpgrade` isn't version-frozen — `m.createTable`
+  always builds a table in its *current* shape — so a single step that (re)creates
+  `daily_flows` (introduced v3) or `bbt_entries` (introduced v5) hands them the current (v7)
+  provenance columns before the intermediate snapshot "should" carry them. Zero production
+  risk: production only ever migrates to the latest `schemaVersion`, and the full v2→v7 /
+  v4→v7 paths are still checked strictly by the first matrix loop. Proper fix: adopt drift's
+  `stepByStep` / a generated frozen-per-version schema migrator (`drift_dev schema steps`) so
+  each migration step uses that version's table definitions — its own slice, not a p6.x
+  blocker. — noted by worker: phase1 during p6.1.
 - (add more here)
 
 ## 10. Orphaned / cut work
