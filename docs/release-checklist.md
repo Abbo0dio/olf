@@ -32,15 +32,23 @@ be waived in CI.
       does not ship:
   - [ ] Regenerate the drift snapshots: from `core/`, run
         `dart run drift_dev schema dump lib/src/db/app_database.dart drift_schemas/`
-        (refreshes the latest `drift_schema_vN.json`) then
-        `dart run tool/dump_historical_schemas.dart` (rebuilds v1..v(N-1)), and
-        regenerate the verifier helpers with
+        (writes `drift_schema_vN.json` for the new version) then
+        `dart run tool/dump_historical_schemas.dart` (rebuilds v1..v5 from the v6
+        anchor and checks every dumped version is present), and regenerate the
+        verifier helpers with
         `dart run drift_dev schema generate drift_schemas/ test/db/generated/`.
         Commit all of `core/drift_schemas/` and `core/test/db/generated/`.
+        Since v7 (p6.1, the first migration that ALTERs an existing table),
+        `dump_historical_schemas.dart` only reconstructs the additive-only
+        stretch v1..v5; v6 (the anchor) and every ALTER version (v7+) must be
+        their own real `schema dump`, never reconstructed.
   - [ ] Extend `core/test/db/migration_matrix_test.dart`: add the new version to
-        the `from` loops and the `_tableCountAtVersion` map in
-        `tool/dump_historical_schemas.dart`, and seed representative rows in any
-        new table so the `v(old) → v(new)` path is covered with data.
+        the `from` loops (and, if it adds a table, to the `_tableCountAtVersion`
+        map in `tool/dump_historical_schemas.dart`), and seed representative rows
+        in any new/altered table so the `v(old) → v(new)` path is covered with
+        data. A column-level change must assert the new columns' post-migration
+        values on pre-existing rows (v7: `source = 'manual'`, `external_id`
+        NULL).
   - [ ] The migration matrix and every per-feature `*_migration_test.dart` are
         green. A lossy or missing historical step is a real bug — fix the
         migration and add a test; do not adjust a snapshot to hide it.

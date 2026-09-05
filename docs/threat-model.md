@@ -346,3 +346,39 @@ The CI guard requires an entry naming the current phase.
   routine confirmation SnackBars not yet announced) are accessibility-parity
   items with a working AT path today and touch no health data — not
   security-relevant. No design changes required by this review.
+- **2026-09-05 — Phase 6 opening gate — reviewer: worker: phase1.** Phase 6
+  (health-platform interop & doctor export) will open **two** deliberate,
+  user-controlled boundaries the app does not have today: (a) a bidirectional
+  bridge to the OS health platform — Apple HealthKit (p6.2) and Android Health
+  Connect (p6.3) — for menstrual flow, BBT / body & wrist temperature, and
+  sleep; and (b) an on-device, offline doctor-ready report the user shares
+  through the existing SAF / file-picker seam (p6.5). Both are opt-in,
+  default-off, and per-direction revocable (p2.5), both honour the p2.3
+  retention window (purge-before-sync / purge-before-export), and every platform
+  SDK sits behind the `core` `HealthPlatformGateway` interface.
+  **This slice (p6.1) opens nothing.** It is pure `core` + schema + docs: the
+  `HealthSample` model, the `HealthPlatformGateway` interface + an in-memory
+  `FakeHealthPlatformGateway`, and the pure `ImportReconciler` (no storage
+  access, deterministic, never overwrites a `source == manual` row). The schema
+  bump v6 → v7 adds `source` (default `'manual'`) + `external_id` (nullable) to
+  `bbt_entries` and `daily_flows` — provenance columns that make "never clobber
+  a user value" enforceable; it ships with its migration, the migration matrix
+  extended to v7, and the backup/restore-across-migration round trip.
+  **No new asset yet** — the two new columns live in the same encrypted `olf.db`
+  inside the existing app ↔ DB boundary; **no new adversary, trust boundary,
+  data flow, dependency, permission, `AndroidManifest.xml` / `Info.plist`
+  change, or network path.** The `OlfHttpClient` TLS chokepoint (p2.6) is
+  **N/A** for this phase: HealthKit and Health Connect are local IPC, and the
+  doctor report is generated and shared entirely on-device — nothing in Phase 6
+  makes a network call. Assets, adversaries, trust boundaries, and the data-flow
+  diagram are unchanged. Watch items, to be reviewed and logged when they land:
+  **p6.2** (HealthKit store as a new asset; iOS Health sandbox as a new trust
+  boundary; new in/out data-flow arrows; HealthKit entitlement + usage strings;
+  first runtime dependency since Phase 1 — `health` — pending its
+  `dependency-audit` + licence + no-telemetry gate), **p6.3** (the same for
+  Health Connect + its `android.permission.health.*` set — exactly the five
+  types, permission-diff explained), **p6.4** (write-back arrows; the
+  `source`-flip-on-edit rule deferred from p6.1 lands here), and **p6.5** (a new
+  user-initiated export egress path, same class as the p1.10 backup export —
+  neutral filename, retention-trimmed, `pdf` dependency pending the same gate).
+  No design changes required by this review.

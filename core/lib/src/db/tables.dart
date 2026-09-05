@@ -79,6 +79,17 @@ class DailyFlows extends Table {
 
   TextColumn get clotSize => textEnum<ClotSize>().nullable()();
 
+  /// Provenance (schema v7, p6.1). `'manual'` for a value the user logged in
+  /// olf; `'appleHealth'` / `'healthConnect'` for a day imported over a
+  /// `HealthPlatformGateway`. Stored as the `HealthDataSource` enum name; kept
+  /// as plain text so the DB layer stays decoupled from the health model.
+  TextColumn get source => text().withDefault(const Constant('manual'))();
+
+  /// The health platform's stable identifier for the imported sample, so a
+  /// later sync matches instead of duplicating. `null` for manual rows.
+  /// (schema v7, p6.1)
+  TextColumn get externalId => text().nullable()();
+
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -174,6 +185,17 @@ class BbtEntries extends Table {
   /// Basal temperature in °C. Plausible range is enforced in the repository
   /// (`validateCelsius`), not by a DB constraint.
   RealColumn get tempCelsius => real()();
+
+  /// Provenance (schema v7, p6.1). `'manual'` for a value the user logged in
+  /// olf; `'appleHealth'` / `'healthConnect'` for a reading imported over a
+  /// `HealthPlatformGateway`. Stored as the `HealthDataSource` enum name; kept
+  /// as plain text so the DB layer stays decoupled from the health model.
+  TextColumn get source => text().withDefault(const Constant('manual'))();
+
+  /// The health platform's stable identifier for the imported sample, so a
+  /// later sync matches instead of duplicating. `null` for manual rows.
+  /// (schema v7, p6.1)
+  TextColumn get externalId => text().nullable()();
 
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 

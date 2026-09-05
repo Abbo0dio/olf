@@ -3674,17 +3674,441 @@ exact-alarm path is backlog (§9), not a gate.
 
 ### Phase 6 — Health-platform interop & doctor export
 
-**Status:** `TODO` · **Requirement refs:** §2, §4. Slices:
+**Status:** `TODO` · **Requirement refs:** §2 (interop; data export for doctor visits), §3 (no
+unencrypted health data leaving the vault; retention window applies to synced + exported data),
+§4 (interop with Apple Health / Health Connect; reliability), §6 (not a medical device —
+disclaimers on any exported report), §9(11) (don't lose data across the sync boundary).
 
-- **p6.1** Apple Health (HealthKit) read/write: menstrual flow, BBT, sleep, wrist temperature.
-- **p6.2** Android Health Connect read/write equivalents; note Google Fit deprecation.
-- **p6.3** Import reconciliation — merge external data without creating duplicates or
-  overriding user corrections.
-- **p6.4** Doctor-ready export — a clean PDF / shareable report of cycle history, symptoms, and
-  trends, generated on-device.
-- **p6.5** All of the above behind our own interface so the plugin can be swapped.
+**What this phase is.** The app currently owns all of its data. Phase 6 opens two new,
+deliberate, user-controlled boundaries: (a) a *bidirectional* bridge to the OS health platform —
+Apple HealthKit and Android Health Connect — for menstrual flow, BBT / body & wrist temperature,
+and sleep; and (b) an on-device, offline **doctor-ready report** the user can hand to a
+clinician. Both are opt-in, both respect the p2.3 retention window and the p2.5 default-off
+consent model, and every platform SDK sits behind a `core` interface (the "swap the plugin"
+requirement) so the desktop shell (Phase 13) and any future backend are unaffected.
 
-**Exit gate:** two-way sync with both platforms; a clinician-usable report exports offline.
+**Slice reshape (orchestrator, 2026-09-05).** The original one-liners were p6.1 HealthKit /
+p6.2 Health Connect / p6.3 reconciliation / p6.4 doctor export / p6.5 "behind our own
+interface." Expanded: the interface + reconciliation engine + provenance schema are the
+*foundation* every other slice builds on, so they move first (p6.1); the two platform
+implementations follow (p6.2 iOS, p6.3 Android); sync becomes genuinely two-way with a visible
+status surface in p6.4; the doctor export is p6.5. Same five slice numbers, resequenced.
+
+**Phase-wide constraints.**
+- **`core` stays Flutter-free / `DateTime.now()`-free.** The gateway interface, the sample
+  model, the reconciliation engine and the report document model all live in `core` as pure
+  Dart; only the platform impls and the PDF rendering live in `app`.
+- **New runtime dependencies are expected but gated.** First phase since Phase 1 to add any.
+  Each candidate (`health` for p6.2/p6.3, `pdf` for p6.5) is **named in its slice row with a
+  rationale** and must clear, in the claiming PR: the `dependency-audit` against
+  `.github/dependency-denylist.txt` *transitively*, a GPLv3-compatible licence, and the
+  "no ad / analytics / telemetry surface" bar every prior dep met (`local_auth`, `file_picker`).
+  A candidate that fails any gate falls back to a hand-rolled `MethodChannel` (p5.4 precedent) —
+  note the outcome in the slice log; do **not** silently swap in a different package (§5 stop).
+- **One schema bump, in p6.1: `schemaVersion` 6 → 7** — provenance columns on the synced tables.
+  Ships with its migration, `migration_matrix_test` extended to v7, and the
+  backup/restore-across-migration round trip — same PR, per the hard rule and
+  `docs/release-checklist.md`'s "Schema change" block.
+- **New platform capabilities are threat-model events.** p6.1 adds the Phase 6 opening-gate
+  Review-log entry to `docs/threat-model.md`; p6.2 and p6.3 each update Assets / Trust
+  boundaries / Data flow / Mitigations for the platform they add; p6.5 logs the new
+  user-initiated export egress path (same class as the p1.10 backup export). The
+  `threat_model_doc_test` guard stays green throughout.
+- **Retention + consent.** Nothing syncs or exports without an explicit, default-off, revocable
+  opt-in per platform / per direction (p2.5; MHMDA separate-consent-for-sharing). The p2.3
+  retention window applies to imported data and to anything written back or exported
+  (purge-before-export, p2.3 precedent). The in-app privacy policy (`docs/privacy-and-lock.md` +
+  the policy screen) discloses the integration.
+- **No backend, no network.** HealthKit / Health Connect are local IPC; the `OlfHttpClient` TLS
+  chokepoint (p2.6) is N/A here — state that in the threat-model update rather than leaving it
+  ambiguous.
+
+#### p6.1 — Interop foundation: gateway interface, sample model, reconciliation engine, provenance schema (v7)
+- **Status:** `IN REVIEW` · **Depends on:** none (first Phase 6 slice; carries `main` from the Phase 5 close + p1.12)
+- **Owner:** worker: phase1
+- **Branch / worktree:** `feat/p6.1-interop-foundation` · `../olf-wt/p6.1` off `main` @ `f9780bd` (#64)
+- **Requirement refs:** §2, §3, §9(11); §1.4 DoD (schema change ⇒ migration + test)
+- **Goal:** the pure-Dart spine every other Phase 6 slice plugs into — a typed external-sample
+  model, a platform-agnostic gateway interface with a fake, a deterministic import-reconciliation
+  engine that never duplicates and never clobbers a user value, and the schema provenance that
+  makes "never clobber" real.
+- **Design (orchestrator, 2026-09-05):**
+  - **`HealthSample` model** (`core/lib/src/health/health_sample.dart`) — `@immutable`, house
+    style. `HealthSampleType` enum: `menstrualFlow`, `basalBodyTemperature`, `bodyTemperature`,
+    `wristTemperature`, `sleep` (start with these five; trivially extensible). Each sample:
+    `type`, `startAt` / `endAt` (`endAt == startAt` for point samples), `value` + `unit` (a
+    small `HealthUnit` enum — `celsius`, `flowLevel`, `minutes`; no free-text units), `source`
+    (`HealthDataSource` enum: `manual`, `appleHealth`, `healthConnect`), nullable `externalId`
+    (the platform's stable UUID, for round-trip identity). `==` / `hashCode`. No Flutter, no
+    `DateTime.now()`.
+  - **`HealthPlatformGateway` interface** (`core/lib/src/health/health_platform_gateway.dart`) —
+    `requestAuthorization(Set<HealthSampleType> types, {required HealthAccess access})` (`access`
+    = read / write / readWrite), `authorizationStatus(...)`, `read({types, from, to})`,
+    `write(List<HealthSample>)`, optional `delete(...)`, `bool get isAvailable`. Each method
+    documents the "platform unavailable ⇒ `isAvailable == false`, calls throw
+    `HealthPlatformUnavailable`" contract. Ships a `FakeHealthPlatformGateway` (in-memory,
+    scriptable auth outcomes + seeded sample store) in `core` for downstream tests.
+  - **`ImportReconciler`** (`core/lib/src/health/import_reconciler.dart`) — pure. Input: the
+    user's existing rows for a type+range (a small `LocalSampleView` DTO carrying `source` +
+    `externalId` + key fields) and a `List<HealthSample>` incoming from a gateway. Output: a
+    `ReconciliationPlan` — `inserts`, `updates` (matched by `externalId`, else by `(type, day)`
+    when both sides are same-source), `conflicts` (incoming disagrees with a `source == manual`
+    row, or with a differently-sourced row), `skipped` (exact duplicates). **Hard rules:** a
+    `source == manual` local row is never in `updates`, only ever `conflicts`; matching is
+    deterministic and order-independent; the plan is a value object the caller applies — the
+    reconciler touches no storage. Editing a previously-imported row is expected to flip its
+    `source` to `manual`; spec that here, implement the flip in p6.4 when the write path exists
+    (or here if it is a couple of lines).
+  - **Schema v6 → v7** — add `source` (text, not null, default `'manual'`) and `externalId`
+    (text, nullable) to `BbtEntries` and `DailyFlows` in `core/lib/src/db/tables.dart`; bump
+    `schemaVersion` to 7; `onUpgrade` `from <= 6` block does `m.addColumn` ×4. **This is the
+    first migration that alters an existing table** — `core/tool/dump_historical_schemas.dart`
+    currently reconstructs v1..v(N-1) by truncating the latest snapshot's entity list, valid
+    only while history is createTable-only. Rework the tool: anchor v1..v5 reconstruction on the
+    committed **v6** snapshot (the last additive-only version) and treat **v7** as its own
+    freshly-dumped real snapshot; update the header comment explaining why v6 is the anchor.
+    Regenerate `drift_schemas/drift_schema_v7.json` + the `test/db/generated/` verifier helpers
+    per `docs/release-checklist.md`.
+  - **`docs/threat-model.md`** — add the "2026-09-05 — Phase 6 opening gate" Review-log entry
+    (same shape as the Phase 5 one): names the two boundaries the phase will open, states
+    nothing is open yet in this slice, notes the `OlfHttpClient` TLS chokepoint is N/A (local
+    IPC, no network). Keep `threat_model_doc_test` green.
+  - **No new dependency. No `app/` UI. No manifest / Info.plist change.** Pure `core` + schema + docs.
+- **Acceptance criteria:**
+  - `core/lib/src/health/{health_sample,health_platform_gateway,import_reconciler}.dart` +
+    `FakeHealthPlatformGateway`, all exported from `core/lib/olf_core.dart`.
+  - `schemaVersion == 7`; migration adds exactly the four columns; `flutter analyze
+    --fatal-infos` clean; `build_runner` shows no `.g.dart` drift.
+  - `drift_schemas/drift_schema_v7.json` + refreshed `test/db/generated/` committed;
+    `dump_historical_schemas.dart` reworked and its output for v1..v6 byte-identical to the
+    committed snapshots.
+  - `migration_matrix_test` extended: `from` loop covers 1..6; new assertions that
+    `bbt_entries` / `daily_flows` gain `source='manual'` + null `externalId` on every pre-v7 row
+    after migration; the v(old)→migrate→backup→restore round trip passes for v7.
+  - `ImportReconciler` never places a `manual` row in `updates`; plan is order-independent
+    (shuffled-input test).
+- **Tests required:** `core/test/health/health_sample_test.dart` (equality, extensibility),
+  `core/test/health/import_reconciler_test.dart` (insert / update-by-externalId / update-by-day /
+  conflict-vs-manual / conflict-vs-other-source / exact-dupe-skip / empty sides / shuffled-order
+  determinism), `core/test/health/fake_gateway_test.dart` (the fake honours its own contract),
+  `core/test/db/migration_matrix_test.dart` extended as above. Existing core + app suites stay green.
+- **Notes / detail:** worker picks the exact DTO shapes and file layout. If the
+  `source`-flip-on-edit is more than a couple of lines in the existing repos, defer it to p6.4
+  with a one-line backlog note. Do **not** add `bodyTemperature` / `wristTemperature` platform
+  mapping yet — model only; mapping is p6.2/p6.3.
+- **Build detail (worker: phase1):**
+  - **`core/lib/src/health/health_sample.dart`** — `HealthSampleType` (5), `HealthUnit`
+    (`celsius` / `flowLevel` / `minutes`), `HealthDataSource` (`manual` / `appleHealth` /
+    `healthConnect`), `HealthAccess` (`read` / `write` / `readWrite`) enums + `@immutable`
+    `HealthSample` (`type`, `startAt`, `endAt`, `value` double, `unit`, `source`, `externalId?`)
+    with value `==` / `hashCode`, a `copyWith`, `isPointSample` (`endAt == startAt`) and an
+    asserting ctor (`!endAt.isBefore(startAt)`; `wristTemperature`/`bodyTemperature`/
+    `basalBodyTemperature` ⇒ `unit == celsius`; `menstrualFlow` ⇒ `flowLevel`; `sleep` ⇒
+    `minutes`). Pure — no Flutter, no `DateTime.now()`.
+  - **`core/lib/src/health/health_platform_gateway.dart`** — `HealthPlatformUnavailable`
+    (`Exception`, message), abstract `HealthPlatformGateway` (`isAvailable`,
+    `requestAuthorization(Set<HealthSampleType>, {required HealthAccess access})` →
+    `HealthAuthResult`, `authorizationStatus(Set<HealthSampleType>, {required HealthAccess})` →
+    `HealthAuthStatus` enum `granted` / `denied` / `notDetermined`, `read({Set<HealthSampleType>
+    types, DateTime from, DateTime to})` → `List<HealthSample>`, `write(List<HealthSample>)`,
+    `delete({type, from, to})`). Doc comment on every method spells the unavailable-⇒-throw
+    contract. `FakeHealthPlatformGateway` — ctor flags (`available`, scripted
+    `authOutcome`/`statusByType`), in-memory `List<HealthSample>` store (`seed(...)`), `read`
+    filters by type+range, `write` upserts by `externalId`, `delete` removes by type+range;
+    throws `HealthPlatformUnavailable` from every data call when `!available`; records
+    `authRequests` for assertions.
+  - **`core/lib/src/health/import_reconciler.dart`** — `LocalSampleView` DTO (`localId` opaque
+    String, `type`, `day` (date-only `DateTime`), `value`, `unit`, `source`, `externalId?`),
+    `ReconciliationOutcome` items (`ReconciliationInsert(sample)`,
+    `ReconciliationUpdate(localId, sample)`, `ReconciliationConflict(localId, local, incoming,
+    reason)` with `ConflictReason` enum `manualDisagreement` / `crossSourceDisagreement`,
+    `ReconciliationSkip(localId, sample)`), `ReconciliationPlan` (`inserts` / `updates` /
+    `conflicts` / `skipped`, all unmodifiable; `isEmpty`; `==`/`hashCode` for test determinism).
+    `ImportReconciler.reconcile({required List<LocalSampleView> local, required
+    List<HealthSample> incoming, double tolerance = 0.01})` — indexes local by `externalId` then
+    by `(type, ymd)`; for each incoming (processed in a stable `startAt`-then-`externalId` sort
+    so output is order-independent): exact match (same value within `tolerance`, same source) ⇒
+    skip; `externalId` match with a `manual` local ⇒ conflict(`manualDisagreement`);
+    `externalId` match same non-manual source, value differs ⇒ update; `(type, day)` match,
+    both non-manual same source, value differs ⇒ update; `(type, day)` match vs `manual` local ⇒
+    conflict(`manualDisagreement`); `(type, day)` match vs different source ⇒
+    conflict(`crossSourceDisagreement`); no match ⇒ insert. Deterministic, storage-free.
+    `source`-flip-on-edit is **deferred to p6.4** (needs the write path; backlog note added to
+    p6.4).
+  - **`core/lib/olf_core.dart`** — `export 'src/health/health_sample.dart';`,
+    `'src/health/health_platform_gateway.dart';`, `'src/health/import_reconciler.dart';`.
+  - **`core/lib/src/db/tables.dart`** — `BbtEntries` + `DailyFlows` each gain
+    `TextColumn get source => text().withDefault(const Constant('manual'))();` and
+    `TextColumn get externalId => text().nullable()();`.
+  - **`core/lib/src/db/app_database.dart`** — `schemaVersion => 7`; `onUpgrade` gains a trailing
+    `if (from < 7 && to >= 7) { … }` block that does `m.addColumn` ×4, **guarded**: an inner
+    `if (from >= 3)` adds `source` + `external_id` to `daily_flows` (introduced v3) and an
+    `if (from >= 5)` adds them to `bbt_entries` (introduced v5). When `from` predates a table's
+    own version the earlier `m.createTable` already builds it in the v7 shape, so an
+    unconditional `addColumn` would duplicate a column; the outer `to >= 7` guard keeps the
+    single-step `migration_matrix_test` targets (`to < 7`) from acquiring the v7 columns early.
+    Regenerated `app_database.g.dart` via `build_runner` (no `.g.dart` drift).
+  - **`core/tool/dump_historical_schemas.dart`** — reworked: `_reconstructFromV6` truncates the
+    committed **v6** snapshot's `entities` / `fixed_sql` to `_tableCountAtVersion[v]` for
+    v ∈ 1..5 (unchanged counts `{1:1, 2:2, 3:3, 4:5, 5:8}`); v6 is copied through verbatim; v7
+    is **not** synthesised — it is produced by a real `drift_dev schema dump` and only
+    validated here (fails loudly if `drift_schema_v7.json` is missing or its `schemaVersion !=
+    7`). Header comment rewritten: v6 is the anchor because it is the last additive-only
+    (createTable-only) version; v7 is the first ALTER and must be dumped, not reconstructed.
+  - **`core/drift_schemas/drift_schema_v7.json`** — fresh `dart run drift_dev schema dump
+    lib/src/db/app_database.dart drift_schemas/`. **`core/test/db/generated/`** — regenerated
+    (`schema.dart` + `schema_v7.dart`) via `dart run drift_dev schema generate`.
+  - **`core/test/db/migration_matrix_test.dart`** — `from` loops widened `1..5` → `1..6`;
+    `migrateAndValidate(db, 7)`; new per-row assertions after a `<= 6 → 7` migration that every
+    surviving `bbt_entries` / `daily_flows` row has `source == 'manual'` and `external_id IS
+    NULL`; the backup→restore round trip re-targets v7 (`BackupService` `appSchemaVersion == 7`).
+    `_tableCountAtVersion` unchanged (v7 adds columns, not tables — count stays 11).
+  - **`docs/threat-model.md`** — "2026-09-05 — Phase 6 opening gate" Review-log entry after the
+    Phase 5 closing one: names the two boundaries Phase 6 will open (OS health platform bridge;
+    doctor-ready export), states **nothing is open in p6.1** (pure `core` + schema + docs — no
+    platform SDK, no manifest change, no network), notes `OlfHttpClient` TLS chokepoint is
+    **N/A** (HealthKit / Health Connect are local IPC), no change to Assets / Adversaries /
+    Trust boundaries / Mitigations / Residual risks yet — those land in p6.2/p6.3/p6.5.
+    `_currentPhase` stays 5 (Phase 6 header still `TODO`), so `threat_model_doc_test` stays
+    green on the Phase 5 entry; the new entry is additive.
+  - **`docs/release-checklist.md`** — the existing "Schema change" block already covers v7; add
+    a one-line note that v7 is the first ALTER migration so `dump_historical_schemas.dart` no
+    longer reconstructs the newest version — it must be `drift_dev schema dump`ed.
+  - **Tests:** `core/test/health/health_sample_test.dart`,
+    `core/test/health/import_reconciler_test.dart`, `core/test/health/fake_gateway_test.dart`,
+    extended `migration_matrix_test.dart`. **Constraints honoured:** no new dependency (Dart or
+    platform); `core` stays Flutter-free / `DateTime.now()`-free; no `app/` change; no CI
+    workflow change (new tests ride the existing `test` job).
+- **Log:**
+  - 2026-09-05 — created (orchestrator, Phase 6 expansion).
+  - 2026-09-05 — claimed by worker: phase1; worktree `../olf-wt/p6.1`, branch
+    `feat/p6.1-interop-foundation` off `main` @ `f9780bd` (#64). Inserted the full Phase 6 plan
+    block (p6.1–p6.5 + phase-wide constraints + exit gate) from the orchestrator dispatch,
+    verbatim. No previous-slice fold (p1.12 already DONE on `main`). Set p6.1 IN PROGRESS.
+  - 2026-09-05 — built to DoD: `core/lib/src/health/{health_sample,health_platform_gateway,import_reconciler}.dart`
+    (+ `FakeHealthPlatformGateway`), all exported from `olf_core.dart`; schema v6 → v7 —
+    `source` (default `'manual'`) + `external_id` (nullable) on `daily_flows` + `bbt_entries`,
+    `onUpgrade` `from < 7 && to >= 7` guarded `addColumn` ×4; `dump_historical_schemas.dart`
+    reworked (v1..v5 from the v6 anchor, v6 + v7 are real dumps); `drift_schema_v7.json` +
+    `test/db/generated/` regenerated; `migration_matrix_test` extended to v7 (pre-v7 rows land
+    `source='manual'` / null `external_id`; backup/restore round-trips at v7; v2→v3 / v4→v5
+    single-step checks dropped — `onUpgrade` isn't version-frozen, covered by the full path);
+    per-feature migration tests + `app_database_test` bumped to v7; `threat-model.md` Phase 6
+    opening-gate entry; `local-database.md` v7 section; `release-checklist.md` first-ALTER note.
+    New tests: `core/test/health/{health_sample,import_reconciler,fake_gateway}_test.dart`.
+    core 557 / app 339; `analyze --fatal-infos` (core + app + `.github/scripts`) + `format` +
+    `dependency-audit` (PASS, 38 rules) + `build_runner` (no `.g.dart` drift) +
+    `git diff core/pubspec.lock app/pubspec.lock` (empty) all green. `source`-flip-on-edit
+    deferred to p6.4. PR [#65](https://github.com/Abbo0dio/olf/pull/65) opened into `main`; set IN REVIEW.
+
+#### p6.2 — Apple HealthKit gateway (iOS)
+- **Status:** `TODO` · **Depends on:** p6.1
+- **Requirement refs:** §2, §3, §4
+- **Goal:** a real `HealthPlatformGateway` for iOS — read + write menstrual flow, BBT / body /
+  wrist temperature, sleep — reachable from a default-off, opt-in "Connect Apple Health" control
+  that runs one reconciled import.
+- **Design (orchestrator, 2026-09-05):**
+  - **Dependency (§5, pre-approved *pending audit*):** add **`health`** (pub.dev, Cachet / DTU)
+    — one API over HealthKit *and* Health Connect, exactly the swap-friendly shape this phase
+    needs, and it saves hand-maintaining two native bridges. The claiming PR must paste: resolved
+    version, full `flutter pub deps` transitive subtree, the `dependency-audit` result (green,
+    not skipped), and the licence. **Gate:** denylist-clean transitively, GPLv3-compatible
+    licence, no ad/analytics/telemetry. On failure: fall back to a hand-rolled `olf/health`
+    `MethodChannel` (p5.4 pattern), iOS side only in this slice; note the decision in the log.
+    Either way the `core` interface is unchanged; the impl lives in `app/lib/src/health/`.
+  - **iOS native:** HealthKit capability + entitlement on the Runner target;
+    `NSHealthShareUsageDescription` + `NSHealthUpdateUsageDescription` in `Info.plist` with
+    honest, non-marketing copy. No new CocoaPods beyond what `health` pulls. ATS stays strict.
+  - **Type mapping:** `menstrualFlow` ↔ `HKCategoryTypeIdentifier.menstrualFlow`,
+    `basalBodyTemperature` ↔ `HKQuantityTypeIdentifier.basalBodyTemperature`, `bodyTemperature`
+    ↔ `.bodyTemperature`, `wristTemperature` ↔ `.appleSleepingWristTemperature` (read-only on
+    iOS — document it; `write` of that type is a no-op that doesn't throw), `sleep` ↔
+    `.sleepAnalysis`. Unit conversions centralised and unit-tested.
+  - **UI:** a single "Connect Apple Health" tile in Settings → new "Apps & export" section.
+    Default off. Tapping it explains what flows **in** and **out**, then triggers
+    `requestAuthorization(readWrite)`; on grant, reads the last N months, feeds the
+    `ImportReconciler`, applies the plan (inserts + non-conflicting updates), shows a plain
+    summary ("added 12, updated 3, 2 need your review"). Revoking is "disconnect" + a pointer to
+    iOS Settings. a11y: tile + summary go through `screen_nav.dart` (new surface); dark mode;
+    `reduceSpokenDetail` on the summary if it names counts of a health type.
+  - **Android:** `health` reports HealthKit unavailable → tile hidden on Android (p6.3 adds the
+    Health Connect equivalent). `isAvailable == false` path tested.
+  - **threat-model:** update Assets (HealthKit store), Trust boundaries (iOS Health sandbox),
+    Data flow (new in/out arrows), Mitigations (opt-in, scoped types, no network).
+    `release-checklist.md`: HealthKit entitlement + usage-string device check.
+- **Acceptance criteria:**
+  - iOS HealthKit impl behind the p6.1 interface; DI wires the real gateway on iOS, an
+    `unavailable` gateway elsewhere.
+  - `Info.plist` usage strings + entitlement present; `flutter analyze` + both CI build-matrix
+    jobs (apk + ios) green; `dependency-audit` green with the new dep, permission-diff
+    clean/explained.
+  - Settings tile default-off, opt-in, revocable; first connect runs a reconciled import + a
+    summary; no crash when permission denied.
+  - New `screen_nav.dart` surface; all five sweeps green, no new skips.
+- **Tests required:** `app/test/health/healthkit_gateway_test.dart` (type + unit mapping,
+  unavailable path — mock the plugin channel), `app/test/health/connect_health_flow_test.dart`
+  (widget: default-off; opt-in dialog names both directions; grant → reconciler invoked with a
+  `FakeHealthPlatformGateway`; summary rendered; denied → calm message), sweeps via
+  `screen_nav.dart`. Native HealthKit auth on a real device → p0.5-style manual smoke list (no
+  Xcode in CI/worker env — CI validates the build only).
+- **Notes / detail:** worker owns the Settings section layout and the first-import month count
+  (propose, note it). If `health` needs a `compileSdk` / min-iOS bump → §5 stop, report it.
+- **Log:** 2026-09-05 — created (orchestrator, Phase 6 expansion).
+
+#### p6.3 — Android Health Connect gateway
+- **Status:** `TODO` · **Depends on:** p6.1; shares the dependency decision with p6.2
+- **Requirement refs:** §2, §3, §4
+- **Goal:** the Android half — Health Connect read + write for the same five types, the same
+  opt-in tile, plus the Google Fit deprecation note.
+- **Design (orchestrator, 2026-09-05):**
+  - **Dependency:** the same `health` package resolved in p6.2 (no *new* dep if p6.2 landed it;
+    if p6.2 hand-rolled, this slice hand-rolls the Android `MethodChannel` half). No standalone
+    `androidx.health.connect` Gradle add unless `health` doesn't bundle it — if a direct add is
+    needed it is noted, audited, and permission-diffed like any dep.
+  - **Android native:** Health Connect permissions in `AndroidManifest.xml`
+    (`android.permission.health.READ_*` / `WRITE_*` for exactly the five types — menstruation,
+    basal body temperature, body temperature, skin/wrist temperature, sleep), the
+    `<intent-filter>` for the permissions-rationale activity, and the availability check (not
+    installed / unsupported → tile hidden, `isAvailable == false`). Target the
+    `androidx.health.connect` client version `health` expects. **No broad or unrelated
+    permission** — the `dependency-audit` permission-diff must show only the `health.*` set and
+    be explained in the PR.
+  - **Type + unit mapping** mirrors p6.2; wrist/skin temperature is `SkinTemperatureRecord`
+    (read + write both available on Health Connect, unlike iOS — document the asymmetry in one
+    place).
+  - **UI:** the same "Connect" tile, now enabled on Android; identical reconciled-import flow +
+    summary. One shared widget, two gateways.
+  - **Docs:** a short `docs/health-platform-interop.md` (or a section in an existing doc) noting
+    Google Fit APIs are deprecated (shut down 2026) and Health Connect is the sole Android path
+    — so there is deliberately no Google Fit integration. `release-checklist.md` gets the Health
+    Connect permission-set check.
+  - **threat-model:** update the same four sections for the Health Connect boundary.
+- **Acceptance criteria:**
+  - Android impl behind the p6.1 interface; DI wires it on Android; iOS unaffected.
+  - Manifest carries exactly the five-type health permission set + rationale activity;
+    `dependency-audit` green, permission-diff explained; both build-matrix jobs green.
+  - Tile works on Android (opt-in, revocable, reconciled import + summary); hidden when Health
+    Connect is unavailable.
+  - The p6.2 `screen_nav.dart` surface now exercises the Android path in CI too (or a second
+    seeded variant); sweeps green.
+- **Tests required:** `app/test/health/health_connect_gateway_test.dart` (mapping, unavailable
+  path), extend `connect_health_flow_test.dart` for the Android gateway, a cheap `dart:io`
+  doc-presence test for the Google Fit note. Real-device Health Connect auth → manual smoke list.
+- **Notes / detail:** if `health`'s Health Connect support lags a record type we need (e.g.
+  wrist temperature), degrade that one type to read-only / unsupported with a logged note —
+  don't block the slice or add a second package.
+- **Log:** 2026-09-05 — created (orchestrator, Phase 6 expansion).
+
+#### p6.4 — Two-way sync + visible sync status
+- **Status:** `TODO` · **Depends on:** p6.2, p6.3
+- **Requirement refs:** §2, §3 (retention), §4 (reliability), §9(11)
+- **Goal:** move from one-shot import to genuine two-way sync — app-entered data written back to
+  the connected platform, imports on a user action ("Sync now") and/or on app open, a per-source
+  status surface (connected? last sync? counts? conflicts to review?), and a conflict-review
+  screen.
+- **Design (orchestrator, 2026-09-05):**
+  - **Write-back:** when the user logs/edits flow or BBT and a platform is connected for
+    `write`, enqueue a `HealthSample` write (`externalId` round-tripped so a later read matches,
+    not dupes). Editing a row whose `source != manual` flips it to `manual` first (the p6.1
+    deferral lands here) — the user's value is authoritative and still gets written back.
+  - **Sync trigger:** a manual "Sync now" in Apps & export is the baseline; an on-open sync
+    (debounced, only if connected, never blocking first frame — reuse the p5.3 lifecycle-timer
+    discipline, contained state) is acceptable if it stays cheap. **No background sync, no
+    `WorkManager` / BGTask** — new capability, out of scope (backlog note if it comes up).
+  - **Status surface:** per connected platform — connected state, last-sync timestamp, last-run
+    counts, "N items need review." `reduceSpokenDetail` redacts counts-by-type. Retention: sync
+    must not re-import data older than the p2.3 window, and must not write back data the user
+    has since purged (purge-before-sync, mirroring purge-before-export).
+  - **Conflict-review screen:** lists `ReconciliationPlan.conflicts` — for each, local vs
+    incoming, user picks keep local / take incoming / dismiss. Applying is an ordinary repo
+    write ("keep local" marks resolved; "take incoming" writes the incoming value as `manual`).
+    New `screen_nav.dart` surface; full a11y sweep; dark mode.
+  - **threat-model:** update Data flow for the write-back arrows + the retention interaction;
+    note the conflict store holds no new data class.
+- **Acceptance criteria:**
+  - Logging/editing flow or BBT with a platform connected produces a matching platform write
+    (verified against `FakeHealthPlatformGateway`), round-trips with no duplicate on the next read.
+  - A `source != manual` row, when edited, becomes `manual` and is written back.
+  - Status surface shows connected / last-sync / counts / review-count and updates after a sync.
+  - Conflict-review resolves each conflict to a deterministic stored outcome; retention window
+    respected on both import and write-back.
+  - Both new/updated `screen_nav.dart` surfaces pass all five sweeps, no new skips.
+- **Tests required:** `app/test/health/write_back_test.dart` (log → platform write; edit
+  imported → source flip + write; no-dupe round trip), `app/test/health/sync_status_test.dart`
+  (states render; redaction under `reduceSpokenDetail`), `app/test/health/conflict_review_test.dart`
+  (each resolution path), a retention-interaction test (purged / out-of-window data not synced).
+- **Notes / detail:** worker decides on-open-sync vs manual-only for v1 (propose, note the
+  tradeoff). Keep the conflict screen simple — a list + three actions, no bulk ops.
+- **Log:** 2026-09-05 — created (orchestrator, Phase 6 expansion).
+
+#### p6.5 — Doctor-ready export (offline PDF report)
+- **Status:** `TODO` · **Depends on:** p6.1 (data model); independent of p6.2–p6.4
+- **Requirement refs:** §2 (data export for doctor visits), §3 (purge-before-export; no PHI in
+  filename), §6 (not a medical device — disclaimer on the report)
+- **Goal:** one action that produces a clean, clinician-usable report of the user's cycle
+  history, symptoms and trends, generated entirely on-device, shareable through the existing
+  SAF / file-picker path.
+- **Design (orchestrator, 2026-09-05):**
+  - **Report document model in `core`** (`core/lib/src/export/clinical_report.dart`) — pure:
+    given the user's data + a date range, build a `ClinicalReport` value object (cycle table:
+    start / end / length / notable flags; summary stats: mean & range of cycle length, period
+    length, variability, the Phase 3 prediction with its humility caveat text; symptom frequency
+    table; temperature series for charting; pregnancy / loss events from p1.11; a fixed "not a
+    medical device" disclaimer string; generated-on date). Fully unit-tested. No rendering, no
+    Flutter.
+  - **Rendering in `app`** — **Dependency (§5, pre-approved *pending audit*):** add **`pdf`**
+    (pub.dev, DavBfr) — **pure Dart**, generates bytes, no native code, **no `printing`
+    companion** (we save/share a file, we don't need the OS print dialog). Claiming PR pastes
+    version + transitive subtree + `dependency-audit` result + licence (Apache-2.0). Gate
+    identical to p6.2's. Fallback on failure: a hand-rolled minimal single-page PDF, or an HTML
+    file the user opens/prints — logged decision.
+  - **Share path:** reuse the p1.10 `BackupFileGateway` / file-picker SAF seam — no storage
+    permission, user picks the destination. Filename neutral (`olf-report-YYYY-MM-DD.pdf`, no
+    name/identifier). **Purge-before-export** (p2.3): the report only includes data inside the
+    retention window; if retention excludes part of the requested range, the report says so.
+  - **UI:** "Export report for a doctor" in Settings → Apps & export — a range picker (last 3 /
+    6 / 12 months / all), a preview of what's included, generate → share sheet. a11y sweep (new
+    surface); dark mode for the on-screen preview (the PDF itself is light — fine, it's for
+    print); `reduceSpokenDetail` N/A on the button, applies to the preview counts.
+  - **threat-model:** log the new user-initiated export egress path — same class as the p1.10
+    backup export — note the retention interaction and the neutral filename.
+  - **release-checklist:** "generate a doctor report, confirm it opens in a PDF viewer and
+    carries the disclaimer" device-check line.
+- **Acceptance criteria:**
+  - `core` `ClinicalReport` builder, pure, exported; deterministic document for a fixed dataset.
+  - App generates a valid PDF (opens in a standard viewer) containing the cycle table, summary
+    stats, symptom frequency, a temperature chart, pregnancy / loss events if any, the
+    generated-on date, and the "not a medical device" disclaimer.
+  - Share goes through the existing SAF seam; filename carries no identifier; data outside the
+    retention window is excluded and the exclusion is stated on the report.
+  - `dependency-audit` green with `pdf` added; both build-matrix jobs green.
+  - New `screen_nav.dart` surface; five sweeps green, no new skips.
+- **Tests required:** `core/test/export/clinical_report_test.dart` (structure, stats maths,
+  retention-trim, empty-history, disclaimer present), `app/test/export/report_pdf_test.dart`
+  (bytes are a valid PDF header + non-trivial size for a seeded dataset; disclaimer text present
+  in the content stream), `app/test/export/export_report_flow_test.dart` (widget: range picker,
+  preview counts, generate → share invoked with a file), sweeps. Real "opens on a phone /
+  prints" → manual smoke list.
+- **Notes / detail:** worker owns the report layout and the chart-rendering approach (a simple
+  `pdf`-drawn line chart is fine — no charting dep). One document, print-friendly, black-on-white.
+- **Log:** 2026-09-05 — created (orchestrator, Phase 6 expansion).
+
+**Phase 6 exit gate:** two-way sync with both platforms; a clinician-usable report exports offline.
+- *Bidirectional Apple HealthKit sync* — p6.2 (read + write, opt-in) + p6.4 (write-back, status,
+  conflicts). PR #… / squash … .
+- *Bidirectional Android Health Connect sync* — p6.3 + p6.4. PR #… .
+- *No duplicates / no clobbered user corrections on import* — p6.1 `ImportReconciler` + v7
+  provenance schema; p6.4 conflict review. PR #… .
+- *Clinician-usable report, generated offline* — p6.5 (`core` `ClinicalReport` + on-device
+  `pdf`, shared via the SAF seam). PR #… .
+- *Every platform SDK behind a swappable `core` interface* — p6.1 `HealthPlatformGateway`;
+  impls live in `app/` only. PR #… .
+- *Phase-wide:* `schemaVersion` 6 → 7 (p6.1: migration + matrix + round-trip); new deps
+  `health` (p6.2/6.3) and `pdf` (p6.5) each dependency-audited green; new platform capabilities
+  (HealthKit entitlement, Health Connect permissions) threat-modelled; `core` stayed
+  Flutter-free / `DateTime.now()`-free.
+
+(PR / SHA blanks filled at phase close.)
 
 ---
 
@@ -4518,6 +4942,16 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   through `announce()` too, with a test asserting the announcement fires. Working AT
   path today, no health data, does not block the Phase 5 exit gate. — noted by
   worker: phase5 during p5.1c, narrowed during p5.3.
+- **p6.1 (2026-09-05): `migration_matrix_test` single-step coverage no longer validates
+  v2→v3 and v4→v5 in isolation.** drift's `onUpgrade` isn't version-frozen — `m.createTable`
+  always builds a table in its *current* shape — so a single step that (re)creates
+  `daily_flows` (introduced v3) or `bbt_entries` (introduced v5) hands them the current (v7)
+  provenance columns before the intermediate snapshot "should" carry them. Zero production
+  risk: production only ever migrates to the latest `schemaVersion`, and the full v2→v7 /
+  v4→v7 paths are still checked strictly by the first matrix loop. Proper fix: adopt drift's
+  `stepByStep` / a generated frozen-per-version schema migrator (`drift_dev schema steps`) so
+  each migration step uses that version's table definitions — its own slice, not a p6.x
+  blocker. — noted by worker: phase1 during p6.1.
 - (add more here)
 
 ## 10. Orphaned / cut work

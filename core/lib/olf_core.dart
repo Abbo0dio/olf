@@ -46,6 +46,9 @@ export 'src/db/tables.dart'
         kBuiltInSymptomNames;
 export 'src/flow/daily_flow_repository.dart';
 export 'src/flow/drift_daily_flow_repository.dart';
+export 'src/health/health_platform_gateway.dart';
+export 'src/health/health_sample.dart';
+export 'src/health/import_reconciler.dart';
 export 'src/meds/birth_control.dart';
 export 'src/meds/birth_control_repository.dart';
 export 'src/meds/drift_birth_control_repository.dart';

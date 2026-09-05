@@ -40,8 +40,13 @@ class AppDatabase extends _$AppDatabase {
   ///            `app_settings` key/value store.
   /// v6 (p1.7): added `medications`, `birth_control_entries` and the
   ///            `reminders` table (one daily local reminder).
+  /// v7 (p6.1): added `source` + `external_id` provenance columns to
+  ///            `bbt_entries` and `daily_flows` for health-platform interop.
+  ///            **First migration that alters an existing table** — see
+  ///            `tool/dump_historical_schemas.dart` for why v6 is the snapshot
+  ///            reconstruction anchor.
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -86,6 +91,35 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(medications);
         await m.createTable(birthControlEntries);
         await m.createTable(reminders);
+      }
+      if (from < 7 && to >= 7) {
+        // p6.1: health-platform provenance — `source` + `external_id` on
+        // `daily_flows` and `bbt_entries`. First migration to ALTER an existing
+        // table. `source` defaults to 'manual' so every row already in the
+        // database is marked user-entered; `external_id` stays NULL until a
+        // sample is round-tripped through a HealthPlatformGateway.
+        //
+        // The `to >= 7` guard exists because this is the first *column* change:
+        // the single-step `migration_matrix_test` migrates to intermediate
+        // targets, and running this block for `to < 7` would leave the pre-v7
+        // snapshots' `daily_flows` / `bbt_entries` carrying columns they should
+        // not have. (The earlier createTable-only blocks don't need it — an
+        // extra *table* is tolerated by the schema verifier; extra *columns* on
+        // a checked table are not.)
+        //
+        // Only ALTER a table that an *earlier* migration already created in its
+        // pre-v7 shape: when `from` predates a table's own version, the
+        // `createTable` above builds it with these columns already present, so a
+        // second `addColumn` would be a duplicate. `daily_flows` arrived in v3,
+        // `bbt_entries` in v5.
+        if (from >= 3) {
+          await m.addColumn(dailyFlows, dailyFlows.source);
+          await m.addColumn(dailyFlows, dailyFlows.externalId);
+        }
+        if (from >= 5) {
+          await m.addColumn(bbtEntries, bbtEntries.source);
+          await m.addColumn(bbtEntries, bbtEntries.externalId);
+        }
       }
     },
     beforeOpen: (details) async {

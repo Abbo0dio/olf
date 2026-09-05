@@ -206,6 +206,23 @@ interface, with a fake in tests.
 
 `schemaVersion = 6`.
 
+## Schema v7 (p6.1)
+
+Adds **provenance** to the two tables that health-platform interop (Phase 6) will sync —
+`daily_flows` and `bbt_entries` — so an import can tell a value the user typed from one that
+came in over the OS health platform, and never overwrite the former.
+
+| Column (both tables) | Type | Notes |
+|--------|------|-------|
+| `source` | TEXT, **NOT NULL**, default `'manual'` | `HealthDataSource` name — `manual` / `appleHealth` / `healthConnect`. The default marks every pre-v7 row as user-entered. Kept as plain text so the DB layer doesn't depend on the `core` health model. |
+| `external_id` | TEXT, nullable | The platform's stable identifier for an imported sample, so a later sync matches instead of duplicating. `NULL` for manual rows. |
+
+This is the **first migration that ALTERs an existing table**. The reconciliation engine that
+relies on these columns (`core/lib/src/health/import_reconciler.dart`) is pure and storage-free;
+the write path that sets `source` on import / flips it back to `manual` on edit lands in p6.4.
+
+`schemaVersion = 7`.
+
 ## Migrations
 
 `MigrationStrategy.onUpgrade` runs the steps below in order. Every schema change:
@@ -222,6 +239,7 @@ interface, with a fake in tests.
 | `from < 4` (p1.5) | Creates `symptom_types` + `daily_symptom_entries` and seeds the built-in symptom names. Purely additive — existing `periods` / `daily_flows` / `cycle_events` rows are untouched. Verified by `core/test/db/symptom_migration_test.dart` (real on-disk v3 file → upgrade → assert both table shapes, catalogue seeded, period + flow rows intact, tables usable); `flow_migration_test.dart` and `period_migration_test.dart` also run older versions straight through and check the catalogue seeded. |
 | `from < 5` (p1.6) | Creates `bbt_entries`, `cervical_mucus_entries` and `app_settings`. Purely additive — nothing is backfilled, existing rows are untouched. Verified by `core/test/db/fertility_migration_test.dart` (real on-disk v4 file with period + flow + symptom rows → upgrade → assert the three new tables exist, old rows intact, all three new repos usable). |
 | `from < 6` (p1.7) | Creates `medications`, `birth_control_entries` and `reminders`. Purely additive — nothing is backfilled, existing rows are untouched. Verified by `core/test/db/meds_migration_test.dart` (real on-disk v5 file with period + settings rows → upgrade → assert the three new tables exist, old rows intact, all three new repos usable, and `reminders` rejects a second row for the same `kind`). |
+| `from < 7 && to >= 7` (p6.1) | `m.addColumn` × 4: `source` (default `'manual'`) + `external_id` (nullable) on `daily_flows` and `bbt_entries`. First ALTER migration — the `addColumn` is guarded so it only touches a table an earlier step created in its *pre-v7* shape (`daily_flows` from v3, `bbt_entries` from v5); when `from` predates the table, the `createTable` above already builds it with the columns. The `to >= 7` guard keeps the single-step `migration_matrix_test` targets honest. Verified by `core/test/db/migration_matrix_test.dart` (v1..v6 → v7: schema matches the committed v7 snapshot, every pre-v7 row comes out `source = 'manual'` / `external_id` NULL, backup/restore round-trips at v7). |
 
 drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) is still **not** wired up
 — the migration tests hand-build the old schema. Adopting the snapshot tooling is a tracked
