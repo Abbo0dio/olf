@@ -3908,7 +3908,7 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     green incl. `CI OK`. **Phase 6 header stays `TODO`** (not a phase close). Set DONE.
 
 #### p6.2 — Apple HealthKit gateway (iOS)
-- **Status:** `IN PROGRESS` · **Depends on:** p6.1
+- **Status:** `IN REVIEW` ([PR #66](https://github.com/Abbo0dio/olf/pull/66)) · **Depends on:** p6.1
 - **Requirement refs:** §2, §3, §4
 - **Goal:** a real `HealthPlatformGateway` for iOS — read + write menstrual flow, BBT / body /
   wrist temperature, sleep — reachable from a default-off, opt-in "Connect Apple Health" control
@@ -4017,6 +4017,10 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     **Tests:** `app/test/health/{flow_mapping,healthkit_gateway,health_import,connect_health_flow}_test.dart`
     + `core` repo provenance / one-shot-read tests + `healthDataSourceFromStorage`
     tests. `git diff app/pubspec.lock` clean — no dependency added.
+  - 2026-09-05 — [PR #66](https://github.com/Abbo0dio/olf/pull/66) opened, p6.2
+    IN REVIEW. Local: format / analyze (core + app + scripts) / build_runner
+    (no `.g.dart` drift) / core 567 / app 381 / dependency-audit PASS / pubspec
+    locks clean — all green. CI running.
 
 #### p6.3 — Android Health Connect gateway
 - **Status:** `TODO` · **Depends on:** p6.1; shares the dependency decision with p6.2
