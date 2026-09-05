@@ -6,6 +6,7 @@ import 'package:olf_core/olf_core.dart';
 import '../a11y/spoken_detail.dart';
 import '../bbt/bbt_format.dart';
 import '../bbt/bbt_providers.dart';
+import '../health/health_providers.dart';
 import '../mucus/mucus_providers.dart';
 import '../period/period_format.dart';
 import '../settings/settings_providers.dart';
@@ -109,8 +110,10 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
     if (result == null || !mounted) return;
 
     final repo = ref.read(bbtRepositoryProvider);
+    final writeBack = ref.read(healthWriteBackProvider);
     if (result.cleared) {
       await repo.clearTemp(widget.date);
+      await writeBack.bbtCleared(widget.date);
       if (mounted) setState(() => _tempCelsius = null);
       return;
     }
@@ -121,6 +124,8 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
     }
     final celsius = result.celsius!;
     await repo.setTemp(widget.date, celsius);
+    // p6.4: push the edit out to a connected health platform (no-op otherwise).
+    await writeBack.bbtLogged(widget.date, celsius: celsius);
     if (mounted) setState(() => _tempCelsius = celsius);
   }
 

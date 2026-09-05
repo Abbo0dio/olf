@@ -22,9 +22,10 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 18 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 20 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
-/// p6.3, the tile is platform-neutral). The dispatch inventory named
+/// p6.3, the tile is platform-neutral; p6.4 added the health sync-status page
+/// and the conflict-review page). The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
 /// flow/spotting/clot chip surface) stand in its place.
@@ -78,13 +79,66 @@ Future<void> _seedRecentCycle(AppDatabase db) async {
 }
 
 /// Put the app in the "health app already connected" state so the
-/// "Apps & export" section renders its full form (summary subtitle + "Sync
-/// now"). A `FakeHealthPlatformGateway` override makes `healthAvailableProvider`
-/// true; the stored keys stand in for a sync that already ran.
+/// "Apps & export" section renders its full form (summary subtitle + "Health
+/// sync" tile). A `FakeHealthPlatformGateway` override makes
+/// `healthAvailableProvider` true; the stored keys stand in for a sync that
+/// already ran.
 Future<void> _seedHealthAppConnected(AppDatabase db) async {
   final settings = DriftSettingsRepository(db);
   await settings.set(SettingKeys.appleHealthConnected, 'true');
   await settings.set(SettingKeys.appleHealthLastSync, '2,1,0');
+  await settings.set(
+    SettingKeys.appleHealthLastSyncAt,
+    DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(),
+  );
+}
+
+/// A single reconciliation conflict for the p6.4 sync-status / conflict-review
+/// surfaces. Basal-temperature by default (local 36.50 °C vs incoming 36.90 °C);
+/// pass `flow: true` for a menstrual-flow disagreement instead.
+ReconciliationConflict _sampleConflict({int day = 4, bool flow = false}) {
+  final at = DateTime(2026, 4, day);
+  final localId = '2026-04-$day';
+  if (flow) {
+    return ReconciliationConflict(
+      localId: localId,
+      local: LocalSampleView(
+        localId: localId,
+        type: HealthSampleType.menstrualFlow,
+        day: at,
+        value: FlowIntensity.light.index.toDouble(),
+        unit: HealthUnit.flowLevel,
+        source: HealthDataSource.manual,
+      ),
+      incoming: HealthSample.point(
+        type: HealthSampleType.menstrualFlow,
+        at: at,
+        value: FlowIntensity.heavy.index.toDouble(),
+        unit: HealthUnit.flowLevel,
+        source: HealthDataSource.appleHealth,
+      ),
+      reason: ConflictReason.manualDisagreement,
+    );
+  }
+  return ReconciliationConflict(
+    localId: localId,
+    local: LocalSampleView(
+      localId: localId,
+      type: HealthSampleType.basalBodyTemperature,
+      day: at,
+      value: 36.5,
+      unit: HealthUnit.celsius,
+      source: HealthDataSource.manual,
+    ),
+    incoming: HealthSample.point(
+      type: HealthSampleType.basalBodyTemperature,
+      at: at,
+      value: 36.9,
+      unit: HealthUnit.celsius,
+      source: HealthDataSource.appleHealth,
+    ),
+    reason: ConflictReason.manualDisagreement,
+  );
 }
 
 Future<void> _openSettings(WidgetTester tester) async {
@@ -99,6 +153,23 @@ Future<void> _openFromSettings(WidgetTester tester, Finder row) async {
     200,
     scrollable: find.byType(Scrollable).first,
   );
+  await tester.tap(row);
+  await tester.pumpAndSettle();
+}
+
+/// Settings → "Health sync" (p6.4). That tile is the last row in the list, so at
+/// 2.0x text `scrollUntilVisible` can stop with it built but a few pixels below
+/// the fold; `ensureVisible` nudges it fully on-screen before the tap.
+Future<void> _openHealthSync(WidgetTester tester) async {
+  await _openSettings(tester);
+  final row = find.text('Health sync');
+  await tester.scrollUntilVisible(
+    row,
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.ensureVisible(row);
+  await tester.pumpAndSettle();
   await tester.tap(row);
   await tester.pumpAndSettle();
 }
@@ -208,6 +279,58 @@ final List<Surface> screenSurfaces = <Surface>[
           200,
           scrollable: find.byType(Scrollable).first,
         );
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('health_sync_status_page', (tester, check) async {
+    final db = memoryDb();
+    await _seedHealthAppConnected(db);
+    await pumpOlf(
+      tester,
+      overrides: [
+        ...screenNavOverrides(db),
+        healthPlatformGatewayProvider.overrideWithValue(
+          FakeHealthPlatformGateway(),
+        ),
+        healthConflictsProvider.overrideWith((ref) => [_sampleConflict()]),
+      ],
+      body: () async {
+        await _openHealthSync(tester);
+        expect(find.text('Last synced'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('health_conflict_review_page', (tester, check) async {
+    final db = memoryDb();
+    await _seedHealthAppConnected(db);
+    await pumpOlf(
+      tester,
+      overrides: [
+        ...screenNavOverrides(db),
+        healthPlatformGatewayProvider.overrideWithValue(
+          FakeHealthPlatformGateway(),
+        ),
+        healthConflictsProvider.overrideWith(
+          (ref) => [_sampleConflict(), _sampleConflict(day: 9, flow: true)],
+        ),
+      ],
+      body: () async {
+        await _openHealthSync(tester);
+        final reviewRow = find.text('Needs review');
+        await tester.scrollUntilVisible(
+          reviewRow,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.ensureVisible(reviewRow);
+        await tester.pumpAndSettle();
+        await tester.tap(reviewRow);
+        await tester.pumpAndSettle();
+        expect(find.text('Review sync conflicts'), findsOneWidget);
         await check(tester);
       },
     );

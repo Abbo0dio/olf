@@ -63,11 +63,17 @@ abstract final class SettingKeys {
   /// app; olf treats an empty read as "nothing to import", not an error.
   static const String appleHealthConnected = 'apple_health_connected';
 
-  /// The last Apple Health sync outcome (p6.2), as `"<added>,<updated>,<review>"`
-  /// counts — e.g. `'2,1,0'`. Absent means "connected, not synced yet". Owned by
-  /// the app layer (`health_providers.dart`); shown as the tile subtitle and
-  /// redacted from screen readers under [reduceSpokenDetail].
+  /// The last health-platform sync outcome (p6.2), as
+  /// `"<added>,<updated>,<review>"` counts — e.g. `'2,1,0'`. Absent means
+  /// "connected, not synced yet". Owned by the app layer
+  /// (`health_providers.dart`); shown as the tile subtitle and redacted from
+  /// screen readers under [reduceSpokenDetail].
   static const String appleHealthLastSync = 'apple_health_last_sync';
+
+  /// When the last health-platform sync ran (p6.4), ISO-8601 local. Absent
+  /// until the first sync. Shown as a relative "last synced …" line on the sync
+  /// status surface.
+  static const String appleHealthLastSyncAt = 'apple_health_last_sync_at';
 }
 
 /// A tiny persistent key/value store for user preferences (`app_settings`).

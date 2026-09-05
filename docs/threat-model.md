@@ -132,6 +132,9 @@ flowchart TD
     UI -->|"opt-in: Connect a health app (p6.2 iOS / p6.3 Android)"| HKBridge{{"olf/health MethodChannel<br/>HealthPlatformGateway seam"}}
     HKBridge <-->|"flow + BBT, local IPC"| HealthStore[["OS health store<br/>Apple Health / Health Connect<br/>(OS-governed, per-app grants)"]]
     HKBridge -->|"reconcile, never clobber manual"| RealVault
+    UI -->|"log / edit / clear flow or BBT while connected (p6.4 write-back, best-effort)"| HKBridge
+    Sweep -.->|"purge-before-sync (p6.4): sync skips rows older than window, never writes them back"| HKBridge
+    UI -->|"conflict review (p6.4): 'keep mine' -> platform write; 'take theirs' -> manual row"| RealVault
 ```
 
 ASCII fallback (same flow, for viewers without Mermaid):
@@ -162,6 +165,12 @@ ASCII fallback (same flow, for viewers without Mermaid):
      [ Flutter UI ] <--> [ olf/health MethodChannel = HealthPlatformGateway ]
                           <--> [ OS health store: Apple Health / Health Connect ]  (flow + BBT, local IPC)
                      import --> [ ImportReconciler ] --> olf.db  (never clobbers a manual row)
+     write-back (p6.4): log / edit / clear flow or BBT while connected --> gateway.write / .delete
+                        best-effort, no queue, no retry; round-trip is value-equal -> reconciler skip
+     purge-before-sync (p6.4): retention sweep runs first; sync never re-imports or writes back
+                               rows older than the p2.3 window
+     conflict review (p6.4): in-memory list only; "keep mine" -> platform write,
+                             "take theirs" -> olf.db as source='manual', "later" -> re-surfaces next sync
 ```
 
 ---
@@ -191,6 +200,7 @@ cross-reference the phase-gate review walks.
 | This threat model + its CI guard | p2.8 | keeps the security design written down and reviewed each phase |
 | Health-platform bridge is opt-in / default-off / revocable, scoped to exactly two data types, hand-rolled channel (no SDK, no CocoaPod), no network; imported rows land in the same `bbt_entries` / `daily_flows` tables the p2.3 retention sweep already covers | p6.2 | the new App ↔ OS health platform boundary (#8) — minimises what crosses it and keeps the user in control of when it is open |
 | Android half of the same bridge hand-rolled in Kotlin against Health Connect — the manifest carries **exactly four** `android.permission.health.*` entries (read + write for the two wired types, each `audited:` and checked by the dependency-audit permission-diff), no pub package (`pubspec.lock` unchanged), no network; runtime `getSdkStatus` probe hides the tile when Health Connect is absent | p6.3 | extends boundary #8 to Android with the same minimal, user-controlled, auditable surface as iOS |
+| Two-way sync stays inside boundary #8: write-back is best-effort with **no queue, no retry, no background execution** (no `WorkManager` / `BGTaskScheduler` — sync only on the user's "Sync now"); the retention sweep runs **before** every sync so purged / out-of-window rows are neither re-imported nor written back; the conflict list is **in-memory only** (no new table, no new data class at rest) and each resolution is an ordinary local or platform write | p6.4 | keeps the new bidirectional flow user-triggered, bounded by the p2.3 window, and free of any new persistent store or scheduled-execution capability |
 
 ---
 

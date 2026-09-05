@@ -135,6 +135,33 @@ void main() {
       expect(plan.skipped.single.localId, '2026-04-2');
     });
 
+    test('a manual row olf wrote back round-trips as a skip, not a conflict '
+        '(p6.4 write-back dedup)', () {
+      // The user logged a value in olf (source: manual, no externalId); p6.4
+      // pushed it to the platform; on the next read it comes back
+      // platform-sourced with the *same* value (within tolerance).
+      final plan = reconciler.reconcile(
+        local: [local(4, value: 36.6, source: HealthDataSource.manual)],
+        incoming: [bbt(4, value: 36.604, source: HealthDataSource.appleHealth)],
+      );
+      expect(plan.conflicts, isEmpty);
+      expect(plan.updates, isEmpty);
+      expect(plan.inserts, isEmpty);
+      expect(plan.skipped.single.localId, '2026-04-4');
+    });
+
+    test(
+      'a manual row still conflicts when the platform value genuinely differs',
+      () {
+        final plan = reconciler.reconcile(
+          local: [local(4, value: 36.6, source: HealthDataSource.manual)],
+          incoming: [bbt(4, value: 37.1, source: HealthDataSource.appleHealth)],
+        );
+        expect(plan.skipped, isEmpty);
+        expect(plan.conflicts.single.reason, ConflictReason.manualDisagreement);
+      },
+    );
+
     test(
       'exact duplicate (value within tolerance, same source) is skipped',
       () {

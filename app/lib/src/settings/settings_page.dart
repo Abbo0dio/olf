@@ -10,6 +10,7 @@ import '../appearance/app_icon_providers.dart';
 import '../backup/backup_page.dart';
 import '../health/health_import.dart';
 import '../health/health_providers.dart';
+import '../health/sync_status_page.dart';
 import '../personalization/personalization_providers.dart';
 import '../prediction/accuracy_format.dart';
 import '../prediction/accuracy_page.dart';
@@ -64,6 +65,7 @@ class SettingsPage extends ConsumerWidget {
     final healthConnected =
         ref.watch(healthConnectedProvider).valueOrNull ?? false;
     final healthLastSync = ref.watch(healthLastSyncProvider).valueOrNull;
+    final healthConflicts = ref.watch(healthConflictsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -299,9 +301,21 @@ class SettingsPage extends ConsumerWidget {
             ),
             if (healthConnected)
               ListTile(
-                leading: const Icon(Icons.refresh),
-                title: const Text('Sync now'),
-                onTap: () => _syncHealth(context, ref),
+                leading: const Icon(Icons.sync),
+                title: const Text('Health sync'),
+                subtitle: Text(
+                  healthConflicts.isEmpty
+                      ? 'Sync now, see the last run'
+                      : '${healthConflicts.length} '
+                            '${healthConflicts.length == 1 ? 'difference' : 'differences'} '
+                            'to review',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const HealthSyncStatusPage(),
+                  ),
+                ),
               ),
           ],
         ],
@@ -388,21 +402,6 @@ class SettingsPage extends ConsumerWidget {
         SnackBar(
           content: Text('$name access was not granted. Nothing changed.'),
         ),
-      );
-    } on HealthPlatformUnavailable {
-      messenger.showSnackBar(
-        SnackBar(content: Text("Couldn't reach $name. Nothing changed.")),
-      );
-    }
-  }
-
-  Future<void> _syncHealth(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final name = ref.read(healthPlatformNameProvider);
-    try {
-      final summary = await syncHealthPlatform(ref);
-      messenger.showSnackBar(
-        SnackBar(content: Text(_summarySentence(summary))),
       );
     } on HealthPlatformUnavailable {
       messenger.showSnackBar(

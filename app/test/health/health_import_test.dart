@@ -60,7 +60,7 @@ void main() {
       ],
     );
 
-    final summary = await serviceWith(gateway).sync();
+    final summary = (await serviceWith(gateway).sync()).summary;
 
     expect(
       summary,
@@ -90,7 +90,7 @@ void main() {
       seedSamples: [bbtSample(celsius: 36.9, externalId: 't1')],
     );
 
-    final summary = await serviceWith(gateway).sync();
+    final summary = (await serviceWith(gateway).sync()).summary;
 
     expect(summary.updated, 1);
     expect(summary.added, 0);
@@ -104,7 +104,7 @@ void main() {
       seedSamples: [bbtSample(celsius: 36.9, externalId: 't9')],
     );
 
-    final summary = await serviceWith(gateway).sync();
+    final summary = (await serviceWith(gateway).sync()).summary;
 
     expect(summary.needsReview, 1);
     expect(summary.added, 0);
@@ -164,7 +164,7 @@ void main() {
       final gateway = FakeHealthPlatformGateway(
         seedSamples: [bbtSample(celsius: 36.7, externalId: 't1')],
       );
-      final summary = await serviceWith(gateway).connect();
+      final summary = (await serviceWith(gateway).connect()).summary;
       expect(summary.added, 1);
       expect(gateway.authRequests, hasLength(1));
       expect(gateway.authRequests.single.access, HealthAccess.readWrite);

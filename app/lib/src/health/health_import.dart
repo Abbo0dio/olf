@@ -52,14 +52,31 @@ class HealthSyncSummary {
       'needsReview: $needsReview)';
 }
 
+/// The full outcome of one [HealthImportService.sync] — the plain-language
+/// [summary] shown to the user, plus the actual [conflicts] the p6.4
+/// conflict-review screen works through. Conflicts live in memory only (there
+/// is no `sync_conflicts` table); the next sync recomputes them from scratch.
+@immutable
+class HealthSyncResult {
+  const HealthSyncResult({required this.summary, required this.conflicts});
+
+  const HealthSyncResult.empty()
+    : summary = const HealthSyncSummary.empty(),
+      conflicts = const [];
+
+  final HealthSyncSummary summary;
+  final List<ReconciliationConflict> conflicts;
+}
+
 /// Runs one import/export pass between the OS health platform and olf's own
 /// tables, on top of the pure [ImportReconciler] from `core`.
 ///
-/// Sequence: request read+write authorization → read the last [window] of the
-/// two mapped types → reconcile against the local rows → apply the safe inserts
-/// and updates → push out the user's own manual rows the platform is missing →
-/// return a [HealthSyncSummary]. Conflicts are counted, never applied (p6.4
-/// owns the review screen). Nothing here touches the network.
+/// Sequence: (purge anything past the retention window) → request read+write
+/// authorization → read the last [window] of the two mapped types, clamped to
+/// the retention cutoff → reconcile against the local rows → apply the safe
+/// inserts and updates → push out the user's own manual rows the platform is
+/// missing → return a [HealthSyncResult]. Conflicts are surfaced, never applied
+/// (p6.4's review screen). Nothing here touches the network.
 class HealthImportService {
   HealthImportService({
     required HealthPlatformGateway gateway,
@@ -68,12 +85,16 @@ class HealthImportService {
     DateTime Function() now = DateTime.now,
     Duration window = const Duration(days: 180),
     ImportReconciler reconciler = const ImportReconciler(),
+    Future<void> Function()? purgeBeforeSync,
+    DateTime? Function()? retentionCutoff,
   }) : _gateway = gateway,
        _bbt = bbt,
        _flow = flow,
        _now = now,
        _window = window,
-       _reconciler = reconciler;
+       _reconciler = reconciler,
+       _purgeBeforeSync = purgeBeforeSync,
+       _retentionCutoff = retentionCutoff;
 
   final HealthPlatformGateway _gateway;
   final BbtRepository _bbt;
@@ -81,6 +102,15 @@ class HealthImportService {
   final DateTime Function() _now;
   final Duration _window;
   final ImportReconciler _reconciler;
+
+  /// Runs the p2.3 retention sweep before a sync so nothing past the window is
+  /// read back in or pushed back out. `null` in unit tests that don't wire it.
+  final Future<void> Function()? _purgeBeforeSync;
+
+  /// The oldest calendar day to keep (entries strictly before it are excluded
+  /// from both import and write-back). `null` / a `null` return means "no
+  /// retention window".
+  final DateTime? Function()? _retentionCutoff;
 
   static const Set<HealthSampleType> _types = {
     HealthSampleType.menstrualFlow,
@@ -92,7 +122,7 @@ class HealthImportService {
   /// [HealthAuthorizationDenied] if the user dismissed the permission sheet
   /// without granting; the caller turns either into a calm message and leaves
   /// the connected flag off.
-  Future<HealthSyncSummary> connect() async {
+  Future<HealthSyncResult> connect() async {
     final status = await _gateway.requestAuthorization(
       _types,
       access: HealthAccess.readWrite,
@@ -104,11 +134,24 @@ class HealthImportService {
   }
 
   /// Re-run the sync for an already-connected user (no permission prompt).
-  Future<HealthSyncSummary> sync() async {
-    final to = _now();
-    final from = to.subtract(_window);
+  Future<HealthSyncResult> sync() async {
+    // p2.3: purge anything past the retention window first, so a sync can
+    // neither re-import nor write back data the user has chosen to drop —
+    // mirrors purge-before-export in the backup path.
+    await _purgeBeforeSync?.call();
+    final cutoff = _retentionCutoff?.call();
 
-    final incoming = await _gateway.read(types: _types, from: from, to: to);
+    final to = _now();
+    var from = to.subtract(_window);
+    if (cutoff != null && cutoff.isAfter(from)) from = cutoff;
+
+    final rawIncoming = await _gateway.read(types: _types, from: from, to: to);
+    final incoming = cutoff == null
+        ? rawIncoming
+        : [
+            for (final s in rawIncoming)
+              if (!dateOnly(s.startAt).isBefore(cutoff)) s,
+          ];
 
     final bbtRows = await _bbt.allEntries();
     final flowRows = await _flow.allFlows();
@@ -146,10 +189,13 @@ class HealthImportService {
 
     await _pushOut(incoming: incoming, bbtRows: bbtRows, flowRows: flowRows);
 
-    return HealthSyncSummary(
-      added: plan.inserts.length,
-      updated: plan.updates.length,
-      needsReview: plan.conflicts.length,
+    return HealthSyncResult(
+      summary: HealthSyncSummary(
+        added: plan.inserts.length,
+        updated: plan.updates.length,
+        needsReview: plan.conflicts.length,
+      ),
+      conflicts: plan.conflicts,
     );
   }
 

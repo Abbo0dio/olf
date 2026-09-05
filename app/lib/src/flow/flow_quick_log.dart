@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../health/health_providers.dart';
 import '../period/period_format.dart';
 import 'flow_format.dart';
 import 'flow_providers.dart';
@@ -74,7 +75,14 @@ class _FlowQuickLogSheetState extends ConsumerState<_FlowQuickLogSheet> {
     if (intensity == null) return;
     ref
         .read(dailyFlowRepositoryProvider)
-        .setFlow(widget.date, intensity: intensity, clotSize: _clot);
+        .setFlow(widget.date, intensity: intensity, clotSize: _clot)
+        .then((_) {
+          // p6.4: push the edit out to a connected health platform (no-op
+          // otherwise). Best-effort — never blocks the log.
+          ref
+              .read(healthWriteBackProvider)
+              .flowLogged(widget.date, intensity: intensity);
+        });
   }
 
   void _pickIntensity(FlowIntensity value) {
@@ -89,6 +97,7 @@ class _FlowQuickLogSheetState extends ConsumerState<_FlowQuickLogSheet> {
 
   Future<void> _remove() async {
     await ref.read(dailyFlowRepositoryProvider).clearFlow(widget.date);
+    await ref.read(healthWriteBackProvider).flowCleared(widget.date);
     if (mounted) Navigator.of(context).pop();
   }
 

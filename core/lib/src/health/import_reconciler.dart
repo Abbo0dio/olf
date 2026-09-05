@@ -214,10 +214,13 @@ bool _listEq(List<Object?> a, List<Object?> b) {
 /// storage.
 ///
 /// **Matching.** An incoming sample matches a local row by [externalId] first;
-/// failing that, by `(type, day)`. **Hard rules.** A [HealthDataSource.manual]
-/// local row is never in [ReconciliationPlan.updates] — a disagreement with it
-/// is always a [ReconciliationConflict]. A `(type, day)` match against a
-/// different-source row is a conflict, not an update.
+/// failing that, by `(type, day)`. **Hard rules.** A value-equal match (within
+/// [tolerance]) is always a [ReconciliationPlan.skipped] — nothing to do,
+/// whatever the source (this is how a manual row olf wrote back round-trips
+/// cleanly). When the values *disagree*: a [HealthDataSource.manual] local row
+/// is never in [ReconciliationPlan.updates] — it is always a
+/// [ReconciliationConflict]; a `(type, day)` match against a different
+/// non-manual source is a conflict, not an update.
 class ImportReconciler {
   const ImportReconciler({this.tolerance = 0.01});
 
@@ -260,13 +263,18 @@ class ImportReconciler {
           sameUnit && (match.value - sample.value).abs() <= tolerance;
       final sameSource = match.source == sample.source;
 
-      if (sameValue && sameSource) {
+      // Values agree within tolerance → nothing to do, whatever the source.
+      // This is also what makes a manual row olf pushed out round-trip
+      // cleanly: it comes back platform-sourced but value-equal, so it lands
+      // here as a skip rather than a false conflict (p6.4 write-back).
+      if (sameValue) {
         skipped.add(
           ReconciliationSkip(localId: match.localId, incoming: sample),
         );
         continue;
       }
 
+      // From here the values genuinely disagree.
       if (match.source == HealthDataSource.manual) {
         conflicts.add(
           ReconciliationConflict(
@@ -280,20 +288,14 @@ class ImportReconciler {
       }
 
       if (!sameSource) {
-        if (sameValue) {
-          skipped.add(
-            ReconciliationSkip(localId: match.localId, incoming: sample),
-          );
-        } else {
-          conflicts.add(
-            ReconciliationConflict(
-              localId: match.localId,
-              local: match,
-              incoming: sample,
-              reason: ConflictReason.crossSourceDisagreement,
-            ),
-          );
-        }
+        conflicts.add(
+          ReconciliationConflict(
+            localId: match.localId,
+            local: match,
+            incoming: sample,
+            reason: ConflictReason.crossSourceDisagreement,
+          ),
+        );
         continue;
       }
 

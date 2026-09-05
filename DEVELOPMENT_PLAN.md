@@ -4026,7 +4026,7 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     header stays `TODO` (not a phase close).
 
 #### p6.3 — Android Health Connect gateway
-- **Status:** `IN REVIEW` · **PR:** [#67](https://github.com/Abbo0dio/olf/pull/67) · **Depends on:** p6.1, p6.2 (shared `olf/health` wire contract + Dart gateway/codec)
+- **Status:** `DONE (2026-09-05)` · squash `de46108` · **PR:** [#67](https://github.com/Abbo0dio/olf/pull/67) · **Depends on:** p6.1, p6.2 (shared `olf/health` wire contract + Dart gateway/codec)
 - **Requirement refs:** §2, §3, §4
 - **Goal:** the Android half — a real `HealthPlatformGateway` over Health Connect for the two
   wired types, the same opt-in tile now enabled on Android, plus the Google Fit deprecation note.
@@ -4147,9 +4147,12 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     env; the `Build (ubuntu-latest, apk)` job validates it.
   - 2026-09-05 — PR [#67](https://github.com/Abbo0dio/olf/pull/67) opened into `main`; set
     p6.3 IN REVIEW. Awaiting CI + orchestrator review.
+  - 2026-09-05 — CI green (9/9, run 33981648228). Merged by orchestrator as squash
+    `de46108`. Set DONE.
 
 #### p6.4 — Two-way sync + visible sync status
-- **Status:** `TODO` · **Depends on:** p6.2, p6.3
+- **Status:** `IN PROGRESS` — worker: phase1; worktree `../olf-wt/p6.4`, branch
+  `feat/p6.4-two-way-sync` off `main` @ `de46108` (#67) · **Depends on:** p6.2, p6.3
 - **Requirement refs:** §2, §3 (retention), §4 (reliability), §9(11)
 - **Goal:** move from one-shot import to genuine two-way sync — app-entered data written back to
   the connected platform, imports on a user action ("Sync now") and/or on app open, a per-source
@@ -4188,7 +4191,55 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   (each resolution path), a retention-interaction test (purged / out-of-window data not synced).
 - **Notes / detail:** worker decides on-open-sync vs manual-only for v1 (propose, note the
   tradeoff). Keep the conflict screen simple — a list + three actions, no bulk ops.
-- **Log:** 2026-09-05 — created (orchestrator, Phase 6 expansion).
+- **Sync-trigger decision (worker, 2026-09-05): manual-only for v1.** "Sync now" already
+  exists (p6.2, one tap) on both the Apps & export tile and the new status page. On-open sync
+  would add a lifecycle-timer branch to `_AppGateState` (which already carries the p5.3
+  auto-lock timer + pointer listener), a debounce, a "don't block first frame" guarantee, and
+  a platform read on every cold open — cost out of proportion to the benefit for v1. Manual-only
+  keeps the surface small and the risk low; on-open is a clean fast-follow (backlog).
+- **Conflict store (worker, 2026-09-05):** in-memory `StateProvider<List<ReconciliationConflict>>`
+  (`healthConflictsProvider`), populated by each sync, drained as the user resolves rows. **No
+  `sync_conflicts` table** → no schema change → no §5 STOP. "Keep mine" writes the local value
+  to the platform (converge → next sync skips it); "use theirs" writes the incoming value
+  locally as `source='manual'` (converge); "later" drops it from the list only (it re-surfaces
+  on the next sync). Three distinct behaviours, zero persistence.
+- **Reconciler `sameValue → skip` fix (worker, 2026-09-05):** `ImportReconciler.reconcile`
+  previously sent a value-equal incoming sample to a `manualDisagreement` conflict whenever the
+  local row was `manual` and the source differed — which would make *every* written-back manual
+  row a false conflict on the next sync. Moved the `if (sameValue) → skip` check ahead of the
+  source/manual branches so a pushed-out `manual` row that comes back platform-sourced but
+  value-equal (within tolerance) lands as a `skip`. Pure `core` change; 2 new reconciler tests.
+- **Write-back edited-imported-row edge case:** after a UI edit a formerly-imported row is
+  `manual` with `externalId = null` (p6.2 already clears it on source-flip). Write-back writes
+  `source: manual, externalId: null`. If the platform still holds the pre-edit value under its
+  own id, the next sync surfaces a genuine `manualDisagreement` conflict — correct UX, that is
+  what the conflict-review screen is for. On *clear*, write-back calls `gateway.delete` for the
+  day + type; iOS scopes deletes to olf-authored samples, Android range-delete carries a narrow
+  risk of removing another app's same-day record (noted in threat-model).
+- **Log:**
+  - 2026-09-05 — created (orchestrator, Phase 6 expansion).
+  - 2026-09-05 — claimed by worker: phase1; worktree `../olf-wt/p6.4`, branch
+    `feat/p6.4-two-way-sync` off `main` @ `de46108` (#67). Folded p6.3 → DONE (squash
+    `de46108`). Set p6.4 IN PROGRESS. **Seams built:** `core` `ImportReconciler` `sameValue →
+    skip` reorder (round-trip dedup) + 2 tests; `HealthImportService.sync()`/`connect()` now
+    return `HealthSyncResult { summary, conflicts }` and take `purgeBeforeSync` +
+    `retentionCutoff` callbacks (purge-before-sync; incoming filtered to `>= cutoff`; read
+    window floored at cutoff); new `HealthWriteBack` (thin best-effort `gateway.write` /
+    `gateway.delete`, `debugPrint` on failure, no queue/retry — same posture as p6.2
+    `_pushOut`) wired from `flow_quick_log.dart` + `symptom_day_sheet.dart` on log / edit /
+    clear; `health_providers.dart` gains `healthWriteBackProvider`, `healthLastSyncAtProvider`,
+    `healthConflictsProvider` (in-memory) + `resolveConflictKeepLocal` / `…TakeIncoming` /
+    `dismissConflict` / `_recordSync`; `SettingKeys.appleHealthLastSyncAt`. **UI:**
+    `sync_status_page.dart` (`HealthSyncStatusPage` — connected / last-synced relative time /
+    last-run counts / N-need-review → conflict screen / "Sync now"; `spokenLabel` redaction),
+    `conflict_review_page.dart` (`ConflictReviewPage` — one row per conflict, local vs incoming,
+    Keep mine / Use theirs / Later; `spokenDetail` redaction; empty done-state); Settings "Sync
+    now" tile → "Health sync" tile → the status page. **screen_nav.dart:** +2 surfaces
+    (`health_sync_status_page`, `health_conflict_review_page`), doc count 18 → 20,
+    `_openHealthSync` helper + `_sampleConflict` fixture. **Test plan:**
+    `app/test/health/write_back_test.dart`, `sync_status_test.dart`, `conflict_review_test.dart`,
+    `health_retention_test.dart` + the 2 `core` reconciler tests. No schema change, no new
+    dependency, no background sync.
 
 #### p6.5 — Doctor-ready export (offline PDF report)
 - **Status:** `TODO` · **Depends on:** p6.1 (data model); independent of p6.2–p6.4
