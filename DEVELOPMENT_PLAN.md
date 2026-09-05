@@ -3724,7 +3724,7 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   ambiguous.
 
 #### p6.1 — Interop foundation: gateway interface, sample model, reconciliation engine, provenance schema (v7)
-- **Status:** `IN PROGRESS` · **Depends on:** none (first Phase 6 slice; carries `main` from the Phase 5 close + p1.12)
+- **Status:** `IN REVIEW` · **Depends on:** none (first Phase 6 slice; carries `main` from the Phase 5 close + p1.12)
 - **Owner:** worker: phase1
 - **Branch / worktree:** `feat/p6.1-interop-foundation` · `../olf-wt/p6.1` off `main` @ `f9780bd` (#64)
 - **Requirement refs:** §2, §3, §9(11); §1.4 DoD (schema change ⇒ migration + test)
@@ -3882,6 +3882,21 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
     `feat/p6.1-interop-foundation` off `main` @ `f9780bd` (#64). Inserted the full Phase 6 plan
     block (p6.1–p6.5 + phase-wide constraints + exit gate) from the orchestrator dispatch,
     verbatim. No previous-slice fold (p1.12 already DONE on `main`). Set p6.1 IN PROGRESS.
+  - 2026-09-05 — built to DoD: `core/lib/src/health/{health_sample,health_platform_gateway,import_reconciler}.dart`
+    (+ `FakeHealthPlatformGateway`), all exported from `olf_core.dart`; schema v6 → v7 —
+    `source` (default `'manual'`) + `external_id` (nullable) on `daily_flows` + `bbt_entries`,
+    `onUpgrade` `from < 7 && to >= 7` guarded `addColumn` ×4; `dump_historical_schemas.dart`
+    reworked (v1..v5 from the v6 anchor, v6 + v7 are real dumps); `drift_schema_v7.json` +
+    `test/db/generated/` regenerated; `migration_matrix_test` extended to v7 (pre-v7 rows land
+    `source='manual'` / null `external_id`; backup/restore round-trips at v7; v2→v3 / v4→v5
+    single-step checks dropped — `onUpgrade` isn't version-frozen, covered by the full path);
+    per-feature migration tests + `app_database_test` bumped to v7; `threat-model.md` Phase 6
+    opening-gate entry; `local-database.md` v7 section; `release-checklist.md` first-ALTER note.
+    New tests: `core/test/health/{health_sample,import_reconciler,fake_gateway}_test.dart`.
+    core 557 / app 339; `analyze --fatal-infos` (core + app + `.github/scripts`) + `format` +
+    `dependency-audit` (PASS, 38 rules) + `build_runner` (no `.g.dart` drift) +
+    `git diff core/pubspec.lock app/pubspec.lock` (empty) all green. `source`-flip-on-edit
+    deferred to p6.4. PR [#65](https://github.com/Abbo0dio/olf/pull/65) opened into `main`; set IN REVIEW.
 
 #### p6.2 — Apple HealthKit gateway (iOS)
 - **Status:** `TODO` · **Depends on:** p6.1
