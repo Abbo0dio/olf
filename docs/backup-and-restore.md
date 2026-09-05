@@ -3,7 +3,7 @@
 `requirements.md` §7 / §9(11): **never lose data.** p1.10 gives the user one encrypted file
 that holds everything, that only their passphrase can open, and that restores exactly on the
 same device or a new one. It is a store-release prerequisite
-(`DEVELOPMENT_PLAN.md` Phase 1 exit gate).
+(`docs/plan/phases/phase-01.md` exit gate).
 
 ## Pieces
 
@@ -104,7 +104,7 @@ AES-256-GCM ciphertext       of the UTF-8 JSON document
 The real `file_picker` SAF / `UIDocumentPicker` dialogs are exercised **manually / on-device**
 only — CI covers the gateway seam with a fake, like p1.7's notification scheduler.
 
-## Deferred (see `DEVELOPMENT_PLAN.md` §9)
+## Deferred (see `docs/plan/backlog.md`)
 
 - KDF runs on the **main isolate** — move to a background isolate (and consider Argon2id).
 - JSON is **not compressed** before encryption — add gzip as history grows.

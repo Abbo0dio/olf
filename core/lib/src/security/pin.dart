@@ -4,7 +4,7 @@
 /// database is already encrypted at rest with a key held in the platform secure
 /// enclave; the PIN does not derive or wrap that key in Phase 1. Binding the DB
 /// key to the PIN (and biometric unlock, a decoy PIN, scheduled deletion) is
-/// Phase 2 — see `DEVELOPMENT_PLAN.md` §7 / §9.
+/// Phase 2 — see `docs/plan/decisions.md` / §9.
 ///
 /// The PIN is never stored. What is stored (in the platform secure store, via a
 /// [PinStore]) is a [PinCredential]: a random salt, an iteration count, and the
@@ -29,7 +29,7 @@ const int maxPinLength = 12;
 /// Kept modest so an on-device unlock stays snappy on the main isolate (~150 ms
 /// desktop, well under a second on a mid phone). Phase 2 should move hashing to
 /// a background isolate and raise this — or better, bind the database key to the
-/// PIN with a real KDF (see `DEVELOPMENT_PLAN.md` §9).
+/// PIN with a real KDF (see `docs/plan/backlog.md`).
 const int defaultPinIterations = 30000;
 
 /// Why a candidate PIN was rejected. `null` from [validatePin] means it is

@@ -76,7 +76,7 @@ When the first backend host exists:
    `_checkPins`.
 3. `dart:io` has no built-in SPKI pinning helper. If a small, audited package is
    the cleaner path at that point, add it then — it is **not** pulled in
-   speculatively now (see `DEVELOPMENT_PLAN.md` §9).
+   speculatively now (see `docs/plan/backlog.md`).
 
 ## The build gate
 

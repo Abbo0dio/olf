@@ -36,7 +36,7 @@ dependencies:
   olf_core:
     path: ../core
 
-  # State management (DEVELOPMENT_PLAN.md §3).
+  # State management (docs/plan/conventions.md).
   flutter_riverpod: ^2.6.1
 
   # Local database + encryption-at-rest. `core` owns the schema; the app supplies

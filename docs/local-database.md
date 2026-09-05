@@ -109,7 +109,7 @@ Adds the symptom catalogue and a per-day symptom log.
 | `created_at` | INTEGER (unix seconds) | |
 | | | **PRIMARY KEY (`date`, `symptom_type_id`)** — toggling is idempotent; a multi-select day is just several rows. |
 
-Presence-only in v1 — no severity or scale (see `DEVELOPMENT_PLAN.md` §9). `setSymptom(present: true)`
+Presence-only in v1 — no severity or scale (see `docs/plan/backlog.md`). `setSymptom(present: true)`
 is insert-or-ignore, `present: false` deletes the row; there is nothing to validate, so day
 logging is plain CRUD. The catalogue **is** validated (`validateSymptomName` → empty / too long /
 duplicate). Entries are not linked to `periods` — like `daily_flows`, editing a period never
@@ -230,7 +230,7 @@ the write path that sets `source` on import / flips it back to `manual` on edit 
 1. Bump `AppDatabase.schemaVersion`.
 2. Add an `if (from < N) { ... }` block to `onUpgrade`.
 3. Add a migration test that opens at the old version, applies the upgrade, and asserts the new
-   shape + that existing rows survived (`DEVELOPMENT_PLAN.md` §6.3 / §1.4).
+   shape + that existing rows survived (`docs/plan/cross-cutting.md` / `docs/plan/conventions.md`).
 
 | Step | Does |
 |------|------|
@@ -243,7 +243,7 @@ the write path that sets `source` on import / flips it back to `manual` on edit 
 
 drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) is still **not** wired up
 — the migration tests hand-build the old schema. Adopting the snapshot tooling is a tracked
-follow-up (`DEVELOPMENT_PLAN.md` §9); a hand-rolled test has been enough for the three small
+follow-up (`docs/plan/backlog.md`); a hand-rolled test has been enough for the three small
 additive migrations so far.
 
 ## Derived data — not stored (p1.3, p1.4)

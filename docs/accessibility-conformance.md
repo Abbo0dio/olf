@@ -9,7 +9,7 @@ each claim.
   (`core/`). One target platform pair, one language (English), offline, no
   account, no web surface.
 - **Status values:** **Supports** — no known gap; **Partially** — a real,
-  named gap with a tracked follow-up (see `DEVELOPMENT_PLAN.md` §9); **Not
+  named gap with a tracked follow-up (see `docs/plan/backlog.md`); **Not
   applicable** — the criterion covers content or a mechanism olf does not have.
 - Honesty over optics: a "Partially" with a follow-up is preferred to a
   generous "Supports".
@@ -71,7 +71,7 @@ contrast maths. All run in the required `CI OK` check.
 | 2.5.2 Pointer Cancellation | A | Supports | Standard Material buttons act on up-event and are cancellable by dragging off before release. |
 | 2.5.3 Label in Name | A | Supports | Accessible names match or contain the visible label (`labeledTapTargetGuideline` in `screen_guidelines_test.dart`; visible-text labels used verbatim as semantic labels). |
 | 2.5.4 Motion Actuation | A | Not applicable | No function is triggered by device motion. |
-| 2.5.7 Dragging Movements | AA | **Partially** | Reordering the symptom list in `manage_symptoms_page.dart` is drag-only (`ReorderableDragStartListener`); there is no single-tap "move up / move down" alternative for a pointer user who cannot drag. Screen-reader users get `ReorderableListView`'s built-in move actions. Follow-up: add explicit move controls — `DEVELOPMENT_PLAN.md` §9 (p5.1c follow-ups). |
+| 2.5.7 Dragging Movements | AA | **Partially** | Reordering the symptom list in `manage_symptoms_page.dart` is drag-only (`ReorderableDragStartListener`); there is no single-tap "move up / move down" alternative for a pointer user who cannot drag. Screen-reader users get `ReorderableListView`'s built-in move actions. Follow-up: add explicit move controls — `docs/plan/backlog.md` (p5.1c follow-ups). |
 | 2.5.8 Target Size (Minimum) | AA | Supports | `screen_guidelines_test.dart` runs `androidTapTargetGuideline` + `iOSTapTargetGuideline` (48dp) unskipped on every surface — stricter than the 24×24 CSS-px minimum. |
 
 ## Principle 3 — Understandable
@@ -98,7 +98,7 @@ contrast maths. All run in the required `CI OK` check.
 |----|-------|--------|----------|
 | 4.1.1 Parsing | A | Not applicable | Obsolete/removed in WCAG 2.2, and not meaningful for a native rendered UI (no markup to parse). |
 | 4.1.2 Name, Role, Value | A | Supports | Native Material widgets expose name/role/state; `semantics_labels_test.dart` + `screen_guidelines_test.dart` guard names; toggles expose checked state through the merged list-tile node. |
-| 4.1.3 Status Messages | AA | **Partially** | The calendar month change announces via `SemanticsService.announce` + a `liveRegion: true` node. p5.3 adds a shared `announce()` helper (`app/lib/src/a11y/announce.dart`) and routes the inactivity auto-lock warning and the prediction-correction notice through it. The remaining `ScaffoldMessenger` `SnackBar` confirmations ("App lock is on.", "… removed.") are visible but not wrapped in a live region, so a screen reader may not speak them without focus movement. Follow-up (narrowed): route the remaining SnackBar confirmations through `announce()` — `DEVELOPMENT_PLAN.md` §9. |
+| 4.1.3 Status Messages | AA | **Partially** | The calendar month change announces via `SemanticsService.announce` + a `liveRegion: true` node. p5.3 adds a shared `announce()` helper (`app/lib/src/a11y/announce.dart`) and routes the inactivity auto-lock warning and the prediction-correction notice through it. The remaining `ScaffoldMessenger` `SnackBar` confirmations ("App lock is on.", "… removed.") are visible but not wrapped in a live region, so a screen reader may not speak them without focus movement. Follow-up (narrowed): route the remaining SnackBar confirmations through `announce()` — `docs/plan/backlog.md`. |
 
 ## Summary
 
@@ -108,7 +108,7 @@ contrast maths. All run in the required `CI OK` check.
 | Partially | 2 (SC 2.5.7, SC 4.1.3) |
 | Not applicable | 9 |
 
-The two "Partially" rows are tracked as follow-ups in `DEVELOPMENT_PLAN.md` §9
+The two "Partially" rows are tracked as follow-ups in `docs/plan/backlog.md`
 and do not block the Phase 5 exit gate: both have a working path for
 assistive-technology users today, and neither touches health data or the
 privacy posture. The SC 4.1.3 follow-up was narrowed in p5.3 (the shared

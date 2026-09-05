@@ -8,7 +8,7 @@ set -euo pipefail
 #
 # This script does NOT decide the version number or bump pubspec.yaml for
 # you — that is a manual call per the versioning policy in
-# DEVELOPMENT_PLAN.md §7 (2026-09-04 entry): `1.x.x` is the alpha stage until
+# docs/plan/decisions.md (2026-09-04 entry): `1.x.x` is the alpha stage until
 # every phase is DONE, `2.0.0` is the beta cut the moment the last phase
 # closes; inside `1.x`, a minor bump means new features shipped since the
 # last release, a patch bump means bug-fixes-only. Decide the number, bump
@@ -65,7 +65,7 @@ pr_number="$(gh pr view "$branch" --json number -q .number 2>/dev/null || true)"
 if [[ -z "$pr_number" ]]; then
   pr_url="$(gh pr create \
     --title "chore: release ${tag}" \
-    --body "Release-prep commit for ${tag}. See docs/release-checklist.md and DEVELOPMENT_PLAN.md §7 (versioning policy)." \
+    --body "Release-prep commit for ${tag}. See docs/release-checklist.md and docs/plan/decisions.md (versioning policy)." \
     --base main)"
   pr_number="${pr_url##*/}"
   echo "PR #${pr_number}: ${pr_url}"

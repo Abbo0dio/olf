@@ -3,14 +3,14 @@
 Private, correctable period & cycle tracker. Local-first, no ad/analytics SDKs, ever.
 
 - **What the product must do:** [`requirements.md`](./requirements.md)
-- **Roadmap & task order:** [`DEVELOPMENT_PLAN.md`](./DEVELOPMENT_PLAN.md)
+- **Roadmap & task order:** [`docs/plan/`](./docs/plan/)
 - **How to contribute:** [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - **Accessibility (WCAG 2.2 AA) conformance:** [`docs/accessibility-conformance.md`](./docs/accessibility-conformance.md)
 
 ## Workspace layout
 
 A two-package Dart/Flutter monorepo wired with **plain `path:` dependencies** (no Melos yet —
-see `DEVELOPMENT_PLAN.md` §7):
+see `docs/plan/decisions.md`):
 
 | Path | Package | Purpose |
 |------|---------|---------|

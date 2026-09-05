@@ -289,7 +289,7 @@ jobs:
           audit_result=$(echo "$NEEDS_JSON" | jq -r '."dependency-audit".result')
           echo "dependency-audit result: ${audit_result}"
           if [ "$audit_result" != "success" ]; then
-            echo "::error::dependency-audit did not pass (result: ${audit_result}). It is an un-waivable release blocker (DEVELOPMENT_PLAN.md p2.9); see docs/dependency-audit.md."
+            echo "::error::dependency-audit did not pass (result: ${audit_result}). It is an un-waivable release blocker (docs/plan/phases/phase-02.md p2.9); see docs/dependency-audit.md."
             exit 1
           fi
           echo "All required jobs passed (dependency audit ran and passed)."

@@ -1,12 +1,12 @@
 <!--
 Title: "<task-id> — <short summary>"  e.g. "p0.1 — Initialise repository & workflow"
-One worktree = one task = one PR. See CONTRIBUTING.md §3.
+One worktree = one task = one PR. See CONTRIBUTING.md.
 -->
 
 ## Task
 
 - **Task ID:** <!-- p0.1 -->
-- **Development plan entry:** <!-- link to the section in DEVELOPMENT_PLAN.md -->
+- **Plan entry:** <!-- link to the task in docs/plan/phases/phase-XX.md -->
 - **Depends on:** <!-- task IDs or "none" -->
 
 ## What this slice does
@@ -37,9 +37,10 @@ Tick every box, or replace `[ ]` with `n/a — <reason>`.
       scales; contrast ≥ 4.5:1; touch targets adequate.
 - [ ] **Dark mode** and **gender-neutral, non-heteronormative copy** for any new UI.
 - [ ] Works **offline / on-device**. No feature silently requires a network call.
-- [ ] Runs acceptably on a **low-end device** (`DEVELOPMENT_PLAN.md` §3 budget).
-- [ ] **`DEVELOPMENT_PLAN.md` updated**: status set to `IN REVIEW`, PR linked, Log line added,
-      and any schema/library/edge-case detail locked in by this slice.
+- [ ] Runs acceptably on a **low-end device** (`docs/plan/conventions.md` performance budget).
+- [ ] **Draft PR body carries the plan detail** this slice locked in (schema, chosen libs,
+      edge cases). The Orchestrator folds it into `docs/plan/phases/phase-XX.md` at merge;
+      task status is tracked in `.herdsman/state.md`, not in the plan or this PR.
 
 ## Test output
 
@@ -50,8 +51,8 @@ Tick every box, or replace `[ ]` with `n/a — <reason>`.
 
 ## Foundational decisions changed
 
-<!-- If this PR changes anything in DEVELOPMENT_PLAN.md §3, list it here and confirm the
-     Decisions Log (§7) was updated. Otherwise: "none". -->
+<!-- If this PR changes a foundational decision (docs/plan/conventions.md), list it here and
+     confirm docs/plan/decisions.md was updated. Otherwise: "none". -->
 
 ## Reviewer notes
 

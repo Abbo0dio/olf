@@ -197,7 +197,7 @@ cross-reference the phase-gate review walks.
 ## Residual risks
 
 Known gaps, carried from the per-slice `§9` follow-up notes in
-`DEVELOPMENT_PLAN.md`. None block Phase 2; each is a candidate for a later
+`docs/plan/backlog.md`. None block Phase 2; each is a candidate for a later
 hardening slice.
 
 - **The DB key is not bound to the PIN.** Each vault's SQLCipher key sits in
@@ -474,7 +474,7 @@ The CI guard requires an entry naming the current phase.
   (`git diff --exit-code` clean). It requires API 26+, so **`minSdk` rises
   24 → 26** in `build.gradle.kts` — this only *aligns the actual build floor*
   with the minimum olf has always documented ("Android 8+ / API 26+" in
-  `DEVELOPMENT_PLAN.md` and `docs/performance-budget.md`); the documented target
+  `docs/plan/conventions.md` and `docs/performance-budget.md`); the documented target
   is unchanged. The Android manifest gains **exactly four**
   `android.permission.health.*` entries — `READ`/`WRITE` × `MENSTRUATION` /
   `BASAL_BODY_TEMPERATURE`, the read+write set for the two wired types and

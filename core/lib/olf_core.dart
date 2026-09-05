@@ -1,6 +1,6 @@
 /// olf_core — pure-Dart domain layer.
 ///
-/// This library has **no Flutter dependency** on purpose (see DEVELOPMENT_PLAN.md
+/// This library has **no Flutter dependency** on purpose (see docs/plan/conventions.md
 /// §3): the mobile app and the future desktop shell both consume it.
 library;
 

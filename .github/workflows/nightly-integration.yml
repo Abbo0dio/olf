@@ -42,7 +42,7 @@ jobs:
       fail-fast: false
       matrix:
         # Just a current API level. We tried adding API 26 (our documented
-        # minimum — see §3 "Min target" in DEVELOPMENT_PLAN.md) but the x86_64
+        # minimum — see "Min target" in docs/plan/conventions.md) but the x86_64
         # API 26 image is too flaky to boot on GitHub's runners: two separate
         # infra failures in two runs (userdata-partition sizing, then a
         # corrupt emulator-package download — "Error on ZipFile unknown

@@ -3,7 +3,7 @@
 `requirements.md` §3 is a hard architectural constraint: **zero third-party advertising or
 analytics SDKs, ever** — transitively included. Embedding SDKs that can see health data is a
 direct legal-liability vector (Flo/FTC 2021; the 2025 Meta/CIPA verdict). The dependency-audit
-CI gate enforces this mechanically. It is a **release blocker** (`DEVELOPMENT_PLAN.md` p2.9).
+CI gate enforces this mechanically. It is a **release blocker** (`docs/plan/phases/phase-02.md` p2.9).
 
 ## Release blocker (p2.9)
 
