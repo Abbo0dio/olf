@@ -6,12 +6,12 @@ plan layout and `.claude/skills/herdsman/` for the workflow.
 
 ## Now
 
-Phase 6 — Health-platform interop & doctor export — IN PROGRESS · main @ `de46108` · next slice p6.4
+Phase 6 — Health-platform interop & doctor export — IN PROGRESS · main @ `7b6f401` · current slice p6.4 (dispatched to Worker 1)
 
 ## Workers
 
-| W | agent    | tab   | status | slice | worktree |
-| 1 | worker-1 | w6:t2 | idle   | —     | —        |
+| W | agent    | tab   | status   | slice | worktree        |
+| 1 | worker-1 | w6:t2 | building | p6.4  | ../olf-wt/p6.4  |
 
 ## Tasks
 
@@ -31,7 +31,7 @@ Current phase (6) + previous phase (5). Closed-phase task detail is frozen into
 | p6.1 | DONE | #65 | `ed81ac5` | 2026-09-05 — interop foundation: `HealthPlatformGateway` + `FakeHealthPlatformGateway` + pure `ImportReconciler` + schema v6→v7 provenance cols (`source`/`externalId` on bbt_entries + daily_flows). `core`-only, no dep. Doc fixes folded in `e7b308d`. |
 | p6.2 | DONE | #66 | `76c31cd` | 2026-09-05 — Apple HealthKit gateway (iOS): hand-rolled `olf/health` MethodChannel + Swift `HealthKitBridge`, no dep, no SDK-floor bump, ATS untouched. `setTemp`/`setFlow` gained `source`/`externalId`; `+allEntries()`/`allFlows()`. |
 | p6.3 | DONE | #67 | `de46108` | 2026-09-05 — Android Health Connect gateway: hand-rolled Kotlin bridge on `MainActivity`, same wire contract. `androidx.health.connect:connect-client:1.1.0` as a Gradle dep (not a pub package — `pubspec.lock` clean); `minSdk` 24→26; 4 `android.permission.health.*`. Shared `MethodChannelHealthGateway` base + `sourceTag`. New `docs/health-platform-interop.md`. (Plan had said IN REVIEW; it merged.) |
-| p6.4 | TODO | — | — | Two-way sync + write-back + per-source status surface + conflict-review screen; retention purge-before-sync; no background sync. Worker mis-started this pre-migration on branch `feat/p6.4-two-way-sync` (`55023d8`, pushed to origin, no PR, worktree removed) — that branch is abandoned; re-dispatch clean. |
+| p6.4 | IN PROGRESS | — | — | Worker 1 · worktree `../olf-wt/p6.4` · branch `feat/p6.4-two-way-sync-v2` off `7b6f401` (dispatched 2026-09-06). Two-way sync + write-back + per-source status surface + conflict-review screen; retention purge-before-sync; no background sync. Pre-migration branch `feat/p6.4-two-way-sync` (`55023d8`, pushed to origin, no PR, worktree removed) is ABANDONED — not reused. |
 | p6.5 | TODO | — | — | Doctor-ready offline PDF report — pure `core` `ClinicalReport` + `app` render via `pdf` pkg (§5 pending audit, no `printing`); p1.10 SAF seam; purge-before-export; "not a medical device" disclaimer. |
 
 ## In-flight PRs
@@ -42,3 +42,4 @@ _(none)_
 
 - Abandoned remote branch to prune (Orchestrator's `git push --delete` is classifier-blocked — user prunes): `feat/p6.4-two-way-sync` @ `55023d8`. Plus the pre-migration stale list: the Phase 5 `feat/p5.*` batch, `docs/phase-5-close`, `chore/release-v1.1.0`, `feat/p1.12-cycle-wheel`, `feat/p6.1-interop-foundation`, `feat/p6.2-healthkit-gateway`, `feat/p6.3-health-connect-gateway`.
 - v1.1.0 is the current release (tag on `6820cd2`). Versioning policy: `docs/plan/decisions.md` (2026-09-04). `1.x` = alpha until the last phase closes; `2.0.0` = beta cut at close.
+- **state.md push policy (user decision 2026-09-06):** `protect-main` forbids Orchestrator direct-push to `main`. So `.herdsman/state.md` claim/merge edits are committed to **local `main` only** during a phase and folded into the **phase-close PR**. Between merges, `origin/main`'s copy of this file lags — local `main` is authoritative. After each Worker squash-merge, `git pull --rebase` the local bookkeeping commits onto the advanced `origin/main`.
