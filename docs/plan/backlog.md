@@ -331,4 +331,26 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   `stepByStep` / a generated frozen-per-version schema migrator (`drift_dev schema steps`) so
   each migration step uses that version's table definitions — its own slice, not a p6.x
   blocker. — noted by worker: phase1 during p6.1.
+- **p6.4 (2026-09-06) — deferred from two-way sync:**
+  (a) **On-open / resume sync.** v1 ships manual "Sync now" only. An `AppLifecycleState.resumed`
+  hook that runs a debounced sync when a platform is connected (never blocking first frame,
+  contained state, reusing the p5.3 lifecycle-timer discipline) is unbuilt — a connected user
+  who never opens Settings won't pull platform-side edits until they tap "Sync now". The phase
+  design flagged it "acceptable if cheap", not required.
+  (b) **Delete propagation.** `clearFlow` / `clearTemp` remove the local row but do not delete
+  the corresponding record from the connected platform — a day the user erases in olf stays in
+  Apple Health / Health Connect. Write-back only covers set/edit, not delete.
+  (c) **Persisted conflict store.** `healthConflictsProvider` holds the unresolved conflicts
+  from the last sync **in memory only** (`// SHORTCUT` at the provider) — re-derived on the next
+  sync, lost on app restart; "Dismiss" doesn't persist, so a still-disagreeing day reappears on
+  the next sync. A durable store (a small table, or a settings blob) would let review state
+  survive a restart and make Dismiss sticky. — noted by worker: phase6 during p6.4.
+- **p6.5 (2026-09-06) — `report_pdf.dart` `_ascii()` font ceiling.** The doctor-report PDF uses
+  the built-in Helvetica core font (no bundled asset, no APK size hit). `_ascii()` folds common
+  typographic characters (dashes, curly quotes, ellipsis) down to Latin-1, but a symptom name a
+  user typed in a non-Latin script (CJK, Arabic, Cyrillic, …) still can't be drawn — its glyphs
+  drop with a `pdf` warning. `// SHORTCUT:` marked at the helper. Upgrade path: bundle a compact
+  Unicode TTF (e.g. Noto Sans subset) as an asset and pass it as the document font — costs some
+  APK size, so measure against the `perf-budget` gate. English-language UI + a print document
+  make this acceptable for v1. — noted by worker: phase6 during p6.5.
 - (add more here)
