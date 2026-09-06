@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../db/app_database.dart';
+import '../db/tables.dart' show BbtMeasurementKind;
 import 'logging_activity_repository.dart';
 import 'preferred_hour.dart';
 
@@ -28,9 +29,17 @@ class DriftLoggingActivityRepository implements LoggingActivityRepository {
     final symptoms = await (_db.select(
       _db.dailySymptomEntries,
     )..where((t) => t.createdAt.isBiggerOrEqualValue(since))).get();
-    final bbt = await (_db.select(
-      _db.bbtEntries,
-    )..where((t) => t.createdAt.isBiggerOrEqualValue(since))).get();
+    // p8.1a: a passive Apple Watch wrist-temperature import lands in
+    // `bbt_entries` but is not the user logging something, so it must not count
+    // toward "recent logging activity" / the preferred-hour estimate. Basal
+    // rows only — which is exactly the pre-p8.1a behaviour.
+    final bbt =
+        await (_db.select(_db.bbtEntries)..where(
+              (t) =>
+                  t.createdAt.isBiggerOrEqualValue(since) &
+                  t.measurementKind.equalsValue(BbtMeasurementKind.basal),
+            ))
+            .get();
     final mucus = await (_db.select(
       _db.cervicalMucusEntries,
     )..where((t) => t.createdAt.isBiggerOrEqualValue(since))).get();

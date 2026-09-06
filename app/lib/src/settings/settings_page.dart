@@ -69,6 +69,8 @@ class SettingsPage extends ConsumerWidget {
         ref.watch(healthConnectedProvider).valueOrNull ?? false;
     final healthLastSync = ref.watch(healthLastSyncProvider).valueOrNull;
     final healthReviewCount = ref.watch(healthConflictsProvider).length;
+    // p8.1a: how many passive Apple Watch wrist-temperature readings olf holds.
+    final passiveWristCount = ref.watch(passiveWristTempCountProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -332,6 +334,23 @@ class SettingsPage extends ConsumerWidget {
                 leading: const Icon(Icons.refresh),
                 title: const Text('Sync now'),
                 onTap: () => _syncHealth(context, ref),
+              ),
+            // p8.1a: per-source line for the passive Apple Watch path — only
+            // shown once real wrist readings have been imported.
+            if (healthConnected && passiveWristCount > 0)
+              ListTile(
+                leading: const Icon(Icons.watch_outlined),
+                title: const Text('Apple Watch wrist temperature'),
+                subtitle: Text(
+                  '$passiveWristCount passive '
+                  '${passiveWristCount == 1 ? 'reading' : 'readings'} '
+                  'captured while you slept. Not used for fertility signals.',
+                  semanticsLabel: spokenLabel(
+                    reduceSpokenDetail,
+                    redacted:
+                        'Passive Apple Watch readings are being imported.',
+                  ),
+                ),
               ),
             if (healthConnected && healthReviewCount > 0)
               ListTile(

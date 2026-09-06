@@ -83,6 +83,57 @@ void main() {
       expect(out.single.value, 36.62);
     });
 
+    test('decodes a passive Apple Watch wrist-temperature sample in °C '
+        '(p8.1a)', () async {
+      mockChannel(
+        response: [
+          {
+            'type': 'wristTemperature',
+            'startMs': DateTime(2026, 3, 7).millisecondsSinceEpoch,
+            'endMs': DateTime(2026, 3, 7).millisecondsSinceEpoch,
+            'value': 36.91,
+            'externalId': 'HK-wrist-1',
+          },
+        ],
+      );
+
+      final out = await gateway.read(
+        types: {HealthSampleType.wristTemperature},
+        from: from,
+        to: to,
+      );
+
+      expect(out, hasLength(1));
+      final s = out.single;
+      expect(s.type, HealthSampleType.wristTemperature);
+      expect(s.unit, HealthUnit.celsius);
+      expect(s.value, 36.91);
+      expect(s.source, HealthDataSource.appleHealth);
+      expect(s.externalId, 'HK-wrist-1');
+      // The wrist token is forwarded to the native side on read.
+      expect((calls.single.arguments as Map)['types'], ['wristTemperature']);
+    });
+
+    test(
+      'a wrist-temperature sample is never written back out (p8.1a)',
+      () async {
+        mockChannel(response: null);
+        await gateway.write([
+          HealthSample.point(
+            type: HealthSampleType.wristTemperature,
+            at: DateTime(2026, 3, 7),
+            value: 36.9,
+            unit: HealthUnit.celsius,
+            source: HealthDataSource.appleHealth,
+          ),
+        ]);
+        expect(
+          calls,
+          isEmpty,
+        ); // dropped by rawFromHealthSample, no channel call
+      },
+    );
+
     test('drops the HealthKit "no flow" marker', () async {
       mockChannel(
         response: [
@@ -108,7 +159,9 @@ void main() {
       () async {
         mockChannel(response: const []);
         final out = await gateway.read(
-          types: {HealthSampleType.sleep, HealthSampleType.wristTemperature},
+          // Both genuinely unmapped: `wristTemperature` became supported in
+          // p8.1a, so `bodyTemperature` + `sleep` are the unsupported pair now.
+          types: {HealthSampleType.sleep, HealthSampleType.bodyTemperature},
           from: from,
           to: to,
         );

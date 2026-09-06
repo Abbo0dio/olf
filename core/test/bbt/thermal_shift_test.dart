@@ -4,10 +4,15 @@ import 'package:test/test.dart';
 void main() {
   final stamp = DateTime(2026);
 
-  BbtEntry temp(DateTime date, double celsius) => BbtEntry(
+  BbtEntry temp(
+    DateTime date,
+    double celsius, {
+    BbtMeasurementKind kind = BbtMeasurementKind.basal,
+  }) => BbtEntry(
     date: date,
     tempCelsius: celsius,
     source: 'manual',
+    measurementKind: kind,
     createdAt: stamp,
     updatedAt: stamp,
   );
@@ -166,5 +171,58 @@ void main() {
       a.estimatedOvulation.add(const Duration(days: 40)),
     );
     expect(b.riseCelsius, a.riseCelsius);
+  });
+
+  // p8.1a: a passive Apple Watch sleeping-wrist reading shares the
+  // `bbt_entries` day slot but is not a basal body temperature. `thermalShift`
+  // must ignore it entirely — a mixed-kind history produces the identical shift
+  // to the same history with the `sleepingWrist` rows removed.
+  test('sleepingWrist readings are invisible to the thermal shift', () {
+    final basal = series(cycleStart, const [
+      36.40,
+      36.42,
+      36.38,
+      36.41,
+      36.40,
+      36.43,
+      36.70,
+      36.72,
+      36.68,
+      36.71,
+    ]);
+
+    // Interleave wrist readings that, if counted, would wreck the coverline and
+    // the 3-over-6 run (wildly hot early, ice-cold during the rise).
+    final wrist = [
+      temp(
+        cycleStart.add(const Duration(days: 1)),
+        38.5,
+        kind: BbtMeasurementKind.sleepingWrist,
+      ),
+      temp(
+        cycleStart.add(const Duration(days: 3)),
+        38.9,
+        kind: BbtMeasurementKind.sleepingWrist,
+      ),
+      temp(
+        cycleStart.add(const Duration(days: 7)),
+        35.1,
+        kind: BbtMeasurementKind.sleepingWrist,
+      ),
+    ];
+
+    final basalOnly = thermalShift(
+      basal,
+      cycleStart: cycleStart,
+      today: DateTime(2026, 4, 1),
+    );
+    final mixed = thermalShift(
+      [...basal, ...wrist],
+      cycleStart: cycleStart,
+      today: DateTime(2026, 4, 1),
+    );
+
+    expect(basalOnly, isNotNull);
+    expect(mixed, basalOnly);
   });
 }

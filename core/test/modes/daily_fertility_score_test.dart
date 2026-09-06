@@ -14,10 +14,15 @@ void main() {
     updatedAt: epoch,
   );
 
-  BbtEntry temp(DateTime date, double celsius) => BbtEntry(
+  BbtEntry temp(
+    DateTime date,
+    double celsius, {
+    BbtMeasurementKind kind = BbtMeasurementKind.basal,
+  }) => BbtEntry(
     date: date,
     tempCelsius: celsius,
     source: 'manual',
+    measurementKind: kind,
     createdAt: epoch,
     updatedAt: epoch,
   );
@@ -184,6 +189,61 @@ void main() {
     expect(withShift.factors, contains(FertilityFactor.thermalShiftPassed));
     // An observed signal firms the read up.
     expect(withShift.confidence, isNot(FertilityConfidence.low));
+  });
+
+  // p8.1a: `dailyFertilityScore` reads BBT only through `thermalShift`, which
+  // ignores `sleepingWrist` rows. A passive Apple Watch reading interleaved
+  // with the basal history must not move the score, the peak, or the factors.
+  test('sleepingWrist readings do not affect the fertility score', () {
+    final anchor = DateTime(2026, 6, 1);
+    final periods = regularHistory(anchor);
+    List<BbtEntry> basalShift() => [
+      for (var i = 0; i < 6; i++)
+        temp(
+          anchor.add(Duration(days: 4 + i)),
+          36.40 + (i.isEven ? 0.0 : 0.02),
+        ),
+      temp(anchor.add(const Duration(days: 10)), 36.70),
+      temp(anchor.add(const Duration(days: 11)), 36.72),
+      temp(anchor.add(const Duration(days: 12)), 36.69),
+    ];
+    // Wrist readings that would obliterate the shift if they counted.
+    final wristNoise = [
+      temp(
+        anchor.add(const Duration(days: 5)),
+        38.6,
+        kind: BbtMeasurementKind.sleepingWrist,
+      ),
+      temp(
+        anchor.add(const Duration(days: 10)),
+        35.0,
+        kind: BbtMeasurementKind.sleepingWrist,
+      ),
+      temp(
+        anchor.add(const Duration(days: 12)),
+        34.8,
+        kind: BbtMeasurementKind.sleepingWrist,
+      ),
+    ];
+    final today = anchor.add(const Duration(days: 13));
+
+    final basalOnly = score(
+      periods,
+      today: today,
+      day: today,
+      bbt: basalShift(),
+    )!;
+    final mixed = score(
+      periods,
+      today: today,
+      day: today,
+      bbt: [...basalShift(), ...wristNoise],
+    )!;
+
+    expect(mixed.peakDay, basalOnly.peakDay);
+    expect(mixed.score, basalOnly.score);
+    expect(mixed.confidence, basalOnly.confidence);
+    expect(mixed.factors, basalOnly.factors);
   });
 
   test('an irregular history stays humble even on its best day', () {

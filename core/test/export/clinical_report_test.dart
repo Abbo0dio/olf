@@ -13,10 +13,15 @@ void main() {
     updatedAt: epoch,
   );
 
-  BbtEntry temp(DateTime date, double celsius) => BbtEntry(
+  BbtEntry temp(
+    DateTime date,
+    double celsius, {
+    BbtMeasurementKind kind = BbtMeasurementKind.basal,
+  }) => BbtEntry(
     date: date,
     tempCelsius: celsius,
     source: 'manual',
+    measurementKind: kind,
     createdAt: epoch,
     updatedAt: epoch,
   );
@@ -249,6 +254,53 @@ void main() {
       );
 
       expect(report.temperatureSeries.map((p) => p.date).toList(), [
+        DateTime(2026, 2, 5),
+        DateTime(2026, 2, 20),
+      ]);
+    });
+
+    // p8.1a: the doctor report charts basal body temperatures only. A passive
+    // Apple Watch sleeping-wrist reading must not reach `temperatureSeries` —
+    // a mixed-kind history produces the identical report to the same history
+    // with the `sleepingWrist` rows removed.
+    test('sleepingWrist readings never enter the temperature series', () {
+      List<BbtEntry> basal() => [
+        temp(DateTime(2026, 2, 5), 36.4),
+        temp(DateTime(2026, 2, 20), 36.8),
+      ];
+      final wrist = [
+        temp(
+          DateTime(2026, 2, 6),
+          35.9,
+          kind: BbtMeasurementKind.sleepingWrist,
+        ),
+        temp(
+          DateTime(2026, 2, 21),
+          37.6,
+          kind: BbtMeasurementKind.sleepingWrist,
+        ),
+      ];
+
+      ClinicalReport run(List<BbtEntry> temps) => buildClinicalReport(
+        generatedOn: DateTime(2026, 7, 1),
+        rangeStart: DateTime(2026, 2, 1),
+        rangeEnd: DateTime(2026, 3, 1),
+        periods: const [],
+        pregnancyEvents: const [],
+        symptomEntries: const [],
+        symptomNames: const {},
+        temperatures: temps,
+        prediction: null,
+      );
+
+      final basalOnly = run(basal());
+      final mixed = run([...basal(), ...wrist]);
+
+      expect(
+        mixed.temperatureSeries.map((p) => (p.date, p.celsius)).toList(),
+        basalOnly.temperatureSeries.map((p) => (p.date, p.celsius)).toList(),
+      );
+      expect(mixed.temperatureSeries.map((p) => p.date).toList(), [
         DateTime(2026, 2, 5),
         DateTime(2026, 2, 20),
       ]);

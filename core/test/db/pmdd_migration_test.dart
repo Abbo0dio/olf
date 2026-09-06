@@ -151,7 +151,7 @@ void main() {
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
     expect(version.data.values.first, db.schemaVersion);
-    expect(db.schemaVersion, 9);
+    expect(db.schemaVersion, 10);
 
     // New table exists with the expected shape: composite (date, item) PK.
     final columns = await db

@@ -1897,6 +1897,19 @@ class $BbtEntriesTable extends BbtEntries
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  @override
+  late final GeneratedColumnWithTypeConverter<BbtMeasurementKind, String>
+  measurementKind =
+      GeneratedColumn<String>(
+        'measurement_kind',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('basal'),
+      ).withConverter<BbtMeasurementKind>(
+        $BbtEntriesTable.$convertermeasurementKind,
+      );
   static const VerificationMeta _sourceMeta = const VerificationMeta('source');
   @override
   late final GeneratedColumn<String> source = GeneratedColumn<String>(
@@ -1946,6 +1959,7 @@ class $BbtEntriesTable extends BbtEntries
   List<GeneratedColumn> get $columns => [
     date,
     tempCelsius,
+    measurementKind,
     source,
     externalId,
     createdAt,
@@ -2023,6 +2037,12 @@ class $BbtEntriesTable extends BbtEntries
         DriftSqlType.double,
         data['${effectivePrefix}temp_celsius'],
       )!,
+      measurementKind: $BbtEntriesTable.$convertermeasurementKind.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}measurement_kind'],
+        )!,
+      ),
       source: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}source'],
@@ -2046,6 +2066,11 @@ class $BbtEntriesTable extends BbtEntries
   $BbtEntriesTable createAlias(String alias) {
     return $BbtEntriesTable(attachedDatabase, alias);
   }
+
+  static JsonTypeConverter2<BbtMeasurementKind, String, String>
+  $convertermeasurementKind = const EnumNameConverter<BbtMeasurementKind>(
+    BbtMeasurementKind.values,
+  );
 }
 
 class BbtEntry extends DataClass implements Insertable<BbtEntry> {
@@ -2055,6 +2080,13 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
   /// Basal temperature in °C. Plausible range is enforced in the repository
   /// (`validateCelsius`), not by a DB constraint.
   final double tempCelsius;
+
+  /// What this reading measures (schema v10, p8.1a). Stored as the
+  /// [BbtMeasurementKind] enum name; defaults to `'basal'` so every row written
+  /// before p8.1a — and every future typed / `basalBodyTemperature` row — is a
+  /// basal body temperature. Only a passive Apple Watch wrist-temperature import
+  /// writes `'sleepingWrist'`, and an in-app edit resets the row to `'basal'`.
+  final BbtMeasurementKind measurementKind;
 
   /// Provenance (schema v7, p6.1). `'manual'` for a value the user logged in
   /// olf; `'appleHealth'` / `'healthConnect'` for a reading imported over a
@@ -2071,6 +2103,7 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
   const BbtEntry({
     required this.date,
     required this.tempCelsius,
+    required this.measurementKind,
     required this.source,
     this.externalId,
     required this.createdAt,
@@ -2081,6 +2114,11 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     final map = <String, Expression>{};
     map['date'] = Variable<DateTime>(date);
     map['temp_celsius'] = Variable<double>(tempCelsius);
+    {
+      map['measurement_kind'] = Variable<String>(
+        $BbtEntriesTable.$convertermeasurementKind.toSql(measurementKind),
+      );
+    }
     map['source'] = Variable<String>(source);
     if (!nullToAbsent || externalId != null) {
       map['external_id'] = Variable<String>(externalId);
@@ -2094,6 +2132,7 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     return BbtEntriesCompanion(
       date: Value(date),
       tempCelsius: Value(tempCelsius),
+      measurementKind: Value(measurementKind),
       source: Value(source),
       externalId: externalId == null && nullToAbsent
           ? const Value.absent()
@@ -2111,6 +2150,9 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     return BbtEntry(
       date: serializer.fromJson<DateTime>(json['date']),
       tempCelsius: serializer.fromJson<double>(json['tempCelsius']),
+      measurementKind: $BbtEntriesTable.$convertermeasurementKind.fromJson(
+        serializer.fromJson<String>(json['measurementKind']),
+      ),
       source: serializer.fromJson<String>(json['source']),
       externalId: serializer.fromJson<String?>(json['externalId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -2123,6 +2165,9 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     return <String, dynamic>{
       'date': serializer.toJson<DateTime>(date),
       'tempCelsius': serializer.toJson<double>(tempCelsius),
+      'measurementKind': serializer.toJson<String>(
+        $BbtEntriesTable.$convertermeasurementKind.toJson(measurementKind),
+      ),
       'source': serializer.toJson<String>(source),
       'externalId': serializer.toJson<String?>(externalId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -2133,6 +2178,7 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
   BbtEntry copyWith({
     DateTime? date,
     double? tempCelsius,
+    BbtMeasurementKind? measurementKind,
     String? source,
     Value<String?> externalId = const Value.absent(),
     DateTime? createdAt,
@@ -2140,6 +2186,7 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
   }) => BbtEntry(
     date: date ?? this.date,
     tempCelsius: tempCelsius ?? this.tempCelsius,
+    measurementKind: measurementKind ?? this.measurementKind,
     source: source ?? this.source,
     externalId: externalId.present ? externalId.value : this.externalId,
     createdAt: createdAt ?? this.createdAt,
@@ -2151,6 +2198,9 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
       tempCelsius: data.tempCelsius.present
           ? data.tempCelsius.value
           : this.tempCelsius,
+      measurementKind: data.measurementKind.present
+          ? data.measurementKind.value
+          : this.measurementKind,
       source: data.source.present ? data.source.value : this.source,
       externalId: data.externalId.present
           ? data.externalId.value
@@ -2165,6 +2215,7 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
     return (StringBuffer('BbtEntry(')
           ..write('date: $date, ')
           ..write('tempCelsius: $tempCelsius, ')
+          ..write('measurementKind: $measurementKind, ')
           ..write('source: $source, ')
           ..write('externalId: $externalId, ')
           ..write('createdAt: $createdAt, ')
@@ -2174,14 +2225,22 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(date, tempCelsius, source, externalId, createdAt, updatedAt);
+  int get hashCode => Object.hash(
+    date,
+    tempCelsius,
+    measurementKind,
+    source,
+    externalId,
+    createdAt,
+    updatedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is BbtEntry &&
           other.date == this.date &&
           other.tempCelsius == this.tempCelsius &&
+          other.measurementKind == this.measurementKind &&
           other.source == this.source &&
           other.externalId == this.externalId &&
           other.createdAt == this.createdAt &&
@@ -2191,6 +2250,7 @@ class BbtEntry extends DataClass implements Insertable<BbtEntry> {
 class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
   final Value<DateTime> date;
   final Value<double> tempCelsius;
+  final Value<BbtMeasurementKind> measurementKind;
   final Value<String> source;
   final Value<String?> externalId;
   final Value<DateTime> createdAt;
@@ -2199,6 +2259,7 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
   const BbtEntriesCompanion({
     this.date = const Value.absent(),
     this.tempCelsius = const Value.absent(),
+    this.measurementKind = const Value.absent(),
     this.source = const Value.absent(),
     this.externalId = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -2208,6 +2269,7 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
   BbtEntriesCompanion.insert({
     required DateTime date,
     required double tempCelsius,
+    this.measurementKind = const Value.absent(),
     this.source = const Value.absent(),
     this.externalId = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -2218,6 +2280,7 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
   static Insertable<BbtEntry> custom({
     Expression<DateTime>? date,
     Expression<double>? tempCelsius,
+    Expression<String>? measurementKind,
     Expression<String>? source,
     Expression<String>? externalId,
     Expression<DateTime>? createdAt,
@@ -2227,6 +2290,7 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
     return RawValuesInsertable({
       if (date != null) 'date': date,
       if (tempCelsius != null) 'temp_celsius': tempCelsius,
+      if (measurementKind != null) 'measurement_kind': measurementKind,
       if (source != null) 'source': source,
       if (externalId != null) 'external_id': externalId,
       if (createdAt != null) 'created_at': createdAt,
@@ -2238,6 +2302,7 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
   BbtEntriesCompanion copyWith({
     Value<DateTime>? date,
     Value<double>? tempCelsius,
+    Value<BbtMeasurementKind>? measurementKind,
     Value<String>? source,
     Value<String?>? externalId,
     Value<DateTime>? createdAt,
@@ -2247,6 +2312,7 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
     return BbtEntriesCompanion(
       date: date ?? this.date,
       tempCelsius: tempCelsius ?? this.tempCelsius,
+      measurementKind: measurementKind ?? this.measurementKind,
       source: source ?? this.source,
       externalId: externalId ?? this.externalId,
       createdAt: createdAt ?? this.createdAt,
@@ -2263,6 +2329,11 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
     }
     if (tempCelsius.present) {
       map['temp_celsius'] = Variable<double>(tempCelsius.value);
+    }
+    if (measurementKind.present) {
+      map['measurement_kind'] = Variable<String>(
+        $BbtEntriesTable.$convertermeasurementKind.toSql(measurementKind.value),
+      );
     }
     if (source.present) {
       map['source'] = Variable<String>(source.value);
@@ -2287,6 +2358,7 @@ class BbtEntriesCompanion extends UpdateCompanion<BbtEntry> {
     return (StringBuffer('BbtEntriesCompanion(')
           ..write('date: $date, ')
           ..write('tempCelsius: $tempCelsius, ')
+          ..write('measurementKind: $measurementKind, ')
           ..write('source: $source, ')
           ..write('externalId: $externalId, ')
           ..write('createdAt: $createdAt, ')
@@ -6146,6 +6218,7 @@ typedef $$BbtEntriesTableCreateCompanionBuilder =
     BbtEntriesCompanion Function({
       required DateTime date,
       required double tempCelsius,
+      Value<BbtMeasurementKind> measurementKind,
       Value<String> source,
       Value<String?> externalId,
       Value<DateTime> createdAt,
@@ -6156,6 +6229,7 @@ typedef $$BbtEntriesTableUpdateCompanionBuilder =
     BbtEntriesCompanion Function({
       Value<DateTime> date,
       Value<double> tempCelsius,
+      Value<BbtMeasurementKind> measurementKind,
       Value<String> source,
       Value<String?> externalId,
       Value<DateTime> createdAt,
@@ -6180,6 +6254,12 @@ class $$BbtEntriesTableFilterComposer
   ColumnFilters<double> get tempCelsius => $composableBuilder(
     column: $table.tempCelsius,
     builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<BbtMeasurementKind, BbtMeasurementKind, String>
+  get measurementKind => $composableBuilder(
+    column: $table.measurementKind,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
   ColumnFilters<String> get source => $composableBuilder(
@@ -6222,6 +6302,11 @@ class $$BbtEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get measurementKind => $composableBuilder(
+    column: $table.measurementKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get source => $composableBuilder(
     column: $table.source,
     builder: (column) => ColumnOrderings(column),
@@ -6257,6 +6342,12 @@ class $$BbtEntriesTableAnnotationComposer
 
   GeneratedColumn<double> get tempCelsius => $composableBuilder(
     column: $table.tempCelsius,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<BbtMeasurementKind, String>
+  get measurementKind => $composableBuilder(
+    column: $table.measurementKind,
     builder: (column) => column,
   );
 
@@ -6305,6 +6396,8 @@ class $$BbtEntriesTableTableManager
               ({
                 Value<DateTime> date = const Value.absent(),
                 Value<double> tempCelsius = const Value.absent(),
+                Value<BbtMeasurementKind> measurementKind =
+                    const Value.absent(),
                 Value<String> source = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -6313,6 +6406,7 @@ class $$BbtEntriesTableTableManager
               }) => BbtEntriesCompanion(
                 date: date,
                 tempCelsius: tempCelsius,
+                measurementKind: measurementKind,
                 source: source,
                 externalId: externalId,
                 createdAt: createdAt,
@@ -6323,6 +6417,8 @@ class $$BbtEntriesTableTableManager
               ({
                 required DateTime date,
                 required double tempCelsius,
+                Value<BbtMeasurementKind> measurementKind =
+                    const Value.absent(),
                 Value<String> source = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -6331,6 +6427,7 @@ class $$BbtEntriesTableTableManager
               }) => BbtEntriesCompanion.insert(
                 date: date,
                 tempCelsius: tempCelsius,
+                measurementKind: measurementKind,
                 source: source,
                 externalId: externalId,
                 createdAt: createdAt,

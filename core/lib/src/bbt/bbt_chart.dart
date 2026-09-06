@@ -1,6 +1,7 @@
 import '../cycle/cycle.dart';
 import '../date_math.dart';
 import '../db/app_database.dart';
+import '../db/tables.dart' show BbtMeasurementKind;
 
 /// One plotted basal temperature: its 1-based day within the cycle, the calendar
 /// date, and the reading in °C.
@@ -38,6 +39,10 @@ List<BbtChartPoint> bbtChartForCycle(Cycle cycle, Iterable<BbtEntry> entries) {
 
   final points = <BbtChartPoint>[];
   for (final e in entries) {
+    // p8.1a: the BBT chart plots basal body temperatures only. A passive Apple
+    // Watch sleeping-wrist reading is a different measurement and is skipped, so
+    // the chart is unchanged by a wrist import.
+    if (e.measurementKind != BbtMeasurementKind.basal) continue;
     final day = dateOnly(e.date);
     if (day.isBefore(start)) continue;
     if (end != null && !day.isBefore(dateOnly(end))) continue;

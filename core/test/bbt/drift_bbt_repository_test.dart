@@ -77,6 +77,49 @@ void main() {
     expect(row.externalId, isNull);
   });
 
+  test('setTemp defaults measurementKind to basal (p8.1a)', () async {
+    await repo.setTemp(DateTime(2026, 8, 20), 36.6);
+    final row = (await repo.tempOn(DateTime(2026, 8, 20)))!;
+    expect(row.measurementKind, BbtMeasurementKind.basal);
+  });
+
+  test('setTemp round-trips a sleepingWrist reading (p8.1a)', () async {
+    await repo.setTemp(
+      DateTime(2026, 8, 20),
+      36.95,
+      source: HealthDataSource.appleHealth,
+      externalId: 'HK-wrist-1',
+      measurementKind: BbtMeasurementKind.sleepingWrist,
+    );
+    final row = (await repo.tempOn(DateTime(2026, 8, 20)))!;
+    expect(row.measurementKind, BbtMeasurementKind.sleepingWrist);
+    expect(row.source, 'appleHealth');
+    expect(row.externalId, 'HK-wrist-1');
+  });
+
+  test(
+    'editing a sleepingWrist row (no kind passed) resets it to basal — a '
+    'corrected passive reading becomes a typed basal temperature (p8.1a)',
+    () async {
+      await repo.setTemp(
+        DateTime(2026, 8, 20),
+        36.95,
+        source: HealthDataSource.appleHealth,
+        externalId: 'HK-wrist-2',
+        measurementKind: BbtMeasurementKind.sleepingWrist,
+      );
+
+      // A plain in-app edit — no kind / source args.
+      await repo.setTemp(DateTime(2026, 8, 20), 36.60);
+
+      final row = (await repo.tempOn(DateTime(2026, 8, 20)))!;
+      expect(row.measurementKind, BbtMeasurementKind.basal);
+      expect(row.source, 'manual');
+      expect(row.externalId, 'HK-wrist-2'); // still sticky for write-back
+      expect(row.tempCelsius, 36.60);
+    },
+  );
+
   test('setTemp records an imported source and external id (p6.2)', () async {
     await repo.setTemp(
       DateTime(2026, 8, 20),

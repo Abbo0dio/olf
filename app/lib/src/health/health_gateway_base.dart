@@ -10,9 +10,10 @@ import 'health_channel.dart';
 /// ships on every iPhone; Health Connect is an installable system app), so that
 /// stays abstract here.
 ///
-/// Only the two types in [kIosSupportedHealthTypes] cross the bridge on either
-/// platform; the other three [HealthSampleType]s are accepted at the API and
-/// produce an empty read / a no-op write with a logged note.
+/// Only the types in [kIosSupportedHealthTypes] cross the bridge; the rest are
+/// accepted at the API and produce an empty read / a no-op write with a logged
+/// note. `wristTemperature` (p8.1a) is read-only — imported but never written
+/// or deleted (see [kIosWritableHealthTypes]).
 abstract class MethodChannelHealthGateway implements HealthPlatformGateway {
   const MethodChannelHealthGateway(
     this.channel, {
@@ -32,9 +33,16 @@ abstract class MethodChannelHealthGateway implements HealthPlatformGateway {
   @protected
   final HealthDataSource sourceTag;
 
+  /// The [HealthSampleType]s this platform's peer actually bridges. Defaults to
+  /// the iOS set; Android overrides it (p8.1a `wristTemperature` is an
+  /// Apple-Watch-only path this slice — a Health Connect wrist-temperature
+  /// mapping is a later slice).
+  @protected
+  Set<HealthSampleType> get bridgedReadTypes => kIosSupportedHealthTypes;
+
   Set<HealthSampleType> _supported(Set<HealthSampleType> types) {
-    final supported = types.intersection(kIosSupportedHealthTypes);
-    final skipped = types.difference(kIosSupportedHealthTypes);
+    final supported = types.intersection(bridgedReadTypes);
+    final skipped = types.difference(bridgedReadTypes);
     if (skipped.isNotEmpty) {
       debugPrint(
         'health: ignoring ${skipped.map((t) => t.name).join(", ")} — '
@@ -99,9 +107,10 @@ abstract class MethodChannelHealthGateway implements HealthPlatformGateway {
     required DateTime from,
     required DateTime to,
   }) async {
-    if (!kIosSupportedHealthTypes.contains(type)) {
+    if (!kIosWritableHealthTypes.contains(type)) {
       debugPrint(
-        'health: delete(${type.name}) ignored — not mapped on $platformLabel',
+        'health: delete(${type.name}) ignored — not a writable type on '
+        '$platformLabel',
       );
       return;
     }

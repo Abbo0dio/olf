@@ -136,6 +136,8 @@ void main() {
       () async {
         mockChannel(response: const []);
         final out = await gateway.read(
+          // On Android `wristTemperature` is not bridged this slice (p8.1a is
+          // Apple-Watch-only), so it counts as unsupported here.
           types: {HealthSampleType.sleep, HealthSampleType.wristTemperature},
           from: from,
           to: to,

@@ -73,10 +73,13 @@ import UIKit
   // p6.2: `olf/health` — a hand-rolled bridge to Apple HealthKit for the
   // opt-in "Connect Apple Health" feature. Mirrors the `core`
   // HealthPlatformGateway: isAvailable / requestAuthorization /
-  // authorizationStatus / read / write / delete. Only two types are mapped —
-  // `menstrualFlow` (HKCategoryType) and `basalBodyTemperature`
-  // (HKQuantityType, °C). The channel speaks HealthKit-native numbers; olf's
-  // Dart side owns the scale translation. Nothing here touches the network.
+  // authorizationStatus / read / write / delete. Mapped types:
+  //   * `menstrualFlow` (HKCategoryType) — read + write
+  //   * `basalBodyTemperature` (HKQuantityType, °C) — read + write
+  //   * `wristTemperature` (HKQuantityType `appleSleepingWristTemperature`,
+  //     °C, iOS 16+) — READ ONLY, passive Apple Watch overnight capture (p8.1a)
+  // The channel speaks HealthKit-native numbers; olf's Dart side owns the
+  // scale translation. Nothing here touches the network.
   private let healthBridge = HealthKitBridge()
 
   private func registerHealthChannel() {
@@ -141,10 +144,25 @@ final class HealthKitBridge {
     HKObjectType.quantityType(forIdentifier: .basalBodyTemperature)
   }
 
+  /// Apple Watch overnight wrist temperature (`appleSleepingWristTemperature`),
+  /// added to HealthKit in iOS 16. `nil` on older systems — the bridge then
+  /// simply has nothing to read for this token (p8.1a).
+  private var wristTemperatureType: HKQuantityType? {
+    if #available(iOS 16.0, *) {
+      return HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature)
+    }
+    return nil
+  }
+
+  // HRV (`heartRateVariabilitySDNN`) and sleep (`sleepAnalysis`) are
+  // deliberately NOT mapped here — passive cycle-phase inference from those
+  // signals is p8.5, which will add the matching `core` HealthSampleType /
+  // HealthUnit and an interval-aggregation query path.
   private func sampleType(for token: String) -> HKSampleType? {
     switch token {
     case "menstrualFlow": return categoryType
     case "basalBodyTemperature": return quantityType
+    case "wristTemperature": return wristTemperatureType
     default: return nil
     }
   }
@@ -162,7 +180,11 @@ final class HealthKitBridge {
     case "requestAuthorization":
       let types = sampleTypes(from: call.arguments)
       guard !types.isEmpty else { result("denied"); return }
-      let share = Set(types)
+      // p8.1a: `wristTemperature` is read-only — the Apple Watch owns that data,
+      // olf never writes it — so it is asked for as a read type only, never a
+      // share type. (Requesting share for a system-written type is meaningless
+      // and would skew `authorizationStatus` below.)
+      let share = Set(types.filter { !isReadOnly($0) })
       let read = Set(types.map { $0 as HKObjectType })
       store.requestAuthorization(toShare: share, read: read) { ok, error in
         DispatchQueue.main.async {
@@ -174,10 +196,14 @@ final class HealthKitBridge {
       let types = sampleTypes(from: call.arguments)
       guard !types.isEmpty else { result("denied"); return }
       // HealthKit only reports share (write) status; read is opaque by design.
-      let statuses = types.map { store.authorizationStatus(for: $0) }
+      // Read-only types (p8.1a `wristTemperature`) carry no share signal, so
+      // they are excluded — the status stays driven by the writable types, as
+      // it was before p8.1a.
+      let writable = types.filter { !isReadOnly($0) }
+      let statuses = writable.map { store.authorizationStatus(for: $0) }
       if statuses.contains(.sharingDenied) {
         result("denied")
-      } else if statuses.allSatisfy({ $0 == .sharingAuthorized }) {
+      } else if !statuses.isEmpty && statuses.allSatisfy({ $0 == .sharingAuthorized }) {
         result("granted")
       } else {
         result("notDetermined")
@@ -203,6 +229,16 @@ final class HealthKitBridge {
     guard let map = arguments as? [String: Any],
           let tokens = map["types"] as? [String] else { return [] }
     return tokens.compactMap { sampleType(for: $0) }
+  }
+
+  /// Types olf only ever reads, never writes back (p8.1a: the Apple Watch owns
+  /// `appleSleepingWristTemperature`). Excluded from share-authorization.
+  private func isReadOnly(_ type: HKSampleType) -> Bool {
+    if #available(iOS 16.0, *) {
+      return type.identifier
+        == HKQuantityTypeIdentifier.appleSleepingWristTemperature.rawValue
+    }
+    return false
   }
 
   private func dateRange(from map: [String: Any]) -> (Date, Date)? {
@@ -263,6 +299,19 @@ final class HealthKitBridge {
        id == HKQuantityTypeIdentifier.basalBodyTemperature.rawValue {
       return [
         "type": "basalBodyTemperature",
+        "startMs": ms(quantity.startDate),
+        "endMs": ms(quantity.endDate),
+        "value": quantity.quantity.doubleValue(for: .degreeCelsius()),
+        "externalId": quantity.uuid.uuidString,
+      ]
+    }
+    // p8.1a: passive Apple Watch overnight wrist temperature (iOS 16+). Same °C
+    // shape as basalBodyTemperature; olf's Dart side tags it `sleepingWrist`.
+    if #available(iOS 16.0, *),
+       let quantity = sample as? HKQuantitySample,
+       id == HKQuantityTypeIdentifier.appleSleepingWristTemperature.rawValue {
+      return [
+        "type": "wristTemperature",
         "startMs": ms(quantity.startDate),
         "endMs": ms(quantity.endDate),
         "value": quantity.quantity.doubleValue(for: .degreeCelsius()),

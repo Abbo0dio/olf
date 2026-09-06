@@ -173,8 +173,26 @@ class DailySymptomEntries extends Table {
   ];
 }
 
+/// What a [BbtEntries] row's temperature actually measures (schema v10, p8.1a).
+///
+/// [basal] — a waking basal body temperature the user typed, or a
+/// `basalBodyTemperature` sample imported from a health platform. This is the
+/// only kind that feeds the fertility-awareness primitives (thermal shift,
+/// fertility score, the BBT chart, the doctor report).
+///
+/// [sleepingWrist] — an Apple Watch overnight wrist-temperature reading
+/// (`appleSleepingWristTemperature`), captured passively while asleep and
+/// imported over the health bridge. Stored in `bbt_entries` so it competes for
+/// the one-row-per-day slot through the **unchanged** `ImportReconciler`, but
+/// deliberately excluded from every existing temperature reader — a
+/// sleeping-wrist figure is not a basal body temperature and must never move a
+/// thermal-shift result or a doctor-PDF chart.
+enum BbtMeasurementKind { basal, sleepingWrist }
+
 /// One basal body temperature reading for a single calendar day (schema v5,
-/// p1.6). Manual entry only — wearable BBT is Phase 8.
+/// p1.6). Manual entry, a `basalBodyTemperature` health-platform import (p6.1),
+/// or — tagged [BbtMeasurementKind.sleepingWrist] — a passive Apple Watch
+/// overnight wrist-temperature reading (schema v10, p8.1a).
 ///
 /// Stored **canonically in degrees Celsius**; the °C / °F choice is a
 /// display-only preference kept in [AppSettings]. Keyed by `date` (one reading
@@ -187,6 +205,14 @@ class BbtEntries extends Table {
   /// Basal temperature in °C. Plausible range is enforced in the repository
   /// (`validateCelsius`), not by a DB constraint.
   RealColumn get tempCelsius => real()();
+
+  /// What this reading measures (schema v10, p8.1a). Stored as the
+  /// [BbtMeasurementKind] enum name; defaults to `'basal'` so every row written
+  /// before p8.1a — and every future typed / `basalBodyTemperature` row — is a
+  /// basal body temperature. Only a passive Apple Watch wrist-temperature import
+  /// writes `'sleepingWrist'`, and an in-app edit resets the row to `'basal'`.
+  TextColumn get measurementKind =>
+      textEnum<BbtMeasurementKind>().withDefault(const Constant('basal'))();
 
   /// Provenance (schema v7, p6.1). `'manual'` for a value the user logged in
   /// olf; `'appleHealth'` / `'healthConnect'` for a reading imported over a

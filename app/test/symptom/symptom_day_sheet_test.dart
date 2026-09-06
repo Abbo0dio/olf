@@ -98,6 +98,57 @@ void main() {
     );
   });
 
+  testWidgets(
+    'a passive Apple Watch reading shows distinctly and can be corrected '
+    'into a typed basal reading (p8.1a)',
+    (tester) async {
+      final db = memoryDb();
+      final bbt = DriftBbtRepository(db);
+      await bbt.setTemp(
+        today,
+        36.9,
+        source: HealthDataSource.appleHealth,
+        externalId: 'hk-wrist-1',
+        measurementKind: BbtMeasurementKind.sleepingWrist,
+      );
+
+      await pumpOlf(
+        tester,
+        overrides: [dbOverride(db)],
+        body: () async {
+          await tester.tap(
+            find.bySemanticsLabel('${formatDay(today)}, no period logged'),
+          );
+          await tester.pumpAndSettle();
+
+          // Value shown, marked as a passive capture.
+          expect(find.textContaining('Basal temp:'), findsOneWidget);
+          expect(
+            find.text('Apple Watch · captured while you slept'),
+            findsOneWidget,
+          );
+
+          // Correct it: tap the chip, type a value, Save.
+          await tester.tap(find.textContaining('Basal temp:'));
+          await tester.pumpAndSettle();
+          await tester.enterText(find.byType(TextField), '36.60');
+          await tester.tap(find.text('Save'));
+          await tester.pumpAndSettle();
+
+          // The passive marker is gone and the stored row is now typed basal.
+          expect(
+            find.text('Apple Watch · captured while you slept'),
+            findsNothing,
+          );
+          final row = (await bbt.tempOn(today))!;
+          expect(row.tempCelsius, closeTo(36.60, 1e-9));
+          expect(row.measurementKind, BbtMeasurementKind.basal);
+          expect(row.source, 'manual');
+        },
+      );
+    },
+  );
+
   testWidgets('the sheet offers "Start a period" on a non-period day', (
     tester,
   ) async {

@@ -165,6 +165,74 @@ void main() {
     );
   });
 
+  testWidgets(
+    'the passive Apple Watch wrist-temperature line appears once readings '
+    'exist, and its subtitle is redacted (p8.1a)',
+    (tester) async {
+      final db = memoryDb();
+      final settings = DriftSettingsRepository(db);
+      await settings.set(SettingKeys.reduceSpokenDetail, 'true');
+      await settings.set(SettingKeys.appleHealthConnected, 'true');
+      final bbt = DriftBbtRepository(db);
+      for (final ago in const [1, 2]) {
+        await bbt.setTemp(
+          DateTime.now().subtract(Duration(days: ago)),
+          36.8,
+          source: HealthDataSource.appleHealth,
+          externalId: 'hk-wrist-$ago',
+          measurementKind: BbtMeasurementKind.sleepingWrist,
+        );
+      }
+
+      await pumpOlf(
+        tester,
+        overrides: [
+          dbOverride(db),
+          healthPlatformGatewayProvider.overrideWithValue(
+            FakeHealthPlatformGateway(),
+          ),
+        ],
+        body: () async {
+          await openSettings(tester);
+          await scrollToApps(tester);
+
+          expect(find.text('Apple Watch wrist temperature'), findsOneWidget);
+          final subtitle = find.textContaining('2 passive readings');
+          expect(subtitle, findsOneWidget);
+          expect(
+            tester.widget<Text>(subtitle).semanticsLabel,
+            'Passive Apple Watch readings are being imported.',
+          );
+        },
+      );
+    },
+  );
+
+  testWidgets(
+    'no passive wrist line when there are no wrist readings (p8.1a)',
+    (tester) async {
+      final db = memoryDb();
+      await DriftSettingsRepository(
+        db,
+      ).set(SettingKeys.appleHealthConnected, 'true');
+
+      await pumpOlf(
+        tester,
+        overrides: [
+          dbOverride(db),
+          healthPlatformGatewayProvider.overrideWithValue(
+            FakeHealthPlatformGateway(),
+          ),
+        ],
+        body: () async {
+          await openSettings(tester);
+          await scrollToApps(tester);
+          expect(find.text('Apple Watch wrist temperature'), findsNothing);
+        },
+      );
+    },
+  );
+
   testWidgets('the counts update after a manual sync', (tester) async {
     final db = memoryDb();
     await DriftSettingsRepository(
