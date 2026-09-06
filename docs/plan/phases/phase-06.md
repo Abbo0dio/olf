@@ -350,6 +350,7 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   permission outside the four-name set. Report, don't work around.
 
 #### p6.4 — Two-way sync + visible sync status
+- squash `2db45db` · [PR #69](https://github.com/Abbo0dio/olf/pull/69)
 - **Depends on:** p6.2, p6.3
 - **Requirement refs:** §2, §3 (retention), §4 (reliability), §9(11)
 - **Goal:** move from one-shot import to genuine two-way sync — app-entered data written back to
@@ -389,8 +390,45 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   (each resolution path), a retention-interaction test (purged / out-of-window data not synced).
 - **Notes / detail:** worker decides on-open-sync vs manual-only for v1 (propose, note the
   tradeoff). Keep the conflict screen simple — a list + three actions, no bulk ops.
+- **Build detail (worker: phase6, folded at close):**
+  - **v1 = manual "Sync now" only.** On-open/resume sync deferred (backlog): it needs its own
+    `AppLifecycleState` plumbing + debounce + never-block-first-frame guarantee + tests, and the
+    design flagged it "acceptable if cheap", not required. Tradeoff noted in the PR: a connected
+    user who never opens Settings won't pull platform-side edits until they tap "Sync now".
+  - **Write-back** — `app/lib/src/health/health_write_back.dart` (`HealthWriteBack`): after a
+    successful local `setFlow` / `setTemp`, read the row back and push it out (`externalId`
+    round-tripped, in-window only). Fire-and-forget, connected-gated, errors swallowed
+    (`debugPrint`, no PHI); never blocks or fails the log. Wired into `flow_quick_log.dart` +
+    `symptom_day_sheet.dart`.
+  - **`externalId` sticky on update** (`drift_bbt_repository` / `drift_daily_flow_repository`):
+    `setTemp`/`setFlow` with `externalId: null` over a row that already has one keeps the id, so
+    an imported-then-edited day stays linked to its platform record — the write-back updates in
+    place, no duplicate. `source` still moves to `manual` on a plain edit (the p6.1 deferral).
+  - **`ImportReconciler`** — value-already-agrees is now a skip *regardless of source* (was
+    `sameValue && sameSource`); absorbs the write-back echo (olf's `manual` row comes back
+    platform-attributed, matched by `externalId`, unchanged). Manual-value protection unchanged:
+    a *disagreeing* manual row is still always a conflict, never an update.
+  - **Status surface** (`settings_page.dart`) — connected · last-sync "N min ago" · added/updated
+    counts · a "N differences to review" row → `conflict_review_screen.dart`. `reduceSpokenDetail`
+    redacts the counts + the review-row subtitle. `HealthSyncSummary` gained `at`; `encode()` is
+    4-field, `decode()` still accepts the pre-p6.4 3-field form. `sync()`/`connect()` return
+    `HealthSyncResult { summary, conflicts }` and take a `retentionCutoff`.
+  - **Conflict review** — `conflict_review_screen.dart` (new `screen_nav.dart` surface, 5 sweeps
+    green): list of `ReconciliationConflict`, each row "your entry" vs the platform + three
+    actions (keep mine → write-back · use theirs → `set…` as `manual` · dismiss → drop, reappears
+    next sync). No bulk ops. `healthConflictsProvider` — in-memory `NotifierProvider`
+    (`// SHORTCUT`: re-derived each sync, lost on restart, Dismiss not persisted).
+  - **Retention both directions** — `syncHealthPlatform` / `connectHealthPlatform` run
+    `retentionController.sweepNow()` first (purge-before-sync); the cutoff clamps the import
+    window *and* filters push-out candidates.
+  - No new dep / no schema / no permission / no manifest / no CI change. `threat-model.md`:
+    write-back arrow + purge-before-sync note on both data-flow diagrams + a p6.4 Review-log
+    entry (conflict store holds no new data class). core 573 / app 426. CI Format bounced once
+    (worker's local `dart format` under-reported — `analysis_options.yaml` env bug); fixed in
+    `9d3d403`, squashed into `2db45db`.
 
 #### p6.5 — Doctor-ready export (offline PDF report)
+- squash `ea585b1` · [PR #70](https://github.com/Abbo0dio/olf/pull/70)
 - **Depends on:** p6.1 (data model); independent of p6.2–p6.4
 - **Requirement refs:** §2 (data export for doctor visits), §3 (purge-before-export; no PHI in
   filename), §6 (not a medical device — disclaimer on the report)
@@ -440,22 +478,91 @@ status surface in p6.4; the doctor export is p6.5. Same five slice numbers, rese
   prints" → manual smoke list.
 - **Notes / detail:** worker owns the report layout and the chart-rendering approach (a simple
   `pdf`-drawn line chart is fine — no charting dep). One document, print-friendly, black-on-white.
+- **Build detail (worker: phase6, folded at close):**
+  - **`pdf` added** (`^3.12.0`, direct main, Apache-2.0) — all §5 pre-approval conditions met:
+    `dependency-audit` green with the full transitive subtree (`archive` MIT, `barcode`
+    Apache-2.0, `bidi` MIT, `image` MIT, `path_parsing` MIT, `posix` MIT, `qr` BSD-3), no
+    ad/analytics/telemetry; pure Dart, no plugin dir / no `flutter: plugin:` section (`posix` is
+    `dart:ffi`-to-libc, no bundled lib); no iOS-target / Android-minSdk bump — both build-matrix
+    jobs green; no `printing` companion. APK-size budget green (`Perf budget` job passed).
+  - **`core/lib/src/export/clinical_report.dart`** (pure — imports only `meta` + core internals,
+    `generatedOn` injected, no `DateTime.now()`): `ClinicalReport` value object +
+    `buildClinicalReport(...)`; sub-types `ReportCycle` / `ReportSummary` / `SymptomFrequency` /
+    `TemperaturePoint` / `ReportPregnancyEvent`; `clinicalReportDisclaimer` +
+    `clinicalReportPredictionCaveat` consts. Retention trim → `includedRange` +
+    `retentionExcludedEarlierData` (stated on the report). Regularity via `CycleStats.from` so
+    the report agrees with the rest of olf. 12 core tests.
+  - **`SymptomRepository.allTypes()`** (+ drift impl) — one-shot read of the whole catalogue,
+    **archived included**, so a removed symptom still gets a name on the report; else "Removed
+    symptom".
+  - **`app/lib/src/export/report_pdf.dart`** — `buildReportPdf(report, {unit, compress})` on
+    `pdf`: single A4 doc, black-on-white, built-in Helvetica core font (no bundled asset, no APK
+    font hit) — summary table · prediction + caveat · cycle table · symptom-frequency table ·
+    hand-drawn (`pw.CustomPaint`) temperature line chart, no charting dep · pregnancy/loss list
+    · disclaimer footer. `// SHORTCUT: _ascii()` — a non-Latin symptom name still drops its
+    glyphs (with a `pdf` warning); upgrade path = bundle a compact Unicode TTF. English UI,
+    print doc — acceptable for v1 (backlog).
+  - **`app/lib/src/export/report_providers.dart`** — `reportModelProvider.family` (reactive
+    preview) + `ClinicalReportController.generate`: `sweepNow()` (purge-before-export, matches
+    p1.10) → build → render → `saveFile`. Filename `olf-report-YYYY-MM-DD.pdf`, no identifier.
+  - **`app/lib/src/export/export_report_screen.dart`** — range picker (3 / 6 / 12 months / all),
+    live preview (`reduceSpokenDetail` redacts the counts), "Generate report" → share sheet. New
+    `screen_nav.dart` surface (20 total), 5 sweeps green.
+  - **`BackupFileGateway.writeBackup` → generic `saveFile(bytes, {suggestedName, dialogTitle})`**
+    — backup + report share the one SAF / `UIDocumentPicker` seam, neither needs a storage
+    permission. One caller updated.
+  - **`settings_page.dart`** — the "Apps & export" header + the doctor-report tile now render
+    unconditionally; only the health-connect tiles stay gated on `healthAvailable`.
+    `release-checklist.md` stale "section is hidden" line fixed.
+  - `threat-model.md`: Assets row + Trust-boundary #4 widening + Mitigations + Residual-risks +
+    a p6.5 Review-log entry for the new user-initiated **plaintext** export egress path (same
+    class as the p1.10 backup — no network, neutral filename, retention-trimmed).
+  - No schema / no permission / no manifest / no CI change. `dart format` clean (worker ran it
+    pre-push this time). core 586 / app 436.
 
-**Phase 6 exit gate:** two-way sync with both platforms; a clinician-usable report exports offline.
-- *Bidirectional Apple HealthKit sync* — p6.2 (read + write, opt-in) + p6.4 (write-back, status,
-  conflicts). PR #… / squash … .
-- *Bidirectional Android Health Connect sync* — p6.3 + p6.4. PR #… .
-- *No duplicates / no clobbered user corrections on import* — p6.1 `ImportReconciler` + v7
-  provenance schema; p6.4 conflict review. PR #… .
-- *Clinician-usable report, generated offline* — p6.5 (`core` `ClinicalReport` + on-device
-  `pdf`, shared via the SAF seam). PR #… .
-- *Every platform SDK behind a swappable `core` interface* — p6.1 `HealthPlatformGateway`;
-  impls live in `app/` only. PR #… .
-- *Phase-wide:* `schemaVersion` 6 → 7 (p6.1: migration + matrix + round-trip); new deps
-  `health` (p6.2/6.3) and `pdf` (p6.5) each dependency-audited green; new platform capabilities
-  (HealthKit entitlement, Health Connect permissions) threat-modelled; `core` stayed
-  Flutter-free / `DateTime.now()`-free.
+**Exit gate (Phase 6) — MET (2026-09-06):**
+- *Bidirectional Apple HealthKit sync* — **MET: p6.2 #66 `76c31cd`** (read + write, opt-in
+  default-off, hand-rolled `olf/health` MethodChannel + Swift `HealthKitBridge`) **+ p6.4 #69
+  `2db45db`** (write-back on every log/edit, per-source status surface, conflict review).
+- *Bidirectional Android Health Connect sync* — **MET: p6.3 #67 `de46108`** (hand-rolled Kotlin
+  bridge on `MainActivity`, same wire contract; `connect-client:1.1.0` Gradle dep, `minSdk`
+  24→26, 4 `health.*` perms) **+ p6.4 #69 `2db45db`**.
+- *No duplicates / no clobbered user corrections on import* — **MET: p6.1 #65 `ed81ac5`** (pure
+  `ImportReconciler` — externalId-then-(type,day) match, a `manual` row is never in `updates`;
+  v7 provenance schema `source`/`externalId` + migration + matrix + backup round-trip) **+ p6.4
+  #69** conflict-review screen for the disagreements it can't auto-apply.
+- *Clinician-usable report, generated offline* — **MET: p6.5 #70 `ea585b1`** (pure `core`
+  `ClinicalReport` + on-device `pdf` render, shared via the `BackupFileGateway` SAF seam,
+  purge-before-export, "not a medical device" disclaimer, neutral filename).
+- *Every platform SDK behind a swappable `core` interface* — **MET: p6.1 #65** —
+  `HealthPlatformGateway` + `FakeHealthPlatformGateway` live in `core`; `HealthKitGateway` /
+  `HealthConnectGateway` / `UnavailableHealthGateway` are `app/`-only, picked by
+  `healthPlatformGatewayProvider` on `defaultTargetPlatform`.
 
-(PR / SHA blanks filled at phase close.)
+**Phase 6 — phase-wide truths (p6.1–p6.5):**
+- **`core` stayed Flutter-free / `DateTime.now()`-free** — the gateway interface, sample model,
+  `ImportReconciler` and `ClinicalReport` are all pure Dart; only the platform impls and the PDF
+  rendering live in `app`.
+- **One schema bump, p6.1: `schemaVersion` 6 → 7** — provenance columns (`source` not-null
+  default `manual`, nullable `external_id`) on `daily_flows` + `bbt_entries`; first migration to
+  `ALTER` an existing table; shipped with its migration + `migration_matrix_test` to v7 + the
+  backup/restore-across-migration round trip in the same PR. No further schema change p6.2–p6.5.
+- **Two candidate deps evaluated; one added.** `health` (p6.2/p6.3) was **evaluated and
+  rejected** — it forces an SDK-floor bump *and* has no `BASAL_BODY_TEMPERATURE` type (olf's
+  primary temperature signal); both platform gateways were hand-rolled instead (p5.4 precedent),
+  no pub dep. `pdf` (p6.5) was **added** — Apache-2.0, pure Dart, `dependency-audit` green with
+  its 7-package transitive subtree, no SDK-floor bump, no `printing`.
+- **New platform capabilities threat-modelled** — HealthKit entitlement + `NSHealth*UsageDescription`
+  (p6.2), 4 `android.permission.health.*` + rationale intent-filter (p6.3), the user-initiated
+  PDF export egress path (p6.5). `threat_model_doc_test` guard green throughout. Health
+  platforms are local IPC — the `OlfHttpClient` TLS chokepoint (p2.6) is N/A, stated in the
+  threat model.
+- **Opt-in, default-off, revocable** per platform and per direction; the p2.3 retention window
+  applies to imported data, written-back data (purge-before-sync) and exported data
+  (purge-before-export). No backend, no network anywhere in the phase.
+
+**Deferred to backlog (see `backlog.md`):** on-open/resume sync · delete propagation to the
+platform · a persisted (restart-surviving) conflict store · a bundled Unicode font for
+non-Latin symptom names in the PDF.
 
 ---

@@ -345,4 +345,12 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   sync, lost on app restart; "Dismiss" doesn't persist, so a still-disagreeing day reappears on
   the next sync. A durable store (a small table, or a settings blob) would let review state
   survive a restart and make Dismiss sticky. — noted by worker: phase6 during p6.4.
+- **p6.5 (2026-09-06) — `report_pdf.dart` `_ascii()` font ceiling.** The doctor-report PDF uses
+  the built-in Helvetica core font (no bundled asset, no APK size hit). `_ascii()` folds common
+  typographic characters (dashes, curly quotes, ellipsis) down to Latin-1, but a symptom name a
+  user typed in a non-Latin script (CJK, Arabic, Cyrillic, …) still can't be drawn — its glyphs
+  drop with a `pdf` warning. `// SHORTCUT:` marked at the helper. Upgrade path: bundle a compact
+  Unicode TTF (e.g. Noto Sans subset) as an asset and pass it as the document font — costs some
+  APK size, so measure against the `perf-budget` gate. English-language UI + a print document
+  make this acceptable for v1. — noted by worker: phase6 during p6.5.
 - (add more here)
