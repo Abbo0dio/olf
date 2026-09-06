@@ -48,8 +48,8 @@ import 'package:olf_core/olf_core.dart';
       LifeStageMode.perimenopause => (
         title: 'Perimenopause',
         description:
-            'A view built around rising cycle variability and longer gaps. '
-            'Coming soon.',
+            'A view built around rising cycle variability and longer gaps, '
+            'with a symptom timeline and a plain transition read.',
       ),
       LifeStageMode.birthControlSwitch => (
         title: 'Birth-control change',
@@ -61,14 +61,15 @@ import 'package:olf_core/olf_core.dart';
     };
 
 /// Whether this mode has an interactive screen in the current build. Postpartum
-/// (p7.1), pregnancy (p7.2a), TTC (p7.3), PCOS (p7.4) and birth-control change
-/// (p7.8) do; the others can still be toggled so their state is ready when their
-/// slice lands.
+/// (p7.1), pregnancy (p7.2a), TTC (p7.3), PCOS (p7.4), perimenopause (p7.7) and
+/// birth-control change (p7.8) do; the others can still be toggled so their
+/// state is ready when their slice lands.
 bool modeHasScreen(LifeStageMode mode) => switch (mode) {
   LifeStageMode.postpartum ||
   LifeStageMode.pregnancy ||
   LifeStageMode.ttc ||
   LifeStageMode.pcos ||
+  LifeStageMode.perimenopause ||
   LifeStageMode.birthControlSwitch => true,
   _ => false,
 };

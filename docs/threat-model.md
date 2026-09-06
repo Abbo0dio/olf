@@ -667,3 +667,31 @@ The CI guard requires an entry naming the current phase.
     unchanged. The shared `CorrelationChart` widget renders bundled, on-device
     data and phones home nothing.
   No design changes required by this review.
+- **2026-09-06 — Phase 7 / p7.7 landing — reviewer: worker: 2.** Perimenopause /
+  menopause mode (cycle-variability transition read + perimenopause symptom
+  timeline + long/absent-cycle reframing). **No new asset, adversary, trust
+  boundary, data flow, network path, dependency, permission, manifest / plist
+  change, or CI gate change.**
+  - The **transition read** (`derivePerimenopauseTransition`, pure `core`,
+    `DateTime.now()`-free, deterministic) is a **derived read** over the logged
+    period history via `deriveCycles` + `CycleStats` — recomputed on read, never
+    stored, like the p3 predictions and the p7.1 / p7.2a / p7.4 views. It emits
+    a coarse `PerimenopauseVariabilityTrend` / `PerimenopauseStageHint` enum and
+    plain facts (days since last period, "12+ months" flag). **No numeric score**
+    — no 0–100, no percentage (§9(12)); a content test asserts this and that the
+    read states it is not a score or a diagnosis. "12 months without a period" is
+    surfaced factually with the disclaimer, as information.
+  - The **symptom timeline** reuses the p7.4 `cyclePhaseCorrelations` core and
+    the shared `CorrelationChart`, filtered to a bundled perimenopause-relevant
+    name list plus the user's own (non-built-in) symptoms. **No new storage** —
+    the p1.5 symptom log is read as-is; the name list is a compile-time
+    constant, not a table.
+  - Mode enablement is the existing `mode.perimenopause` row in the
+    `app_settings` KV store — same sensitivity class as the other `mode.<name>`
+    keys already under Assets. **No schema change.** Turning the mode off only
+    clears the flag; no logged data is touched.
+  - The cycle-UI reframing (gap-copy wording, a wider-interval note, and
+    withholding the forecast card past a long gap / 12+ months) is
+    **presentation / weighting only** — `deriveCycles`, `CycleStats` and the
+    predictor are unchanged.
+  No design changes required by this review.
