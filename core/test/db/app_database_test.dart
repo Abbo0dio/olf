@@ -8,8 +8,8 @@ void main() {
   setUp(() => db = AppDatabase(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  test('schemaVersion is 8', () {
-    expect(db.schemaVersion, 8);
+  test('schemaVersion is 9', () {
+    expect(db.schemaVersion, 9);
   });
 
   test(

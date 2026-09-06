@@ -245,6 +245,30 @@ encrypted export/restore and ages out on the retention window like every other d
 
 `schemaVersion = 8`.
 
+## Schema v9 (p7.6)
+
+Adds **`pmdd_ratings`** — the PMDD daily-rating log. **One row per `(date, item)`**, keyed by a
+composite `{date, item}` PK: a day carries several rows, one per rated item. Not linked to a
+`periods` row. Unlike every other symptom table, **`SymptomSeverity.none` is a real stored
+value** here ("rated, nothing today") — a day is rated when its rows exist, whatever the
+ratings say; the repository only deletes rows on an explicit clear or when an item is dropped
+from a re-rate.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `date` | INTEGER (date), **PK part 1** | Calendar day, time-of-day zeroed on write. |
+| `item` | TEXT, **PK part 2** | `PmddSymptom` name — a small fixed core enum (`irritability`, `moodSwings`, `anxiety`, `lowMood`, `tearfulness`, `fatigue`, `bloating`, `chestTenderness`). No user-configurable set in v1 (backlog). |
+| `rating` | TEXT, **NOT NULL** | `SymptomSeverity` name — `none` / `mild` / `moderate` / `severe`. `none` **is** stored. |
+| `created_at` / `updated_at` | INTEGER (datetime) | Audit stamps; `created_at` preserved across upserts, `updated_at` only bumped when the rating actually changes. |
+
+Purely additive — a new table, nothing backfilled. `BackupService.tableOrder` and
+`RetentionService.deleteWhere` both gained `pmdd_ratings` (appended last — no FK), so it
+round-trips through encrypted export/restore and ages out on the retention window like every
+other dated table. The cycle-phase overlay the screen shows is recomputed from these rows plus
+the derived cycles on every read — **never stored**.
+
+`schemaVersion = 9`.
+
 ## Migrations
 
 `MigrationStrategy.onUpgrade` runs the steps below in order. Every schema change:
@@ -263,12 +287,13 @@ encrypted export/restore and ages out on the retention window like every other d
 | `from < 6` (p1.7) | Creates `medications`, `birth_control_entries` and `reminders`. Purely additive — nothing is backfilled, existing rows are untouched. Verified by `core/test/db/meds_migration_test.dart` (real on-disk v5 file with period + settings rows → upgrade → assert the three new tables exist, old rows intact, all three new repos usable, and `reminders` rejects a second row for the same `kind`). |
 | `from < 7 && to >= 7` (p6.1) | `m.addColumn` × 4: `source` (default `'manual'`) + `external_id` (nullable) on `daily_flows` and `bbt_entries`. First ALTER migration — the `addColumn` is guarded so it only touches a table an earlier step created in its *pre-v7* shape (`daily_flows` from v3, `bbt_entries` from v5); when `from` predates the table, the `createTable` above already builds it with the columns. The `to >= 7` guard keeps the single-step `migration_matrix_test` targets honest. Verified by `core/test/db/migration_matrix_test.dart` (v1..v6 → v7: schema matches the committed v7 snapshot, every pre-v7 row comes out `source = 'manual'` / `external_id` NULL, backup/restore round-trips at v7). |
 | `from < 8` (p7.5) | Creates `pain_entries`. Purely additive — nothing backfilled, existing rows untouched; no `to >=` guard (an extra *table* is tolerated at every intermediate target, unlike the v7 column add). Verified by `core/test/db/pain_migration_test.dart` (real on-disk v7 file → upgrade → assert `pain_entries` shape, old rows intact, table usable through `DriftPainRepository` incl. the ordered scale / region enum / note / flare flag) and `migration_matrix_test.dart` (v1..v7 → v8: schema matches the committed v8 snapshot, `pain_entries` present-and-empty, backup/restore round-trips a real pain row at v8). |
+| `from < 9` (p7.6) | Creates `pmdd_ratings`. Purely additive — nothing backfilled, existing rows untouched; no `to >=` guard (same reasoning as `from < 8`). Verified by `core/test/db/pmdd_migration_test.dart` (real on-disk v8 file → upgrade → assert the composite-PK `pmdd_ratings` shape, old period + pain rows intact, table usable through `DriftPmddRatingRepository` incl. an explicit `none` rating) and `migration_matrix_test.dart` (v1..v8 → v9: schema matches the committed v9 snapshot, `pmdd_ratings` present-and-empty, backup/restore round-trips real rated rows — one a `none` — at v9). |
 
 Since p5.6, drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) **is** wired
 up: `core/drift_schemas/` holds a JSON snapshot per version and `core/test/db/generated/` the
 verifier helpers. History v1..v5 is reconstructed from the v6 anchor by
-`tool/dump_historical_schemas.dart`; v6 and every version after it (v7 ALTER, v8 additive) is
-its own real `schema dump`, listed in that script's `_dumpedVersions`. The per-feature
+`tool/dump_historical_schemas.dart`; v6 and every version after it (v7 ALTER, v8 + v9 additive)
+is its own real `schema dump`, listed in that script's `_dumpedVersions`. The per-feature
 `*_migration_test.dart` files still hand-build one old schema each, kept for context.
 
 ## Derived data — not stored (p1.3, p1.4)

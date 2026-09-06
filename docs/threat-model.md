@@ -23,7 +23,7 @@ What an adversary would want, roughly in order of sensitivity.
 
 | Asset | Where it lives | Why it matters |
 |---|---|---|
-| Cycle & health entries (periods, flow, symptoms, BBT, mucus, meds, pregnancy-loss / birth events, endometriosis pain / flare log incl. free-text pain notes) | `olf.db`, an SQLCipher-encrypted drift database in app-private storage | The core secret. Can imply pregnancy, pregnancy loss, contraception use, sexual activity, transition-related care, a chronic pain / endometriosis condition. |
+| Cycle & health entries (periods, flow, symptoms, BBT, mucus, meds, pregnancy-loss / birth events, endometriosis pain / flare log incl. free-text pain notes, PMDD daily mood/physical ratings — fixed enum item + enum severity, no free text) | `olf.db`, an SQLCipher-encrypted drift database in app-private storage | The core secret. Can imply pregnancy, pregnancy loss, contraception use, sexual activity, transition-related care, a chronic pain / endometriosis condition, a premenstrual mood condition. |
 | The database encryption key | OS keystore via `flutter_secure_storage` (Android Keystore / iOS Keychain), never in the DB or prefs | Whoever has this can read `olf.db` directly, no PIN needed. |
 | PIN hash and decoy-PIN hash | `flutter_secure_storage` | Brute-forcing these bypasses the gate; the decoy hash also reveals that a decoy exists. |
 | Preferences (theme, pronouns, reminder settings, retention window) | unencrypted `SharedPreferences` / `NSUserDefaults` | Low sensitivity on their own, but pronouns and a tight retention window are weak signals. |
@@ -726,4 +726,50 @@ The CI guard requires an entry naming the current phase.
     test locks the copy; the not-a-medical-device line is on the screen).
   - The new `SymptomSeverity` value object is pure `core` with no storage of its
     own beyond the `pain_entries.intensity` column above; p7.6 will reuse it.
+  No design changes required by this review.
+- **2026-09-06 — Phase 7 / p7.6 landing — reviewer: worker: 2.** PMDD mode
+  (quick daily multi-item rating + a cycle-overlay of those ratings by phase + a
+  descriptive luteal-vs-rest-of-cycle sentence). **This is the phase's second
+  and last schema change; no new adversary, trust boundary, data flow, network
+  path, dependency, permission, manifest / plist change, or CI gate change.**
+  - **New asset — a `pmdd_ratings` table** (schema v8 → v9): **one row per
+    `(date, item)`**, composite `{date, item}` PK. `item` is a value from a
+    small **fixed core enum** (`PmddSymptom`, 8 plain mood/physical names — no
+    user-configurable set in v1, noted as a follow-up); `rating` is a
+    `SymptomSeverity` name. **No free text** — this table is enum-only, so it
+    adds a new *topic* (premenstrual mood) but no new *kind* of content beyond
+    what `daily_symptom_entries` already holds. It sits inside the same
+    SQLCipher-encrypted `olf.db`, in the same app ↔ DB trust boundary, encrypted
+    at rest like every other column. Added to the Assets table's top row.
+  - Unlike every other symptom table, **`SymptomSeverity.none` is a real stored
+    value** here ("rated, nothing today"). That is a sensitivity *non-issue* —
+    a `none` row carries strictly less information than a `mild`/`moderate`/
+    `severe` one — but it is called out because it breaks the "a row means it
+    happened" invariant other readers rely on, which is exactly why a **new
+    table** was chosen over adding a nullable `severity` column to
+    `daily_symptom_entries` (that option would have put presence rows in front
+    of the calendar-dot / recent-symptoms / doctor-report readers).
+  - The migration is **purely additive** (`createTable`, nothing backfilled, no
+    `to >=` guard), bundled with its `migration_matrix_test` extension (every
+    historical version → v9), a dedicated `pmdd_migration_test`, and a backup
+    round-trip carrying real `pmdd_ratings` rows — one an explicit `none` —
+    across the migration. `BackupService.tableOrder` and
+    `RetentionService.deleteWhere` both gained `pmdd_ratings` (appended last, no
+    FK), so the rating log is covered by encrypted export/restore **and** by the
+    retention auto-delete sweep — it ages out on the user's configured window
+    exactly like the flow / BBT / symptom / pain rows.
+  - The **cycle overlay** (`pmddOverlay`, pure `core`, `DateTime.now()`-free,
+    deterministic) reuses the p7.4 `cyclePhaseCorrelations` core and the shared
+    `CorrelationChart` unchanged, feeding each rated day as a `'rated'` event and
+    each day whose peak reaches `moderate` as a `'notable'` event. It is
+    **recomputed on read, never stored**, like the p3 predictions and the other
+    Phase 7 views. It emits only per-phase counts and a coarse
+    `PmddLutealRead` enum → one descriptive sentence. **No DRSP score, no
+    numeric score, no diagnostic threshold, no "you have PMDD"** (§9(12)); a
+    content test locks the copy and the not-a-medical-device line is on the
+    screen.
+  - Mode enablement is the existing `mode.pmdd` row in the `app_settings` KV
+    store — same sensitivity class as the other `mode.<name>` keys already under
+    Assets. Turning the mode off only clears the flag; **every `pmdd_ratings`
+    row is kept** (reversible + opt-in).
   No design changes required by this review.

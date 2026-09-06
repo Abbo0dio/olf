@@ -25,6 +25,7 @@ part 'app_database.g.dart';
     BirthControlEntries,
     Reminders,
     PainEntries,
+    PmddRatings,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -53,8 +54,12 @@ class AppDatabase extends _$AppDatabase {
   ///            additive — a new table, nothing backfilled. Dumped as its own
   ///            real snapshot (v6+ history is frozen; only v1..v5 are
   ///            reconstructed).
+  /// v9 (p7.6): added `pmdd_ratings` (PMDD daily rating — one row per
+  ///            `(date, item)`: fixed `PmddSymptom` item, `SymptomSeverity`
+  ///            rating, `none` included). Purely additive — a new table,
+  ///            nothing backfilled. Dumped as its own real snapshot.
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -135,6 +140,12 @@ class AppDatabase extends _$AppDatabase {
         // is tolerated by the schema verifier at every intermediate target (only
         // the v7 *column* add needed that dance).
         await m.createTable(painEntries);
+      }
+      if (from < 9) {
+        // p7.6: the PMDD daily-rating log. Purely additive — a new table,
+        // nothing to backfill. No `to >=` guard needed (same reasoning as the
+        // v8 block: an extra *table* is tolerated at every intermediate target).
+        await m.createTable(pmddRatings);
       }
     },
     beforeOpen: (details) async {

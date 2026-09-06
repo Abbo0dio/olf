@@ -8,6 +8,7 @@ import 'mode_catalog.dart';
 import 'modes_providers.dart';
 import 'pcos_screen.dart';
 import 'perimenopause_screen.dart';
+import 'pmdd_screen.dart';
 import 'postpartum_screen.dart';
 import 'pregnancy_week_screen.dart';
 import 'ttc_screen.dart';
@@ -49,6 +50,7 @@ Widget _modeScreen(LifeStageMode mode) => switch (mode) {
   LifeStageMode.ttc => const TtcScreen(),
   LifeStageMode.pcos => const PcosScreen(),
   LifeStageMode.endometriosis => const EndometriosisScreen(),
+  LifeStageMode.pmdd => const PmddScreen(),
   LifeStageMode.perimenopause => const PerimenopauseScreen(),
   LifeStageMode.birthControlSwitch => const BirthControlRecalibrationScreen(),
   _ => const PostpartumScreen(),
