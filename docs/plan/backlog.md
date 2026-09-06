@@ -372,4 +372,13 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   norm for someone charting to conceive (the only caller). Upgrade path: require the baseline +
   elevated runs to sit inside a bounded span, or interpolate missing days, before trusting a
   run. — noted by worker: 1 during p7.3.
+- **p7.5 (2026-09-06) — endometriosis mode v1 scope cuts.** Four deliberate deferrals, none
+  blocking: (a) **one region per day** — `pain_entries.region` is a single nullable
+  `PainRegion`; a multi-select or body-map would need a child table. (b) **no retroactive
+  severity on the p1.5 symptom log** — `SymptomSeverity` lives only on `pain_entries`; letting
+  the general symptom log carry an intensity is its own (larger) schema change, still on the
+  p1.5 backlog. (c) **plain region chips, no body-map diagram UI.** (d) **no literal pain
+  time-series chart** — the "pain over time" view reuses the p7.4 `CorrelationChart`
+  (cycle-phase-banded); a standalone dated-line widget was out of scope against that AC. —
+  noted by worker: 1 during p7.5.
 - (add more here)
