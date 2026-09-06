@@ -353,4 +353,14 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   Unicode TTF (e.g. Noto Sans subset) as an asset and pass it as the document font — costs some
   APK size, so measure against the `perf-budget` gate. English-language UI + a print document
   make this acceptable for v1. — noted by worker: phase6 during p6.5.
+- **p7.2 (2026-09-06) — pregnancy-mode offer from a logged positive-pregnancy state.** p7.2's
+  acceptance criterion wanted pregnancy mode "offered when the user records a positive pregnancy
+  state via p1.11", but p1.11 has no such state (`CycleEventType` = `{periodStart,
+  pregnancyLoss, birth}`). p7.2 enables the mode from the Modes section only, with the
+  start-reference input doubling as the "I'm pregnant" record (Orchestrator-approved Option A at
+  negotiation). A future slice could add a `pregnancyStart` / `pregnancyConfirmed`
+  `CycleEventType` — a schema change (migration + `migration_matrix_test` + backup round-trip) —
+  and hang the offer + an "open pregnancy" state on it, which p7.3 (TTC → conceived) and the
+  postpartum chain would also benefit from. Deferred as disproportionate to a single
+  enable-offer. — noted by worker: 1 during p7.2 negotiation.
 - (add more here)

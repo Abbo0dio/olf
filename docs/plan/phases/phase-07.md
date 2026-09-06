@@ -88,34 +88,63 @@ app *surfaces and asks about*, never the core logging model.
   table unless the cycle-return view genuinely can't be derived — flag it if so.
 
 #### p7.2 — Pregnancy mode (week-by-week + pregnancy symptom logging)
-- **Depends on:** p7.1 (mode framework), p1.11 (a pregnancy is an open pregnancy-event state)
+
+**Split at negotiation (2026-09-06, worker: 1) into p7.2a / p7.2b** — too big for one
+reviewable PR (43-entry week-notes content asset + gestational-age core + a symptom set +
+prediction-UI suppression). The split was pre-sanctioned in "Phase-wide constraints" above.
+
+**Enablement — acceptance criterion altered at the same negotiation (Orchestrator approved
+Option A).** As written the criterion said pregnancy mode is "offered when the user records a
+positive pregnancy state via p1.11". p1.11 has **no** positive-pregnancy state —
+`CycleEventType` is `{periodStart, pregnancyLoss, birth}`; adding a `pregnancyStart` /
+`pregnancyConfirmed` type is a schema change (migration + `migration_matrix_test` + backup
+round-trip) disproportionate to hanging an enable-offer on it, and out of p1.11's scope.
+**Instead:** pregnancy mode enables from the Modes section only; the **start-reference input**
+(LMP / user-entered due date / conception date), stored as a typed `app_settings` value
+(p7.1 precedent, no schema change), *is* the "I'm pregnant" record. A p1.11 loss/birth still
+ends it. "Offer pregnancy mode from a logged positive state" is deferred to a future slice
+that adds a pregnancy-start event — see `backlog.md`.
+
+- **Depends on:** p7.1 (mode framework), p1.11 (loss/birth end the pregnancy)
 - **Requirement refs:** §2 (pregnancy mode — week-by-week development, symptom logging), §6
-- **Goal:** a user who is pregnant can turn on pregnancy mode, see where they are by
-  gestational week with brief week-by-week development notes, and log pregnancy-appropriate
-  symptoms — with the normal cycle prediction UI suppressed while it's active.
+
+##### p7.2a — Gestational-age core + week view + enable/start-reference flow
 - **Acceptance criteria:**
-  - Pregnancy mode is enabled from the Modes section or offered when the user records a positive
-    pregnancy state via p1.11; it needs a **start reference** (LMP or a user-entered due date /
-    conception date) — pure `core` gestational-age maths from that reference, clock-injected.
+  - Pregnancy mode is enabled from the p7.1 Modes section. Turning it on collects a **start
+    reference** — LMP, a user-entered due date, or a conception date — stored as a typed
+    `app_settings` value (no schema change). That stored reference is the pregnancy record for
+    p7.2; clearing the mode clears it.
+  - Pure `core` `gestational_age.dart`: GA week + day and trimester from any of the three
+    reference kinds, clock-injected (no `DateTime.now()` in `core`); a reference date in the
+    future / an as-of date before conception → an **honest error, not a negative week**.
   - A **week view**: current gestational week + trimester, and a short bundled development note
-    per week (0–42). Content is plain bundled text, **non-alarming, non-clinical**, carries the
-    disclaimer, no tracked links, reviewed against p4.3. Explicitly *not* a medical timeline.
-  - A **pregnancy symptom set** — reuse the p1.5 symptom model (a curated built-in list scoped
-    to the mode + the user's own custom symptoms); no new symptom storage.
-  - While pregnancy mode is on, the cycle-prediction card / fertile-window UI is **hidden** (not
-    deleted — it returns when the mode is turned off or the pregnancy is ended via p1.11).
-  - Ending the pregnancy (birth or loss via p1.11) turns pregnancy mode off and offers
-    postpartum mode (p7.1).
-  - New `screen_nav.dart` surface(s); sweeps green; dark mode.
+    per week (`pregnancy_week_notes.dart`, 0–42 → 43 entries). Plain bundled text,
+    **non-alarming, non-clinical**, carries the not-a-medical-device line, no tracked links,
+    reviewed against p4.3. Explicitly *not* a medical timeline.
+  - `modes_page` / `mode_catalog` wiring so the mode is reachable + shows its "Open" affordance
+    when on. New `screen_nav.dart` surface(s); sweeps green; dark mode.
 - **Tests required:** `core` gestational-age maths (from LMP; from due date; from conception
-  date; week/trimester boundaries; a date before the reference → honest error, not a negative
-  week; clock injected). `app`: enable flow, week view renders the right week + note, pregnancy
-  symptom logging writes through the existing symptom repo, prediction UI hidden while active
-  and restored after, end-pregnancy → postpartum offer. Sweeps.
-- **Notes / detail:** likely the biggest Phase 7 slice — Worker may split into **p7.2a**
-  (gestational-age core + week view) and **p7.2b** (pregnancy symptom set + prediction-UI
-  suppression) at negotiation. The week-by-week text is a content asset — keep it terse and get
-  it copy-reviewed; do not import a third-party content pack (licence + phone-home risk).
+  date; week/trimester boundaries; pre-reference as-of date → honest error; clock injected).
+  `app`: enable + start-reference flow, week view renders the right week + note, week-notes
+  asset has all 43 entries. Sweeps.
+
+##### p7.2b — Pregnancy symptom set + prediction-UI suppression + end-pregnancy chain
+- **Depends on:** p7.2a (the mode + its enablement), p1.5 (symptoms), p1.11 (loss/birth)
+- **Acceptance criteria:**
+  - A **pregnancy symptom set** — reuse the p1.5 symptom model (a curated built-in name list
+    scoped to the mode + the user's own custom symptoms); **no new symptom storage**, logged
+    through the existing symptom repo.
+  - While pregnancy mode is on, the cycle-prediction card / fertile-window UI on the calendar
+    is **hidden** (not deleted — it returns when the mode is turned off).
+  - Ending the pregnancy via a p1.11 **loss or birth** turns pregnancy mode off, restores the
+    prediction UI, and chains the p7.1 `offerPostpartumMode` path.
+  - New `screen_nav.dart` surface(s); sweeps green; dark mode.
+- **Tests required:** `app`: pregnancy symptom logging writes through the existing symptom repo;
+  prediction UI hidden while active and restored after; end-pregnancy (loss and birth) → mode
+  off + postpartum offer shown. Sweeps.
+- **Notes / detail:** the week-by-week text is a content asset — keep it terse and get it
+  copy-reviewed; **do not import a third-party content pack** (licence + phone-home risk).
+  Worker owns the start-reference input shape and the week-note copy.
 
 #### p7.3 — TTC (trying to conceive) mode — daily fertility score + timing guidance
 - **Depends on:** p7.1 (mode framework), p1.4 / p3 (`AdaptivePredictor`, fertile window), p1.6
@@ -295,7 +324,8 @@ app *surfaces and asks about*, never the core logging model.
 **Exit gate (Phase 7):** each mode ships independently, opt-in, tested, non-diagnostic, with
 correlation / timeline views where the requirement calls for them.
 - *Postpartum cycle-return + loss/birth support + the mode framework* — p7.1. PR #… .
-- *Pregnancy mode (week-by-week + pregnancy symptoms)* — p7.2 (or p7.2a/b). PR #… .
+- *Pregnancy mode: gestational-age core + week view + enable/start-reference flow* — p7.2a. PR #… .
+- *Pregnancy mode: pregnancy symptom set + prediction-UI suppression + end-pregnancy → postpartum* — p7.2b. PR #… .
 - *TTC mode with an honest daily fertility score* — p7.3. PR #… .
 - *PCOS mode (irregular-cycle-aware UI + symptom correlation) + the reusable correlation core* —
   p7.4. PR #… .
