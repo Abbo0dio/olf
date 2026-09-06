@@ -57,6 +57,7 @@ export 'src/meds/drift_birth_control_repository.dart';
 export 'src/meds/drift_medication_repository.dart';
 export 'src/meds/medication.dart';
 export 'src/meds/medication_repository.dart';
+export 'src/modes/birth_control_recalibration.dart';
 export 'src/modes/daily_fertility_score.dart';
 export 'src/modes/gestational_age.dart';
 export 'src/modes/life_stage_mode.dart';

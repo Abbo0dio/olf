@@ -14,6 +14,9 @@ import '../flow/flow_providers.dart';
 import '../bbt/bbt_chart_widget.dart';
 import '../bbt/bbt_providers.dart';
 import '../flow/flow_quick_log.dart';
+import '../modes/birth_control_recalibration_content.dart';
+import '../modes/birth_control_recalibration_providers.dart';
+import '../modes/birth_control_recalibration_screen.dart';
 import '../modes/modes_providers.dart';
 import '../modes/postpartum_screen.dart';
 import '../mucus/mucus_providers.dart';
@@ -281,6 +284,13 @@ class _LoadedState extends ConsumerState<_Loaded> {
     final pregnancyState = ref.watch(pregnancyRecoveryStateProvider);
     final pregnancySince = ref.watch(mostRecentPregnancyEndProvider)?.date;
 
+    // p7.8: while a hormonal birth-control change is still settling, the forecast
+    // card is withheld and a plain recalibration note takes its place. Clears on
+    // its own after the window, once enough post-change cycles are logged, or
+    // when the user dismisses it — and only shows when the mode is enabled.
+    final bcRecalibration = ref.watch(birthControlRecalibrationProvider);
+    final bcRecalActive = bcRecalibration?.active ?? false;
+
     // p5.3: when "Reduce spoken detail" is on, sensitive read-outs on this
     // screen (day cells, the prediction card, the correction notice, the
     // recent-symptoms list, today's flow chip) announce only that an entry
@@ -326,7 +336,13 @@ class _LoadedState extends ConsumerState<_Loaded> {
                   ref.read(correctionNoticeProvider.notifier).clear(),
             ),
           ],
-          if (prediction != null && !pregnancyModeOn) ...[
+          if (bcRecalActive) ...[
+            const SizedBox(height: 16),
+            _RecalibrationNote(
+              onDismiss: () => dismissBirthControlRecalibration(ref),
+            ),
+          ],
+          if (prediction != null && !pregnancyModeOn && !bcRecalActive) ...[
             const SizedBox(height: 16),
             _PredictionCard(
               prediction: prediction,
@@ -1343,6 +1359,80 @@ class _PregnancyStatusCard extends ConsumerWidget {
                   child: const Text('Open postpartum view'),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// p7.8: shown in place of the forecast card while a hormonal birth-control
+/// change is still settling. A plain, non-alarming note — no method name, no
+/// diagnosis — with a way into the guided explainer and a way to dismiss it
+/// early. Only rendered when the birth-control-change mode is on and the
+/// recalibration window is active (see `birthControlRecalibrationProvider`).
+class _RecalibrationNote extends StatelessWidget {
+  const _RecalibrationNote({required this.onDismiss});
+
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const note = BirthControlRecalibrationContent.predictionCardNote;
+
+    return Semantics(
+      container: true,
+      label: note,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.timelapse_outlined,
+                  color: theme.colorScheme.onSecondaryContainer,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    note,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const BirthControlRecalibrationScreen(),
+                    ),
+                  ),
+                  child: const Text('Learn more'),
+                ),
+                TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
+              ],
+            ),
+            Text(
+              BirthControlRecalibrationContent.notMedicalDeviceLine,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+            ),
           ],
         ),
       ),

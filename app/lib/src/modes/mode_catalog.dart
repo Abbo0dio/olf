@@ -55,16 +55,18 @@ import 'package:olf_core/olf_core.dart';
         title: 'Birth-control change',
         description:
             'A gentler recalibration period after you start or stop hormonal '
-            'birth control. Coming soon.',
+            'birth control, instead of a confident forecast built on '
+            'pre-change cycles.',
       ),
     };
 
 /// Whether this mode has an interactive screen in the current build. Postpartum
-/// (p7.1), pregnancy (p7.2a) and TTC (p7.3) do; the others can still be toggled
-/// so their state is ready when their slice lands.
+/// (p7.1), pregnancy (p7.2a), TTC (p7.3) and birth-control change (p7.8) do; the
+/// others can still be toggled so their state is ready when their slice lands.
 bool modeHasScreen(LifeStageMode mode) => switch (mode) {
   LifeStageMode.postpartum ||
   LifeStageMode.pregnancy ||
-  LifeStageMode.ttc => true,
+  LifeStageMode.ttc ||
+  LifeStageMode.birthControlSwitch => true,
   _ => false,
 };

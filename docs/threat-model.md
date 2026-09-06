@@ -622,3 +622,26 @@ The CI guard requires an entry naming the current phase.
     **no links**, and are tone-locked by a content test plus the p1.9
     inclusive-language lint. Nothing here phones home.
   No design changes required by this review.
+- **2026-09-06 — Phase 7 / p7.8 landing — reviewer: worker: 3.**
+  Birth-control-switching recalibration support. **No new asset, adversary,
+  trust boundary, data flow, network path, dependency, permission, manifest /
+  plist change, or CI gate change.**
+  - The **recalibration read** (`deriveBirthControlRecalibration`) is a pure
+    `core` derivation (`DateTime.now()`-free, deterministic) over the existing
+    p1.7 `birth_control_entries` rows and the existing derived cycle list —
+    recomputed on read, never stored, exactly like the p3 predictions, the p7.1
+    cycle-return view and the p7.2a gestational age. It fabricates nothing: it
+    only decides whether to *withhold* the p3 forecast and show a plain note.
+    The predictor itself is untouched.
+  - The only new stored value is the **dismissal timestamp**
+    (`mode.birthControlSwitch.dismissedAt`, an ISO-8601 string) — one more row
+    in the existing `app_settings` KV store, the same sensitivity class as
+    `mode.<name>` and the other preference keys under Assets. **No schema
+    change** — no new table, column, or migration. Turning the mode off keeps
+    the row (no data loss on disable).
+  - The **guided explainer** is bundled, non-clinical static text used for both
+    starting and stopping, carries the fixed "not a medical device" line on the
+    screen, contains **no links**, and is checked for phone-home URLs by a
+    content test and covered by the p1.9 inclusive-language lint. Nothing here
+    phones home.
+  No design changes required by this review.
