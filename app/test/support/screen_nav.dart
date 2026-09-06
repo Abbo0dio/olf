@@ -24,7 +24,7 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 41 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 42 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -37,7 +37,9 @@ import 'harness.dart';
 /// thin-history states; p7.5 the endometriosis screen in its correlation-view
 /// and empty states and the pain-logging sheet; p7.6 the PMDD screen in its
 /// overlay-view and empty states and the daily rating sheet; p8.1a the day sheet
-/// with a passive Apple Watch wrist-temperature reading).
+/// with a passive Apple Watch wrist-temperature reading; p8.2 the "Apps &
+/// export" per-device provenance list for third-party wearables synced through
+/// the health platform).
 /// The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -111,6 +113,23 @@ Future<void> _seedHealthAppConnected(AppDatabase db) async {
       measurementKind: BbtMeasurementKind.sleepingWrist,
     );
   }
+  // p8.2: a couple of imported readings tagged by originating device, so the
+  // per-device provenance list ("From Oura", "From Garmin") renders.
+  await bbt.setTemp(
+    _daysAgo(3),
+    36.5,
+    source: HealthDataSource.appleHealth,
+    externalId: 'oura-bbt-1',
+    sourceDevice: 'Oura',
+  );
+  final flow = DriftDailyFlowRepository(db);
+  await flow.setFlow(
+    _daysAgo(4),
+    intensity: FlowIntensity.light,
+    source: HealthDataSource.healthConnect,
+    externalId: 'garmin-flow-1',
+    sourceDevice: 'com.garmin.android.apps.connectmobile',
+  );
 }
 
 /// Seed postpartum mode on, a recorded birth, and three post-event periods so
@@ -512,6 +531,32 @@ final List<Surface> screenSurfaces = <Surface>[
         await _openSettings(tester);
         await tester.scrollUntilVisible(
           find.text('Connect a health app'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('settings_page — Apps & export (per-device list)', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await _seedHealthAppConnected(db);
+    await pumpOlf(
+      tester,
+      overrides: [
+        ...screenNavOverrides(db),
+        healthPlatformGatewayProvider.overrideWithValue(
+          FakeHealthPlatformGateway(),
+        ),
+      ],
+      body: () async {
+        await _openSettings(tester);
+        await tester.scrollUntilVisible(
+          find.text('From Oura'),
           200,
           scrollable: find.byType(Scrollable).first,
         );

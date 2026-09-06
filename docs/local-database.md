@@ -294,6 +294,32 @@ through encrypted export/restore and age out on the retention window unchanged.
 
 `schemaVersion = 10`.
 
+## Schema v11 (p8.2)
+
+Adds **`source_device`** to **both** `daily_flows` and `bbt_entries` — a free-form tag for the
+device / app that originally wrote an imported reading into the OS health store, so olf can
+label it ("from your Oura Ring"). This is what lets a third-party wearable (Oura, Garmin, …)
+that already syncs to Apple Health / Health Connect show up in olf **through the existing
+import path** — no vendor SDK, OAuth, network call, or new permission.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `source_device` | TEXT, **nullable**, no default | `HKSource` / `HKDevice` name on iOS, Health Connect `dataOrigin.packageName` on Android, verbatim. `NULL` for a manual row, a row imported before p8.2, or when the platform gave no attribution. Provenance only — never a query or matching key. Not sticky: an in-app edit clears it (the value is then the user's own), mirroring `source` → `manual`. Prettified for display at the edge (`app/lib/src/health/device_label.dart`). |
+
+The third ALTER of existing tables (after v7's `source` / `external_id` and v10's
+`measurement_kind`), and the first to touch two tables in one step, so each `addColumn` carries
+the same `to >= N` guard plus a per-table `from >=` inner guard (`daily_flows` from v3,
+`bbt_entries` from v5). The **`ImportReconciler` gains one additive clause** (p8.2): two
+readings for the same `(type, day)` from the same platform but two *different, known* devices
+whose values disagree beyond tolerance are a new `ConflictReason.crossDeviceDisagreement` —
+surfaced on the existing conflict-review screen, never auto-merged. olf picks no winner; the
+full multi-source precedence policy is p8.6. Single-source behaviour is byte-for-byte
+unchanged. Both tables are already in `BackupService.tableOrder` and aged by
+`RetentionService.deleteWhere` (a column change, not a new table), so tagged rows round-trip
+through encrypted export/restore and age out on the retention window unchanged.
+
+`schemaVersion = 11`.
+
 ## Migrations
 
 `MigrationStrategy.onUpgrade` runs the steps below in order. Every schema change:
@@ -314,12 +340,13 @@ through encrypted export/restore and age out on the retention window unchanged.
 | `from < 8` (p7.5) | Creates `pain_entries`. Purely additive — nothing backfilled, existing rows untouched; no `to >=` guard (an extra *table* is tolerated at every intermediate target, unlike the v7 column add). Verified by `core/test/db/pain_migration_test.dart` (real on-disk v7 file → upgrade → assert `pain_entries` shape, old rows intact, table usable through `DriftPainRepository` incl. the ordered scale / region enum / note / flare flag) and `migration_matrix_test.dart` (v1..v7 → v8: schema matches the committed v8 snapshot, `pain_entries` present-and-empty, backup/restore round-trips a real pain row at v8). |
 | `from < 9` (p7.6) | Creates `pmdd_ratings`. Purely additive — nothing backfilled, existing rows untouched; no `to >=` guard (same reasoning as `from < 8`). Verified by `core/test/db/pmdd_migration_test.dart` (real on-disk v8 file → upgrade → assert the composite-PK `pmdd_ratings` shape, old period + pain rows intact, table usable through `DriftPmddRatingRepository` incl. an explicit `none` rating) and `migration_matrix_test.dart` (v1..v8 → v9: schema matches the committed v9 snapshot, `pmdd_ratings` present-and-empty, backup/restore round-trips real rated rows — one a `none` — at v9). |
 | `from < 10 && to >= 10` (p8.1a) | `m.addColumn`: `measurement_kind` (TEXT, NOT NULL, default `'basal'`) on `bbt_entries`. Second ALTER migration — same shape as the v7 column add: the inner `from >= 5` guard skips it when `from` predates `bbt_entries` (v5), and the `to >= 10` guard keeps the single-step `migration_matrix_test` targets honest. Every pre-existing row comes out `'basal'`. Verified by `core/test/db/wrist_temp_migration_test.dart` (real on-disk v9 file → upgrade → `PRAGMA table_info` shape check, old rows come out `'basal'`, table usable through `DriftBbtRepository` incl. a `sleepingWrist` round-trip and edit-resets-to-`basal`) and `migration_matrix_test.dart` (v1..v9 → v10: schema matches the committed v10 snapshot, `measurement_kind = 'basal'` on every pre-existing bbt row, backup/restore round-trips a real `sleepingWrist` row at v10). |
+| `from < 11 && to >= 11` (p8.2) | `m.addColumn` × 2: `source_device` (TEXT, nullable, no default) on `daily_flows` **and** `bbt_entries`. Third ALTER migration, first to touch two tables — same shape as v7 / v10: the inner `from >= 3` / `from >= 5` guards skip each `addColumn` when `from` predates that table, and the `to >= 11` guard keeps the single-step `migration_matrix_test` targets honest. Every pre-existing row comes out `NULL`. Verified by `core/test/db/source_device_migration_test.dart` (real on-disk v10 file → upgrade → `PRAGMA table_info` shape check on **both** tables — TEXT, nullable, not-PK, no default — old rows come out `NULL`, both repos usable with the new param incl. edit-clears-tag) and `migration_matrix_test.dart` (v1..v10 → v11: schema matches the committed v11 snapshot, `source_device` NULL on every pre-existing `daily_flows` / `bbt_entries` row, backup/restore round-trips a real non-null `source_device` row at v11). |
 
 Since p5.6, drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) **is** wired
 up: `core/drift_schemas/` holds a JSON snapshot per version and `core/test/db/generated/` the
 verifier helpers. History v1..v5 is reconstructed from the v6 anchor by
-`tool/dump_historical_schemas.dart`; v6 and every version after it (v7 + v10 ALTER, v8 + v9
-additive) is its own real `schema dump`, listed in that script's `_dumpedVersions`. The
+`tool/dump_historical_schemas.dart`; v6 and every version after it (v7 + v10 + v11 ALTER,
+v8 + v9 additive) is its own real `schema dump`, listed in that script's `_dumpedVersions`. The
 per-feature `*_migration_test.dart` files still hand-build one old schema each, kept for context.
 
 ## Derived data — not stored (p1.3, p1.4)

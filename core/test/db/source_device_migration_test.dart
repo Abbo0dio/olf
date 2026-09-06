@@ -5,36 +5,40 @@ import 'package:olf_core/olf_core.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
-/// Schema v9 → v10 (p8.1a): `bbt_entries` gains `measurement_kind TEXT NOT NULL
-/// DEFAULT 'basal'` — the discriminator that keeps a passive Apple Watch
-/// sleeping-wrist import out of the basal-body-temperature readers while still
-/// letting it reconcile for the one-row-per-day slot.
+/// Schema v10 → v11 (p8.2): **both** `daily_flows` and `bbt_entries` gain
+/// `source_device TEXT` (nullable, no default) — the free-form device / app tag
+/// for a health-platform import, so olf can label a reading "from your Oura
+/// Ring". Provenance only; every pre-existing row comes out `NULL`.
 ///
-/// The second ALTER of an existing table in olf's history (after v7's
-/// `source` / `external_id`). Column-level changes can't be reconstructed by
+/// The third ALTER of an existing table in olf's history (after v7's
+/// `source` / `external_id` and v10's `measurement_kind`), and the first to
+/// touch two tables in one step. Column-level changes can't be reconstructed by
 /// the historical-snapshot tool, so this hand-rolled per-feature check mirrors
-/// `fertility_migration_test.dart`: a real on-disk v9 file with a couple of
-/// existing `bbt_entries` rows, opened through [AppDatabase] so
-/// `migration.onUpgrade` runs. The exhaustive v(old)→v10 matrix (including the
-/// backup round-trip carrying a `sleepingWrist` row) lives in
+/// `wrist_temp_migration_test.dart`: a real on-disk v10 file with a couple of
+/// existing rows in each table, opened through [AppDatabase] so
+/// `migration.onUpgrade` runs. The exhaustive v(old)→v11 matrix (including the
+/// backup round-trip carrying a non-null `source_device` row) lives in
 /// `migration_matrix_test.dart`; see `docs/local-database.md`.
 void main() {
   late Directory tmp;
   late File dbFile;
 
   setUp(() {
-    tmp = Directory.systemTemp.createTempSync('olf_wrist_temp_migration_test');
+    tmp = Directory.systemTemp.createTempSync(
+      'olf_source_device_migration_test',
+    );
     dbFile = File('${tmp.path}/olf.db');
   });
   tearDown(() => tmp.deleteSync(recursive: true));
 
   int unixSeconds(DateTime d) => d.millisecondsSinceEpoch ~/ 1000;
 
-  /// Write [dbFile] at exactly the v9 shape (v7 provenance columns + the p7.5
+  /// Write [dbFile] at exactly the v10 shape (v7 provenance columns on both
+  /// per-day tables + v10's `bbt_entries.measurement_kind` + the p7.5
   /// `pain_entries` and p7.6 `pmdd_ratings` tables) with two existing
-  /// `bbt_entries` rows — one plain, one already carrying an `external_id` from
-  /// a p6.2 `basalBodyTemperature` import — then close it.
-  void createV9Database() {
+  /// `daily_flows` rows and two existing `bbt_entries` rows — one plain, one
+  /// already carrying an `external_id` from a p6.2 import — then close it.
+  void createV10Database() {
     final raw = sqlite3.open(dbFile.path);
     raw.execute('''
       CREATE TABLE "cycle_events" (
@@ -78,6 +82,7 @@ void main() {
       CREATE TABLE "bbt_entries" (
         "date" INTEGER NOT NULL PRIMARY KEY,
         "temp_celsius" REAL NOT NULL,
+        "measurement_kind" TEXT NOT NULL DEFAULT 'basal',
         "source" TEXT NOT NULL DEFAULT 'manual',
         "external_id" TEXT,
         "created_at" INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
@@ -140,31 +145,58 @@ void main() {
         PRIMARY KEY ("date", "item")
       );
     ''');
-    // A plain user-typed reading, and one imported from a health platform.
+    // Two flow days: one user-typed, one imported.
     raw.execute(
-      'INSERT INTO bbt_entries (date, temp_celsius, source, external_id, created_at, updated_at) '
+      'INSERT INTO daily_flows (date, intensity, source, external_id, created_at, updated_at) '
       'VALUES (?, ?, ?, ?, ?, ?)',
-      [unixSeconds(DateTime(2026, 7, 10)), 36.51, 'manual', null, 0, 0],
+      [unixSeconds(DateTime(2026, 7, 10)), 'medium', 'manual', null, 0, 0],
     );
     raw.execute(
-      'INSERT INTO bbt_entries (date, temp_celsius, source, external_id, created_at, updated_at) '
+      'INSERT INTO daily_flows (date, intensity, source, external_id, created_at, updated_at) '
       'VALUES (?, ?, ?, ?, ?, ?)',
       [
         unixSeconds(DateTime(2026, 7, 11)),
+        'light',
+        'healthConnect',
+        'hc-flow-1',
+        0,
+        0,
+      ],
+    );
+    // Two BBT readings: one user-typed, one imported.
+    raw.execute(
+      'INSERT INTO bbt_entries (date, temp_celsius, measurement_kind, source, external_id, created_at, updated_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        unixSeconds(DateTime(2026, 7, 10)),
+        36.51,
+        'basal',
+        'manual',
+        null,
+        0,
+        0,
+      ],
+    );
+    raw.execute(
+      'INSERT INTO bbt_entries (date, temp_celsius, measurement_kind, source, external_id, created_at, updated_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        unixSeconds(DateTime(2026, 7, 11)),
         36.72,
+        'basal',
         'appleHealth',
         'hk-basal-1',
         0,
         0,
       ],
     );
-    raw.execute('PRAGMA user_version = 9;');
+    raw.execute('PRAGMA user_version = 10;');
     raw.dispose();
   }
 
-  test('opening a v9 database upgrades through v10, adding '
-      'bbt_entries.measurement_kind', () async {
-    createV9Database();
+  test('opening a v10 database upgrades to v11, adding source_device to '
+      'daily_flows AND bbt_entries', () async {
+    createV10Database();
 
     final db = AppDatabase(NativeDatabase(dbFile));
     addTearDown(db.close);
@@ -173,76 +205,93 @@ void main() {
     expect(version.data.values.first, db.schemaVersion);
     expect(db.schemaVersion, 11);
 
-    // The new column exists: TEXT, NOT NULL, not part of the PK, default 'basal'.
-    final columns = await db
-        .customSelect("PRAGMA table_info('bbt_entries')")
-        .get();
-    final byName = {
-      for (final row in columns)
-        row.data['name'] as String: (
-          (row.data['type'] as String).toUpperCase(),
-          (row.data['notnull'] as int) == 1,
-          (row.data['pk'] as int),
-          row.data['dflt_value'],
-        ),
-    };
-    expect(
-      byName.keys,
-      containsAll(<String>{
-        'date',
-        'temp_celsius',
-        'source',
-        'external_id',
-        'measurement_kind',
-        'created_at',
-        'updated_at',
-      }),
-    );
-    final kind = byName['measurement_kind']!;
-    expect(kind.$1, 'TEXT');
-    expect(kind.$2, isTrue); // NOT NULL
-    expect(kind.$3, 0); // not in the primary key
-    expect(kind.$4.toString().replaceAll("'", ''), 'basal'); // DEFAULT 'basal'
+    // The new column exists on both tables: TEXT, nullable, not part of the
+    // PK, no default.
+    for (final table in const ['daily_flows', 'bbt_entries']) {
+      final columns = await db
+          .customSelect("PRAGMA table_info('$table')")
+          .get();
+      final byName = {
+        for (final row in columns)
+          row.data['name'] as String: (
+            (row.data['type'] as String).toUpperCase(),
+            (row.data['notnull'] as int) == 1,
+            (row.data['pk'] as int),
+            row.data['dflt_value'],
+          ),
+      };
+      expect(
+        byName.keys,
+        contains('source_device'),
+        reason: '$table is missing source_device',
+      );
+      final col = byName['source_device']!;
+      expect(col.$1, 'TEXT', reason: '$table.source_device type');
+      expect(col.$2, isFalse, reason: '$table.source_device must be nullable');
+      expect(col.$3, 0, reason: '$table.source_device must not be in the PK');
+      expect(
+        col.$4,
+        isNull,
+        reason: '$table.source_device must have no default',
+      );
+    }
 
-    // Integrity is clean and every pre-existing row comes out as a basal
-    // reading — the migration changes no behaviour for existing data.
     final integrity = await db
         .customSelect('PRAGMA integrity_check')
         .getSingle();
     expect(integrity.data.values.first, 'ok');
 
-    final repoForRead = DriftBbtRepository(db);
-    final migrated = await repoForRead.allEntries(); // newest day first
-    expect(migrated, hasLength(2));
-    expect(
-      migrated.every((r) => r.measurementKind == BbtMeasurementKind.basal),
-      isTrue,
-    );
-    final byDay = {for (final r in migrated) r.date: r};
-    expect(byDay[DateTime(2026, 7, 10)]!.tempCelsius, 36.51);
-    expect(byDay[DateTime(2026, 7, 10)]!.source, 'manual');
-    expect(byDay[DateTime(2026, 7, 11)]!.source, 'appleHealth');
-    expect(byDay[DateTime(2026, 7, 11)]!.externalId, 'hk-basal-1');
+    // Every pre-existing row comes out with source_device NULL — the
+    // migration changes no behaviour for existing data.
+    final flowRepo = DriftDailyFlowRepository(db);
+    final flows = await flowRepo.allFlows();
+    expect(flows, hasLength(2));
+    expect(flows.every((r) => r.sourceDevice == null), isTrue);
 
-    // The migrated table is usable through the real repository: a passive
-    // Apple Watch reading stores as `sleepingWrist`, and correcting it in-app
-    // (no kind passed) resets the row to `basal`.
-    final repo = DriftBbtRepository(db, now: () => DateTime(2026, 7, 12));
-    await repo.setTemp(
+    final bbtRepo = DriftBbtRepository(db);
+    final bbts = await bbtRepo.allEntries();
+    expect(bbts, hasLength(2));
+    expect(bbts.every((r) => r.sourceDevice == null), isTrue);
+
+    // The migrated tables are usable through the real repositories: an import
+    // stamps a device tag, and correcting the row in-app (no tag passed)
+    // clears it.
+    final flowWrite = DriftDailyFlowRepository(
+      db,
+      now: () => DateTime(2026, 7, 12),
+    );
+    await flowWrite.setFlow(
       DateTime(2026, 7, 12),
-      36.95,
-      source: HealthDataSource.appleHealth,
-      externalId: 'hk-wrist-1',
-      measurementKind: BbtMeasurementKind.sleepingWrist,
+      intensity: FlowIntensity.light,
+      source: HealthDataSource.healthConnect,
+      externalId: 'hc-flow-2',
+      sourceDevice: 'com.ouraring.oura',
     );
-    var wrist = await repo.tempOn(DateTime(2026, 7, 12));
-    expect(wrist!.measurementKind, BbtMeasurementKind.sleepingWrist);
-    expect(wrist.source, 'appleHealth');
+    var flow = await flowWrite.flowOn(DateTime(2026, 7, 12));
+    expect(flow!.sourceDevice, 'com.ouraring.oura');
+    await flowWrite.setFlow(
+      DateTime(2026, 7, 12),
+      intensity: FlowIntensity.medium,
+    );
+    flow = await flowWrite.flowOn(DateTime(2026, 7, 12));
+    expect(flow!.sourceDevice, isNull);
+    expect(flow.source, 'manual');
+    expect(flow.externalId, 'hc-flow-2'); // externalId stays sticky
 
-    await repo.setTemp(DateTime(2026, 7, 12), 36.60);
-    wrist = await repo.tempOn(DateTime(2026, 7, 12));
-    expect(wrist!.measurementKind, BbtMeasurementKind.basal);
-    expect(wrist.source, 'manual');
-    expect(wrist.externalId, 'hk-wrist-1'); // externalId stays sticky
+    final bbtWrite = DriftBbtRepository(db, now: () => DateTime(2026, 7, 12));
+    await bbtWrite.setTemp(
+      DateTime(2026, 7, 12),
+      36.90,
+      source: HealthDataSource.appleHealth,
+      externalId: 'hk-basal-2',
+      sourceDevice: 'Oura',
+    );
+    var bbt = await bbtWrite.tempOn(DateTime(2026, 7, 12));
+    expect(bbt!.sourceDevice, 'Oura');
+    await bbtWrite.setTemp(DateTime(2026, 7, 12), 36.60);
+    bbt = await bbtWrite.tempOn(DateTime(2026, 7, 12));
+    expect(bbt!.sourceDevice, isNull);
+    expect(bbt.source, 'manual');
+    expect(bbt.externalId, 'hk-basal-2'); // externalId stays sticky
   });
 }

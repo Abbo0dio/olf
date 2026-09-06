@@ -31,12 +31,19 @@ abstract interface class DailyFlowRepository {
   /// already carries an id keeps the existing id, so an edit that flips a
   /// previously-imported row back to `manual` still lets a p6.4 write-back
   /// update the platform record in place. Pass a non-null id to replace it.
+  ///
+  /// [sourceDevice] (schema v11, p8.2) is the free-form device / app tag for a
+  /// health-platform import (an Oura Ring, a Garmin watch). It is **not** sticky:
+  /// an in-app edit passes no tag and the row's `source_device` is cleared to
+  /// `null` (the value is now the user's own). Only the health-import path
+  /// passes a non-null tag.
   Future<void> setFlow(
     DateTime date, {
     required FlowIntensity intensity,
     ClotSize? clotSize,
     HealthDataSource source = HealthDataSource.manual,
     String? externalId,
+    String? sourceDevice,
   });
 
   /// Remove the flow logged for [date]. A no-op if that day has none.

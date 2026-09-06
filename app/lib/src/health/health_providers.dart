@@ -7,6 +7,7 @@ import '../flow/flow_providers.dart';
 import '../providers.dart';
 import '../retention/retention_providers.dart';
 import '../settings/settings_providers.dart';
+import 'device_label.dart';
 import 'health_connect_gateway.dart';
 import 'health_import.dart';
 import 'health_write_back.dart';
@@ -105,6 +106,84 @@ final passiveWristTempCountProvider = Provider<int>((ref) {
   return entries
       .where((e) => e.measurementKind == BbtMeasurementKind.sleepingWrist)
       .length;
+});
+
+/// One device / app that has contributed at least one imported reading olf
+/// still holds (schema v11, p8.2), for the per-device status list in Settings.
+@immutable
+class ContributingDevice {
+  const ContributingDevice({
+    required this.rawTag,
+    required this.label,
+    required this.readingCount,
+    required this.lastDay,
+  });
+
+  /// The stored `source_device` string, verbatim.
+  final String rawTag;
+
+  /// [rawTag] run through [prettyDeviceLabel] for display.
+  final String label;
+
+  /// How many stored rows (BBT + flow) carry this exact tag.
+  final int readingCount;
+
+  /// The most recent calendar day a row with this tag is for.
+  final DateTime lastDay;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ContributingDevice &&
+      other.rawTag == rawTag &&
+      other.label == label &&
+      other.readingCount == readingCount &&
+      other.lastDay == lastDay;
+
+  @override
+  int get hashCode => Object.hash(rawTag, label, readingCount, lastDay);
+}
+
+/// The devices / apps behind the imported readings olf currently holds, most
+/// recently seen first (schema v11, p8.2). Derived live from the BBT + flow
+/// streams; rows with no `source_device` (manual, legacy, unattributed) are
+/// ignored, so an all-manual database yields an empty list and the Settings
+/// section stays hidden.
+final contributingDevicesProvider = Provider<List<ContributingDevice>>((ref) {
+  final bbt = ref.watch(bbtEntriesProvider).valueOrNull ?? const [];
+  final flows = ref.watch(dailyFlowsProvider).valueOrNull ?? const [];
+
+  final counts = <String, int>{};
+  final lastDay = <String, DateTime>{};
+  void tally(String? tag, DateTime day) {
+    final key = tag?.trim();
+    if (key == null || key.isEmpty) return;
+    counts[key] = (counts[key] ?? 0) + 1;
+    final prev = lastDay[key];
+    if (prev == null || day.isAfter(prev)) lastDay[key] = day;
+  }
+
+  for (final e in bbt) {
+    tally(e.sourceDevice, e.date);
+  }
+  for (final f in flows) {
+    tally(f.sourceDevice, f.date);
+  }
+
+  final devices =
+      [
+        for (final entry in counts.entries)
+          ContributingDevice(
+            rawTag: entry.key,
+            label: prettyDeviceLabel(entry.key) ?? entry.key,
+            readingCount: entry.value,
+            lastDay: lastDay[entry.key]!,
+          ),
+      ]..sort((a, b) {
+        final byRecency = b.lastDay.compareTo(a.lastDay);
+        if (byRecency != 0) return byRecency;
+        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
+  return List.unmodifiable(devices);
 });
 
 /// The import/export orchestrator over the current gateway and the BBT / flow

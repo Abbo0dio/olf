@@ -48,6 +48,7 @@ class DriftDailyFlowRepository implements DailyFlowRepository {
     ClotSize? clotSize,
     HealthDataSource source = HealthDataSource.manual,
     String? externalId,
+    String? sourceDevice,
   }) async {
     final day = dateOnly(date);
     final stamp = _now();
@@ -63,6 +64,7 @@ class DriftDailyFlowRepository implements DailyFlowRepository {
               clotSize: Value(clotSize),
               source: Value(source.name),
               externalId: Value(externalId),
+              sourceDevice: Value(sourceDevice),
               createdAt: Value(stamp),
               updatedAt: Value(stamp),
             ),
@@ -73,6 +75,9 @@ class DriftDailyFlowRepository implements DailyFlowRepository {
       // record in place instead of inserting a duplicate. The `source` still
       // moves to whatever the caller passed — `manual` by default, i.e. an
       // edit flips a previously-imported row back to the user's own (p6.1).
+      //
+      // `sourceDevice` is NOT sticky (p8.2): an in-app edit passes no tag and
+      // the row's `source_device` is cleared to `null`.
       await (_db.update(
         _db.dailyFlows,
       )..where((t) => t.date.equals(day))).write(
@@ -81,6 +86,7 @@ class DriftDailyFlowRepository implements DailyFlowRepository {
           clotSize: Value(clotSize),
           source: Value(source.name),
           externalId: Value(externalId ?? existing.externalId),
+          sourceDevice: Value(sourceDevice),
           updatedAt: Value(stamp),
         ),
       );

@@ -71,6 +71,9 @@ class SettingsPage extends ConsumerWidget {
     final healthReviewCount = ref.watch(healthConflictsProvider).length;
     // p8.1a: how many passive Apple Watch wrist-temperature readings olf holds.
     final passiveWristCount = ref.watch(passiveWristTempCountProvider);
+    // p8.2: the devices / apps behind the imported readings olf holds (Oura,
+    // Garmin, …). Empty for an all-manual database.
+    final contributingDevices = ref.watch(contributingDevicesProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -352,6 +355,27 @@ class SettingsPage extends ConsumerWidget {
                   ),
                 ),
               ),
+            // p8.2: per-device provenance for third-party wearables (Oura,
+            // Garmin, …) whose data reaches olf through the health platform.
+            // Only shown once at least one imported reading carries a device
+            // tag; no per-device controls — disconnecting the platform keeps
+            // the readings.
+            if (healthConnected && contributingDevices.isNotEmpty) ...[
+              for (final device in contributingDevices)
+                ListTile(
+                  leading: const Icon(Icons.devices_outlined),
+                  title: Text('From ${device.label}'),
+                  subtitle: Text(
+                    '${device.readingCount} '
+                    '${device.readingCount == 1 ? 'reading' : 'readings'} '
+                    '· last ${formatDay(device.lastDay)}',
+                    semanticsLabel: spokenLabel(
+                      reduceSpokenDetail,
+                      redacted: 'A connected device is contributing readings.',
+                    ),
+                  ),
+                ),
+            ],
             if (healthConnected && healthReviewCount > 0)
               ListTile(
                 leading: const Icon(Icons.rule_outlined),

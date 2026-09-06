@@ -293,6 +293,10 @@ class MainActivity : FlutterFragmentActivity() {
                                         "endMs" to at,
                                         "value" to hcFlowToWire(record.flow).toDouble(),
                                         "externalId" to record.metadata.id.ifEmpty { null },
+                                        // p8.2: the app / integration that wrote this record
+                                        // (e.g. com.ouraring.oura). Provenance only.
+                                        "sourceDevice" to
+                                            record.metadata.dataOrigin.packageName.ifEmpty { null },
                                     ),
                                 )
                             }
@@ -313,6 +317,10 @@ class MainActivity : FlutterFragmentActivity() {
                                         "endMs" to at,
                                         "value" to record.temperature.inCelsius,
                                         "externalId" to record.metadata.id.ifEmpty { null },
+                                        // p8.2: the app / integration that wrote this record
+                                        // (e.g. com.ouraring.oura). Provenance only.
+                                        "sourceDevice" to
+                                            record.metadata.dataOrigin.packageName.ifEmpty { null },
                                     ),
                                 )
                             }

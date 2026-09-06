@@ -134,6 +134,68 @@ void main() {
       },
     );
 
+    test(
+      'carries a device tag from HKSource / HKDevice metadata (p8.2)',
+      () async {
+        mockChannel(
+          response: [
+            {
+              'type': 'basalBodyTemperature',
+              'startMs': DateTime(2026, 3, 8).millisecondsSinceEpoch,
+              'endMs': DateTime(2026, 3, 8).millisecondsSinceEpoch,
+              'value': 36.55,
+              'externalId': 'HK-oura-1',
+              'sourceDevice': 'Oura',
+            },
+            {
+              'type': 'menstrualFlow',
+              'startMs': DateTime(2026, 3, 9).millisecondsSinceEpoch,
+              'endMs': DateTime(2026, 3, 9).millisecondsSinceEpoch,
+              'value': hkMenstrualFlowMedium.toDouble(),
+              'externalId': 'HK-garmin-1',
+              'sourceDevice': 'Garmin Connect',
+            },
+          ],
+        );
+
+        final out = await gateway.read(
+          types: {
+            HealthSampleType.basalBodyTemperature,
+            HealthSampleType.menstrualFlow,
+          },
+          from: from,
+          to: to,
+        );
+        final byId = {for (final s in out) s.externalId: s};
+        expect(byId['HK-oura-1']!.sourceDevice, 'Oura');
+        expect(byId['HK-garmin-1']!.sourceDevice, 'Garmin Connect');
+      },
+    );
+
+    test(
+      'a blank device tag decodes as null, not an empty string (p8.2)',
+      () async {
+        mockChannel(
+          response: [
+            {
+              'type': 'basalBodyTemperature',
+              'startMs': DateTime(2026, 3, 8).millisecondsSinceEpoch,
+              'endMs': DateTime(2026, 3, 8).millisecondsSinceEpoch,
+              'value': 36.5,
+              'externalId': 'HK-3',
+              'sourceDevice': '   ',
+            },
+          ],
+        );
+        final out = await gateway.read(
+          types: {HealthSampleType.basalBodyTemperature},
+          from: from,
+          to: to,
+        );
+        expect(out.single.sourceDevice, isNull);
+      },
+    );
+
     test('drops the HealthKit "no flow" marker', () async {
       mockChannel(
         response: [

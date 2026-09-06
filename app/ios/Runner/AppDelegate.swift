@@ -287,38 +287,55 @@ final class HealthKitBridge {
     let id = sample.sampleType.identifier
     if let category = sample as? HKCategorySample,
        id == HKCategoryTypeIdentifier.menstrualFlow.rawValue {
-      return [
+      return withDevice(sample, [
         "type": "menstrualFlow",
         "startMs": ms(category.startDate),
         "endMs": ms(category.endDate),
         "value": Double(category.value),
         "externalId": category.uuid.uuidString,
-      ]
+      ])
     }
     if let quantity = sample as? HKQuantitySample,
        id == HKQuantityTypeIdentifier.basalBodyTemperature.rawValue {
-      return [
+      return withDevice(sample, [
         "type": "basalBodyTemperature",
         "startMs": ms(quantity.startDate),
         "endMs": ms(quantity.endDate),
         "value": quantity.quantity.doubleValue(for: .degreeCelsius()),
         "externalId": quantity.uuid.uuidString,
-      ]
+      ])
     }
     // p8.1a: passive Apple Watch overnight wrist temperature (iOS 16+). Same °C
     // shape as basalBodyTemperature; olf's Dart side tags it `sleepingWrist`.
     if #available(iOS 16.0, *),
        let quantity = sample as? HKQuantitySample,
        id == HKQuantityTypeIdentifier.appleSleepingWristTemperature.rawValue {
-      return [
+      return withDevice(sample, [
         "type": "wristTemperature",
         "startMs": ms(quantity.startDate),
         "endMs": ms(quantity.endDate),
         "value": quantity.quantity.doubleValue(for: .degreeCelsius()),
         "externalId": quantity.uuid.uuidString,
-      ]
+      ])
     }
     return nil
+  }
+
+  /// p8.2: attach a free-form originating-device tag to an outgoing row, when
+  /// HealthKit attributes one. `HKSource.name` is the app / vendor that wrote
+  /// the sample ("Oura", "Garmin Connect"); `HKDevice.name` is a hardware name
+  /// that is usually nil for third-party data synced through Health. Either is
+  /// just provenance on the olf side — never a matching key.
+  private func withDevice(_ sample: HKSample, _ row: [String: Any]) -> [String: Any] {
+    var row = row
+    let sourceName = sample.sourceRevision.source.name
+    let deviceName = sample.device?.name
+    if let tag = [sourceName, deviceName]
+      .compactMap({ $0?.trimmingCharacters(in: .whitespacesAndNewlines) })
+      .first(where: { !$0.isEmpty }) {
+      row["sourceDevice"] = tag
+    }
+    return row
   }
 
   private func write(_ arguments: Any?, result: @escaping FlutterResult) {

@@ -55,21 +55,60 @@ posture.
 
 ## iOS vs Android capability asymmetry
 
-olf syncs exactly **two** data types on both platforms today — menstrual flow
-and basal body temperature — so the asymmetry below does not bite yet. It is
-recorded here for whoever wires a third type later.
+olf syncs **menstrual flow** and **basal body temperature** read + write on both
+platforms, plus **wrist temperature read-only on iOS** (p8.1a). The asymmetry
+below is recorded for whoever wires a further type later; p8.2 adds a per-reading
+device tag on top of these (see "Device attribution" below).
 
 | Data type | Apple HealthKit | Android Health Connect | olf status |
 |---|---|---|---|
 | Menstrual flow | `HKCategoryTypeIdentifier.menstrualFlow` (read + write) | `MenstruationFlowRecord` (read + write) | **wired** (p6.2 / p6.3) |
 | Basal body temperature | `HKQuantityTypeIdentifier.basalBodyTemperature` (read + write) | `BasalBodyTemperatureRecord` (read + write) | **wired** (p6.2 / p6.3) |
 | Body temperature | `HKQuantityTypeIdentifier.bodyTemperature` (read + write) | `BodyTemperatureRecord` (read + write) | declared in the `core` interface; not bridged |
-| Wrist / skin temperature | wrist temperature is **sleeping-wear only and read-only** (`HKQuantityTypeIdentifier.appleSleepingWristTemperature`) | `SkinTemperatureRecord` — general-purpose **read + write** | declared in the `core` interface; not bridged. The platforms are **not** symmetric here — an Android build could write skin temperature, an iOS build cannot write wrist temperature at all |
-| Sleep | `HKCategoryTypeIdentifier.sleepAnalysis` (read + write) | `SleepSessionRecord` (read + write) | declared in the `core` interface; not bridged |
+| Wrist / skin temperature | wrist temperature is **sleeping-wear only and read-only** (`HKQuantityTypeIdentifier.appleSleepingWristTemperature`, iOS 16+) | `SkinTemperatureRecord` — general-purpose **read + write** | **wired read-only on iOS** (p8.1a — passive Apple Watch overnight capture, re-typed to `basalBodyTemperature` at the reconcile boundary and stored tagged `sleepingWrist`); **not bridged on Android**. The platforms are **not** symmetric — an Android build could write skin temperature, an iOS build cannot write wrist temperature at all |
+| Sleep | `HKCategoryTypeIdentifier.sleepAnalysis` (read + write) | `SleepSessionRecord` (read + write) | declared in the `core` interface; not bridged (HRV + sleep mapping is p8.5) |
 
-For the three unbridged types the gateway returns an empty read and a no-op
+For the still-unbridged types the gateway returns an empty read and a no-op
 write with a logged note, on both platforms, so the shared `ImportReconciler`
 and Settings widget stay symmetric.
+
+## Device attribution (p8.2)
+
+A user whose Oura Ring, Garmin watch or similar already syncs temperature / flow
+into Apple Health or Health Connect can see that data in olf **labelled by
+device** — through this same bridge, with **no vendor SDK, OAuth, network call
+or new permission**. Each imported reading carries a free-form `source_device`
+tag (schema v11 — nullable `source_device` TEXT on `daily_flows` and
+`bbt_entries`).
+
+Where the tag comes from is **asymmetric**, the same way the capability table
+above is:
+
+| | Apple HealthKit | Android Health Connect |
+|---|---|---|
+| Source of the tag | `HKSample.sourceRevision.source.name` (the writing app / integration — "Oura", "Garmin Connect"), falling back to `HKSample.device?.name` (`HKDevice`, usually `nil` for third-party data synced through Health) | `Record.metadata.dataOrigin.packageName` (e.g. `com.ouraring.oura`) |
+| Shape | already human-readable | a reverse-DNS package id |
+| Often missing? | `HKDevice` frequently `nil`; the source name is the reliable field | present whenever another app wrote the record; empty for direct user entry |
+
+olf stores the raw string verbatim and **prettifies only at the edge**
+(`app/lib/src/health/device_label.dart`: a small table maps known package
+prefixes — `com.ouraring.*` → "Oura", `com.garmin.*` → "Garmin", … — an unknown
+package id falls back to its last dotted segment, a plain iOS name passes
+through). The tag is **provenance only** — never a query or matching key, and an
+in-app edit clears it (mirroring `source` → `manual`).
+
+Two readings for the same day from **two different, known devices** whose values
+materially disagree become a `ConflictReason.crossDeviceDisagreement` on the
+existing conflict-review screen — olf picks no winner (the full multi-source
+precedence policy is p8.6). Values that agree collapse to one reading; a device
+revising its own earlier reading is a plain update. Single-source behaviour is
+byte-for-byte unchanged. The "Apps & export" section grows a per-device status
+list (device label, reading count, last-seen; `reduceSpokenDetail`-redacted;
+shown only when at least one tagged row exists — no per-device connect control).
+
+HRV and sleep mapping stay **out of scope until p8.5**; Garmin's server-to-server
+Health API and Oura's cloud API are **not** used — the platform path is the
+supported route (Oura cloud API is p8.3).
 
 ## Android permission set (p6.3)
 

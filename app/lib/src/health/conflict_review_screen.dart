@@ -6,6 +6,7 @@ import '../bbt/bbt_format.dart';
 import '../bbt/bbt_providers.dart';
 import '../flow/flow_format.dart';
 import '../period/period_format.dart';
+import 'device_label.dart';
 import 'health_providers.dart';
 
 /// Resolve the differences the last sync could not apply automatically (p6.4).
@@ -36,11 +37,19 @@ class ConflictReviewScreen extends ConsumerWidget {
               itemCount: conflicts.length + 1,
               itemBuilder: (context, i) {
                 if (i == 0) {
+                  final anyCrossDevice = conflicts.any(
+                    (c) => c.reason == ConflictReason.crossDeviceDisagreement,
+                  );
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
-                      'olf and $platformName have different entries for these '
-                      'days. Your entries are never changed until you choose.',
+                      anyCrossDevice
+                          ? 'Some days have different readings from more than '
+                                'one device. Nothing is changed until you '
+                                'choose which to keep.'
+                          : 'olf and $platformName have different entries for '
+                                'these days. Your entries are never changed '
+                                'until you choose.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   );
@@ -122,6 +131,21 @@ class _ConflictCard extends StatelessWidget {
     final mine = _describe(conflict.local.type, conflict.local.value);
     final theirs = _describe(conflict.incoming.type, conflict.incoming.value);
 
+    // p8.2: for a two-device disagreement neither side is "your entry" — both
+    // came from the platform, from different wearables. Label each row and each
+    // button by its device instead. The resolution semantics are unchanged:
+    // `keepLocal` keeps the already-stored reading, `takeIncoming` stores the
+    // other one. olf still picks no winner on its own (p8.6 owns precedence).
+    final crossDevice =
+        conflict.reason == ConflictReason.crossDeviceDisagreement;
+    final localName = crossDevice
+        ? (prettyDeviceLabel(conflict.local.sourceDevice) ?? 'One device')
+        : 'Your entry';
+    final incomingName = crossDevice
+        ? (prettyDeviceLabel(conflict.incoming.sourceDevice) ??
+              'Another device')
+        : platformName;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -137,9 +161,9 @@ class _ConflictCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _ValueRow(label: 'Your entry', value: mine),
+            _ValueRow(label: localName, value: mine),
             const SizedBox(height: 4),
-            _ValueRow(label: platformName, value: theirs),
+            _ValueRow(label: incomingName, value: theirs),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -148,12 +172,12 @@ class _ConflictCard extends StatelessWidget {
                 TextButton(
                   onPressed: () => onResolve(ConflictResolution.keepLocal),
                   style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
-                  child: const Text('Keep mine'),
+                  child: Text(crossDevice ? 'Keep $localName' : 'Keep mine'),
                 ),
                 TextButton(
                   onPressed: () => onResolve(ConflictResolution.takeIncoming),
                   style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
-                  child: Text('Use $platformName'),
+                  child: Text('Use $incomingName'),
                 ),
                 TextButton(
                   onPressed: () => onResolve(ConflictResolution.dismiss),

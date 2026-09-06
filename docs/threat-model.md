@@ -23,14 +23,14 @@ What an adversary would want, roughly in order of sensitivity.
 
 | Asset | Where it lives | Why it matters |
 |---|---|---|
-| Cycle & health entries (periods, flow, symptoms, BBT — typed or a passive Apple Watch overnight wrist-temperature reading tagged `measurement_kind`, mucus, meds, pregnancy-loss / birth events, endometriosis pain / flare log incl. free-text pain notes, PMDD daily mood/physical ratings — fixed enum item + enum severity, no free text) | `olf.db`, an SQLCipher-encrypted drift database in app-private storage | The core secret. Can imply pregnancy, pregnancy loss, contraception use, sexual activity, transition-related care, a chronic pain / endometriosis condition, a premenstrual mood condition, and — from overnight wrist temperature — sleep timing and presence of an Apple Watch. |
+| Cycle & health entries (periods, flow, symptoms, BBT — typed or a passive Apple Watch overnight wrist-temperature reading tagged `measurement_kind`, mucus, meds, pregnancy-loss / birth events, endometriosis pain / flare log incl. free-text pain notes, PMDD daily mood/physical ratings — fixed enum item + enum severity, no free text; an imported flow / BBT row may also carry a free-form `source_device` tag naming the wearable that produced it — p8.2) | `olf.db`, an SQLCipher-encrypted drift database in app-private storage | The core secret. Can imply pregnancy, pregnancy loss, contraception use, sexual activity, transition-related care, a chronic pain / endometriosis condition, a premenstrual mood condition, and — from overnight wrist temperature — sleep timing and presence of an Apple Watch, and — from `source_device` — ownership of a named third-party wearable (Oura, Garmin, …). |
 | The database encryption key | OS keystore via `flutter_secure_storage` (Android Keystore / iOS Keychain), never in the DB or prefs | Whoever has this can read `olf.db` directly, no PIN needed. |
 | PIN hash and decoy-PIN hash | `flutter_secure_storage` | Brute-forcing these bypasses the gate; the decoy hash also reveals that a decoy exists. |
 | Preferences (theme, pronouns, reminder settings, retention window) | unencrypted `SharedPreferences` / `NSUserDefaults` | Low sensitivity on their own, but pronouns and a tight retention window are weak signals. |
 | `.olfbackup` export files | wherever the user saved them via the OS share sheet — local disk, cloud drive, messaging app | Encrypted (AES-GCM, user passphrase), but now outside app control. |
 | `olf-report-YYYY-MM-DD.pdf` doctor-report files (p6.5) | wherever the user saved them via the OS file picker | **Plaintext** — a human-readable summary of cycles, symptoms, BBT and pregnancy-loss / birth events, meant to be handed to a clinician. Neutral filename, no name/identifier. Retention-trimmed (purge-before-export). Outside app control once saved. |
 | Derived predictions (next period, fertile window) | recomputed in memory from entries; not separately stored | Same sensitivity as the entries they come from. |
-| Menstrual-flow & basal-body-temperature samples in the **OS health store** — Apple Health on iOS (p6.2), Android Health Connect on Android (p6.3); plus, read-only on iOS 16+, Apple Watch `appleSleepingWristTemperature` (p8.1a) | the platform's own encrypted store, reached over local IPC only when the user has turned on "Connect a health app" | Same sensitivity as the olf entries — but now also readable by any *other* app the user has granted the same health permissions, and governed by the OS's sharing UI rather than olf's. Default off. olf never *writes* wrist temperature — it is imported only. |
+| Menstrual-flow & basal-body-temperature samples in the **OS health store** — Apple Health on iOS (p6.2), Android Health Connect on Android (p6.3); plus, read-only on iOS 16+, Apple Watch `appleSleepingWristTemperature` (p8.1a); third-party-wearable rows (Oura, Garmin, …) are read through the same path and tagged by device on import (p8.2) | the platform's own encrypted store, reached over local IPC only when the user has turned on "Connect a health app" | Same sensitivity as the olf entries — but now also readable by any *other* app the user has granted the same health permissions, and governed by the OS's sharing UI rather than olf's. Default off. olf never *writes* wrist temperature or the `source_device` tag — both are import-only. |
 | Source repository & dependency graph | GitHub, `pubspec.lock` | A malicious dependency could exfiltrate any of the above from a future build. |
 
 ---
@@ -843,4 +843,49 @@ The CI guard requires an entry naming the current phase.
     already cover `bbt_entries` (a column change, not a new table), so wrist
     rows are covered by encrypted export/restore **and** age out on the user's
     configured retention window exactly like every other dated row.
+  No design changes required by this review.
+- **2026-09-07 — Phase 8 / p8.2 landing — reviewer: worker: 1.** Third-party
+  wearables (Oura, Garmin, …) via the existing health-platform bridge, labelled
+  by device. **One additive schema change; no new adversary, trust boundary,
+  network path, dependency, permission / entitlement, usage string, or CI gate
+  change.**
+  - **Same asset class, finer provenance.** Menstrual-flow and BBT rows that a
+    third-party device already synced into Apple Health / Health Connect are
+    imported over the **same** opt-in `olf/health` local IPC and the **same**
+    existing read grants — no vendor SDK, OAuth, or network call is added
+    (`pubspec.lock` unchanged; the Android manifest's four `health.*`
+    permissions are unchanged). Schema **v10 → v11** adds one nullable column,
+    `source_device TEXT`, to **both** `daily_flows` and `bbt_entries`, inside
+    the same SQLCipher-encrypted `olf.db` and the same app ↔ DB boundary.
+  - **New sensitivity nuance:** `source_device` is a free-form string the OS
+    health store attributes to a reading — `HKSource` / `HKDevice` name on iOS,
+    `dataOrigin.packageName` on Android. It can **name a product the user owns**
+    ("Oura", `com.garmin.…`), a weak new signal of device ownership on top of
+    the cycle data itself. It is stored verbatim, never leaves the device, is
+    **provenance only** (never a query or matching key), and an in-app edit
+    clears it (mirroring `source` → `manual`). No free-text from the user enters
+    it. It is redacted under "Reduce spoken detail" on the per-device Settings
+    list.
+  - **No new egress, no new permission.** Nothing crosses a new boundary. The
+    tag rides the existing inbound read path only — `rawFromHealthSample` /
+    `toWire` do **not** send it back out, so an olf-authored row that is written
+    to the health store carries no device attribution.
+  - The import still reuses the pure `ImportReconciler` with **one additive
+    clause**: two readings for the same `(type, day)` from the same platform but
+    **two different, known devices** whose values disagree beyond tolerance
+    become a new `ConflictReason.crossDeviceDisagreement` — surfaced on the
+    existing conflict-review screen, **never auto-merged or silently
+    overwritten**. olf picks no winner (multi-source precedence is p8.6).
+    Agreement collapses to one reading; a device revising its own earlier
+    reading is a plain update; single-source behaviour is byte-for-byte
+    unchanged (regression-locked by a `core` test).
+  - The migration is additive, bundled with its `migration_matrix_test`
+    extension (every historical version → v11, asserting `source_device` NULL on
+    every pre-existing `daily_flows` / `bbt_entries` row), a dedicated
+    `source_device_migration_test`, and a backup round-trip carrying a real
+    non-null `source_device` row across the migration. `BackupService.tableOrder`
+    and `RetentionService.deleteWhere` already cover both tables (a column
+    change, not a new table), so tagged rows are covered by encrypted
+    export/restore **and** age out on the retention window like every other
+    dated row.
   No design changes required by this review.

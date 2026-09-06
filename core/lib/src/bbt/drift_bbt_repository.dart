@@ -46,6 +46,7 @@ class DriftBbtRepository implements BbtRepository {
     HealthDataSource source = HealthDataSource.manual,
     String? externalId,
     BbtMeasurementKind measurementKind = BbtMeasurementKind.basal,
+    String? sourceDevice,
   }) async {
     final error = validateCelsius(celsius);
     if (error != null) throw BbtException(error);
@@ -64,6 +65,7 @@ class DriftBbtRepository implements BbtRepository {
               source: Value(source.name),
               externalId: Value(externalId),
               measurementKind: Value(measurementKind),
+              sourceDevice: Value(sourceDevice),
               createdAt: Value(stamp),
               updatedAt: Value(stamp),
             ),
@@ -78,6 +80,9 @@ class DriftBbtRepository implements BbtRepository {
       // `measurementKind` is NOT sticky (p8.1a): it moves to whatever the
       // caller passed — `basal` by default — so correcting a passive Apple
       // Watch wrist reading in-app turns it into a typed basal temperature.
+      //
+      // `sourceDevice` is NOT sticky either (p8.2): an in-app edit passes no
+      // tag and the row's `source_device` is cleared to `null`.
       await (_db.update(
         _db.bbtEntries,
       )..where((t) => t.date.equals(day))).write(
@@ -86,6 +91,7 @@ class DriftBbtRepository implements BbtRepository {
           source: Value(source.name),
           externalId: Value(externalId ?? existing.externalId),
           measurementKind: Value(measurementKind),
+          sourceDevice: Value(sourceDevice),
           updatedAt: Value(stamp),
         ),
       );
