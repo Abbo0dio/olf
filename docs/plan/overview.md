@@ -9,7 +9,7 @@
 | **4** | Notifications & reminders | `DONE` | Per-category channels each independently toggleable; on-device behaviour-timed delivery with a safe fallback, nothing stored; all copy reviewed + locked behind a content test, no PHI; a quiet-hours window that shifts rather than drops; a permanent "stop asking to subscribe" control gated for Phase 10 [reverted 2026-09-02, PR #52 — olf is free-forever]; the p1.7 medication reminder folded onto the one unified path |
 | **5** | Accessibility & design polish | `DONE` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
 | **6** | Health-platform interop & doctor export | `DONE` | Two-way Apple Health / Health Connect sync; doctor-ready PDF |
-| **7** | Life-stage & condition modes | `TODO` | Pregnancy, loss/birth, postpartum, PCOS, endo, PMDD, perimenopause modes shipped |
+| **7** | Life-stage & condition modes | `DONE` | Pregnancy, loss/birth, postpartum, PCOS, endo, PMDD, perimenopause modes shipped |
 | **8** | Passive wearable integration | `TODO` | Apple Watch companion + ≥1 third-party wearable; passive phase inference |
 | **9** | Optional zero-knowledge encrypted sync | `TODO` | Opt-in multi-device sync; local-first stays default; deletion propagates |
 | **10** | AI assistant + advanced insights | `TODO` | AI assistant privacy design documented in the threat model (on-device / zero-knowledge, no health data to a third party); advanced insights are useful and non-alarming — no diagnosis language. Free, like everything else. |

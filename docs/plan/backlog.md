@@ -353,4 +353,32 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   Unicode TTF (e.g. Noto Sans subset) as an asset and pass it as the document font — costs some
   APK size, so measure against the `perf-budget` gate. English-language UI + a print document
   make this acceptable for v1. — noted by worker: phase6 during p6.5.
+- **p7.2 (2026-09-06) — pregnancy-mode offer from a logged positive-pregnancy state.** p7.2's
+  acceptance criterion wanted pregnancy mode "offered when the user records a positive pregnancy
+  state via p1.11", but p1.11 has no such state (`CycleEventType` = `{periodStart,
+  pregnancyLoss, birth}`). p7.2 enables the mode from the Modes section only, with the
+  start-reference input doubling as the "I'm pregnant" record (Orchestrator-approved Option A at
+  negotiation). A future slice could add a `pregnancyStart` / `pregnancyConfirmed`
+  `CycleEventType` — a schema change (migration + `migration_matrix_test` + backup round-trip) —
+  and hang the offer + an "open pregnancy" state on it, which p7.3 (TTC → conceived) and the
+  postpartum chain would also benefit from. Deferred as disproportionate to a single
+  enable-offer. — noted by worker: 1 during p7.2 negotiation.
+- **p7.3 (2026-09-06) — `thermal_shift.dart` operates on the reading sequence, not calendar
+  days.** The 3-over-6 post-ovulatory shift detector walks the ordered list of logged BBT
+  readings; it does not require the baseline-6 and elevated-3 to fall within a bounded date
+  span. A multi-day gap in logging can put the coverline on stale readings and mistime (or
+  misfire) the detected shift, which then feeds `dailyFertilityScore`'s ovulation re-centring.
+  `// SHORTCUT:` marked at `thermalShift(...)`. Acceptable because near-daily BBT logging is the
+  norm for someone charting to conceive (the only caller). Upgrade path: require the baseline +
+  elevated runs to sit inside a bounded span, or interpolate missing days, before trusting a
+  run. — noted by worker: 1 during p7.3.
+- **p7.5 (2026-09-06) — endometriosis mode v1 scope cuts.** Four deliberate deferrals, none
+  blocking: (a) **one region per day** — `pain_entries.region` is a single nullable
+  `PainRegion`; a multi-select or body-map would need a child table. (b) **no retroactive
+  severity on the p1.5 symptom log** — `SymptomSeverity` lives only on `pain_entries`; letting
+  the general symptom log carry an intensity is its own (larger) schema change, still on the
+  p1.5 backlog. (c) **plain region chips, no body-map diagram UI.** (d) **no literal pain
+  time-series chart** — the "pain over time" view reuses the p7.4 `CorrelationChart`
+  (cycle-phase-banded); a standalone dated-line widget was out of scope against that AC. —
+  noted by worker: 1 during p7.5.
 - (add more here)

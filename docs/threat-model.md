@@ -773,3 +773,27 @@ The CI guard requires an entry naming the current phase.
     Assets. Turning the mode off only clears the flag; **every `pmdd_ratings`
     row is kept** (reversible + opt-in).
   No design changes required by this review.
+- **2026-09-06 — Phase 7 / p7.3 landing — reviewer: orchestrator (added at the
+  Phase 7 close threat-model walk; not a p7.3 acceptance criterion).** TTC mode
+  (an honest daily fertility score + plain timing notes). **No new asset,
+  adversary, trust boundary, data flow, network path, dependency, permission,
+  manifest / plist change, or CI gate change.**
+  - The **daily fertility score** (`dailyFertilityScore` + `thermalShift`, pure
+    `core`, `DateTime.now()`-free, deterministic) is a **derived read** over the
+    p1.3 cycle history, the p3 `CyclePrediction`, and the p1.6 BBT / cervical-
+    mucus logs — recomputed on read, never stored, like the p3 predictions and
+    the other Phase 7 views. It is **not a second prediction engine**: it
+    layers a fixed day-relative shape curve on the existing p3 ovulation
+    estimate. Score is clamped to 1–99 (never 0 / 100) and is `null` below two
+    completed cycles.
+  - `thermalShift` reads the existing `bbt_entries` rows and confirms a past
+    ovulation retrospectively — it never forecasts. Its `// SHORTCUT` (walks the
+    reading sequence, not calendar-spaced days) is a backlog item, not a
+    security concern.
+  - Mode enablement is the existing `mode.ttc` row in the `app_settings` KV
+    store — same sensitivity class as the other `mode.<name>` keys. Turning the
+    mode off only clears the flag; no logged data is touched.
+  - Copy carries the standard not-a-medical-device line **plus** an explicit
+    "not contraception guidance — do not use these scores to try to avoid
+    pregnancy" line (§6, §9(12)).
+  No design changes required by this review.

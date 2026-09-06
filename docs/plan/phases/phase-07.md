@@ -88,34 +88,63 @@ app *surfaces and asks about*, never the core logging model.
   table unless the cycle-return view genuinely can't be derived — flag it if so.
 
 #### p7.2 — Pregnancy mode (week-by-week + pregnancy symptom logging)
-- **Depends on:** p7.1 (mode framework), p1.11 (a pregnancy is an open pregnancy-event state)
+
+**Split at negotiation (2026-09-06, worker: 1) into p7.2a / p7.2b** — too big for one
+reviewable PR (43-entry week-notes content asset + gestational-age core + a symptom set +
+prediction-UI suppression). The split was pre-sanctioned in "Phase-wide constraints" above.
+
+**Enablement — acceptance criterion altered at the same negotiation (Orchestrator approved
+Option A).** As written the criterion said pregnancy mode is "offered when the user records a
+positive pregnancy state via p1.11". p1.11 has **no** positive-pregnancy state —
+`CycleEventType` is `{periodStart, pregnancyLoss, birth}`; adding a `pregnancyStart` /
+`pregnancyConfirmed` type is a schema change (migration + `migration_matrix_test` + backup
+round-trip) disproportionate to hanging an enable-offer on it, and out of p1.11's scope.
+**Instead:** pregnancy mode enables from the Modes section only; the **start-reference input**
+(LMP / user-entered due date / conception date), stored as a typed `app_settings` value
+(p7.1 precedent, no schema change), *is* the "I'm pregnant" record. A p1.11 loss/birth still
+ends it. "Offer pregnancy mode from a logged positive state" is deferred to a future slice
+that adds a pregnancy-start event — see `backlog.md`.
+
+- **Depends on:** p7.1 (mode framework), p1.11 (loss/birth end the pregnancy)
 - **Requirement refs:** §2 (pregnancy mode — week-by-week development, symptom logging), §6
-- **Goal:** a user who is pregnant can turn on pregnancy mode, see where they are by
-  gestational week with brief week-by-week development notes, and log pregnancy-appropriate
-  symptoms — with the normal cycle prediction UI suppressed while it's active.
+
+##### p7.2a — Gestational-age core + week view + enable/start-reference flow
 - **Acceptance criteria:**
-  - Pregnancy mode is enabled from the Modes section or offered when the user records a positive
-    pregnancy state via p1.11; it needs a **start reference** (LMP or a user-entered due date /
-    conception date) — pure `core` gestational-age maths from that reference, clock-injected.
+  - Pregnancy mode is enabled from the p7.1 Modes section. Turning it on collects a **start
+    reference** — LMP, a user-entered due date, or a conception date — stored as a typed
+    `app_settings` value (no schema change). That stored reference is the pregnancy record for
+    p7.2; clearing the mode clears it.
+  - Pure `core` `gestational_age.dart`: GA week + day and trimester from any of the three
+    reference kinds, clock-injected (no `DateTime.now()` in `core`); a reference date in the
+    future / an as-of date before conception → an **honest error, not a negative week**.
   - A **week view**: current gestational week + trimester, and a short bundled development note
-    per week (0–42). Content is plain bundled text, **non-alarming, non-clinical**, carries the
-    disclaimer, no tracked links, reviewed against p4.3. Explicitly *not* a medical timeline.
-  - A **pregnancy symptom set** — reuse the p1.5 symptom model (a curated built-in list scoped
-    to the mode + the user's own custom symptoms); no new symptom storage.
-  - While pregnancy mode is on, the cycle-prediction card / fertile-window UI is **hidden** (not
-    deleted — it returns when the mode is turned off or the pregnancy is ended via p1.11).
-  - Ending the pregnancy (birth or loss via p1.11) turns pregnancy mode off and offers
-    postpartum mode (p7.1).
-  - New `screen_nav.dart` surface(s); sweeps green; dark mode.
+    per week (`pregnancy_week_notes.dart`, 0–42 → 43 entries). Plain bundled text,
+    **non-alarming, non-clinical**, carries the not-a-medical-device line, no tracked links,
+    reviewed against p4.3. Explicitly *not* a medical timeline.
+  - `modes_page` / `mode_catalog` wiring so the mode is reachable + shows its "Open" affordance
+    when on. New `screen_nav.dart` surface(s); sweeps green; dark mode.
 - **Tests required:** `core` gestational-age maths (from LMP; from due date; from conception
-  date; week/trimester boundaries; a date before the reference → honest error, not a negative
-  week; clock injected). `app`: enable flow, week view renders the right week + note, pregnancy
-  symptom logging writes through the existing symptom repo, prediction UI hidden while active
-  and restored after, end-pregnancy → postpartum offer. Sweeps.
-- **Notes / detail:** likely the biggest Phase 7 slice — Worker may split into **p7.2a**
-  (gestational-age core + week view) and **p7.2b** (pregnancy symptom set + prediction-UI
-  suppression) at negotiation. The week-by-week text is a content asset — keep it terse and get
-  it copy-reviewed; do not import a third-party content pack (licence + phone-home risk).
+  date; week/trimester boundaries; pre-reference as-of date → honest error; clock injected).
+  `app`: enable + start-reference flow, week view renders the right week + note, week-notes
+  asset has all 43 entries. Sweeps.
+
+##### p7.2b — Pregnancy symptom set + prediction-UI suppression + end-pregnancy chain
+- **Depends on:** p7.2a (the mode + its enablement), p1.5 (symptoms), p1.11 (loss/birth)
+- **Acceptance criteria:**
+  - A **pregnancy symptom set** — reuse the p1.5 symptom model (a curated built-in name list
+    scoped to the mode + the user's own custom symptoms); **no new symptom storage**, logged
+    through the existing symptom repo.
+  - While pregnancy mode is on, the cycle-prediction card / fertile-window UI on the calendar
+    is **hidden** (not deleted — it returns when the mode is turned off).
+  - Ending the pregnancy via a p1.11 **loss or birth** turns pregnancy mode off, restores the
+    prediction UI, and chains the p7.1 `offerPostpartumMode` path.
+  - New `screen_nav.dart` surface(s); sweeps green; dark mode.
+- **Tests required:** `app`: pregnancy symptom logging writes through the existing symptom repo;
+  prediction UI hidden while active and restored after; end-pregnancy (loss and birth) → mode
+  off + postpartum offer shown. Sweeps.
+- **Notes / detail:** the week-by-week text is a content asset — keep it terse and get it
+  copy-reviewed; **do not import a third-party content pack** (licence + phone-home risk).
+  Worker owns the start-reference input shape and the week-note copy.
 
 #### p7.3 — TTC (trying to conceive) mode — daily fertility score + timing guidance
 - **Depends on:** p7.1 (mode framework), p1.4 / p3 (`AdaptivePredictor`, fertile window), p1.6
@@ -182,13 +211,28 @@ app *surfaces and asks about*, never the core logging model.
 - **Requirement refs:** §2 (endometriosis symptom-correlation), §9(12), §6
 - **Goal:** a user tracking endometriosis can log pain (location + intensity) and flares, and
   see how flares track cycle phase.
+
+**Storage model — decided at negotiation (2026-09-06, worker: 1, PR #80). Orchestrator
+approved a dedicated table (schema v7→v8).** The Worker showed the p1.5 presence-only
+`(date, symptomTypeId)` model structurally can't carry the three things this log needs — an
+*ordered* intensity scale (synthetic catalogue names aren't rankable and break on
+rename/archive; they also multiply with the region tag and would leave p7.6 without a real
+reusable scale), a free-text note (no text column near the symptom log; dropping the note
+criterion is itself a §5 stop), and a region tag. New DDL, shipped **in PR #80** on the p6.1
+precedent: additive `pain_entries` table (PK `date`, one row/day: `intensity`
+non-null · `region` nullable · `note` nullable TEXT · `isFlare` bool · `createdAt`/`updatedAt`),
+`schemaVersion` 7→8 with `if (from < 8) m.createTable(painEntries)`, regen `.g.dart` +
+`drift_schemas/v8` + `test/db/generated/schema_v8`, `migration_matrix_test` extended to 8,
+new `pain_migration_test.dart`, backup round-trip, `backup_service` `tableOrder` += `pain_entries`
+(appended last, no FK). New pure `core` `enum SymptomSeverity` (`.rank` + `.label`) — the
+reusable ordered scale; **p7.6 rates its items on this same enum**. `region` is a fixed `core`
+`enum PainRegion`, not user-editable. Threat-model p7.5 entry names the new asset (structured
+pain/flare rows + free-text pain notes, new local `pain_entries`, SQLCipher-encrypted at rest,
+no new egress/permission/CI gate); `docs/release-checklist.md` "Schema change" block updated.
 - **Acceptance criteria:**
   - A **pain / flare log**: intensity (an ordered scale) + optional body-region tag + optional
-    note, per day. **Decision point for the Worker:** whether this fits the p1.5 symptom model
-    (a set of "pain: <region>" symptoms + a severity — noting p1.5's follow-up that symptoms are
-    presence-only today) or needs a small dedicated table. A new table is a **schema change** —
-    §5 stop; it ships with its migration + matrix + round-trip in the same PR. Prefer the
-    symptom model if it's not a stretch.
+    note, per day — stored in the new `pain_entries` table (see the storage-model block above),
+    **not** the p1.5 symptom model.
   - Flare↔cycle-phase correlation via the p7.4 core function ("logged flares cluster in your
     late luteal / menstrual phase" — descriptive only).
   - A simple pain-over-time view (reuses the p7.1 chart widget) with cycle-phase banding.
@@ -211,11 +255,39 @@ app *surfaces and asks about*, never the core logging model.
 - **Goal:** a user tracking PMDD can do a quick **daily rating** of a small set of
   mood/physical symptoms and see those ratings overlaid on cycle phase across several cycles —
   the pattern PMDD is defined by (luteal-phase symptom rise, follicular relief).
+
+**Storage model — decided at negotiation (2026-09-06, worker: 2, PR #82). Orchestrator
+approved a dedicated table (schema v8→v9).** A daily multi-symptom rating is a
+`(date, item, rating)` series — it fits neither p7.5's `pain_entries` (one row per day, a
+single intensity) nor the p1.5 presence-only `(date, symptomTypeId)` model. **Rejected**
+ALTER-ing `daily_symptom_entries` to add a nullable `severity`: a "rated none today" row would
+break the "a row means the symptom happened" invariant that the calendar dots, the
+recent-symptoms list and the doctor report all rely on, and would fold PMDD's every-day
+ratings into a table many surfaces read. **Approved** option (b) — a new additive
+`pmdd_ratings` table (PK `{date, item}`, one row per rated item per day: `item`
+`textEnum<PmddSymptom>` — a fixed `core` enum, v1 has no user-configurable rating set ·
+`rating` `textEnum<SymptomSeverity>` reusing the p7.5 scale verbatim, and here
+`SymptomSeverity.none` **is** a stored value, meaning "rated, nothing today" · `createdAt` /
+`updatedAt`). `schemaVersion` 8→9 with `if (from < 9) m.createTable(pmddRatings)` — plain
+additive `createTable`, no `to >=` guard (an extra *table* is tolerated at every intermediate
+matrix target; only the v7 *column* add needed the guard). Shipped **in PR #82** on the
+p6.1 + p7.5 precedent: regen `app_database.g.dart` + real `drift_dev schema dump`
+→ `drift_schemas/drift_schema_v9.json` + `test/db/generated/schema_v9.dart`,
+`dump_historical_schemas.dart` `_dumpedVersions` += 9, `migration_matrix_test` extended to v9
+(from-loops + single-step loop reach 8; `pmdd_ratings` asserted present-and-empty from every
+earlier version + usable through its repository), new `pmdd_migration_test.dart`, backup
+round-trip carrying a real rated row across the migration, `backup_service` `tableOrder` +=
+`pmdd_ratings` (appended last, no FK), `retention_service` `deleteWhere` += `pmdd_ratings`
+(ages out on the retention window like every dated table), `docs/local-database.md` "Schema v9"
+section. Threat-model p7.6 entry names the new asset (structured PMDD rating rows in a new
+local `pmdd_ratings` table, SQLCipher-encrypted at rest, recomputed overlay never stored, no
+new egress/permission/CI gate).
 - **Acceptance criteria:**
-  - A daily **multi-symptom rating** entry (a handful of items, each on the ordered scale from
-    p7.5 or a shared `core` scale) — quick to complete (≤ the p5.5 tap discipline where it can).
-    Same table-vs-symptom-model decision as p7.5, same §5-stop rule if a table is needed;
-    reuse p7.5's storage choice if possible.
+  - A daily **multi-symptom rating** entry — a handful of fixed items (a small hard-coded
+    `core` list; v1 has no user-configurable rating scales — noted as a follow-up), each on
+    p7.5's `SymptomSeverity` scale, stored in the new `pmdd_ratings` table (see the
+    storage-model block above), **not** the p1.5 symptom model. Quick to complete (≤ the p5.5
+    tap discipline where the shape allows).
   - A **cycle-overlay chart**: ratings for the current + recent cycles aligned by cycle day /
     phase, so a luteal rise is visible. Uses the p7.1 chart widget.
   - A descriptive luteal-vs-follicular summary via the p7.4 correlation core ("your ratings run
@@ -292,22 +364,120 @@ app *surfaces and asks about*, never the core logging model.
   start/stop dates — verify that first. Don't add BC-type-specific pharmacology; the note is
   generic ("a hormonal birth-control change").
 
-**Exit gate (Phase 7):** each mode ships independently, opt-in, tested, non-diagnostic, with
-correlation / timeline views where the requirement calls for them.
-- *Postpartum cycle-return + loss/birth support + the mode framework* — p7.1. PR #… .
-- *Pregnancy mode (week-by-week + pregnancy symptoms)* — p7.2 (or p7.2a/b). PR #… .
-- *TTC mode with an honest daily fertility score* — p7.3. PR #… .
-- *PCOS mode (irregular-cycle-aware UI + symptom correlation) + the reusable correlation core* —
-  p7.4. PR #… .
-- *Endometriosis mode (pain/flare log + cycle-phase correlation)* — p7.5. PR #… .
-- *PMDD mode (daily rating + cycle-overlay chart)* — p7.6. PR #… .
-- *Perimenopause / menopause mode (variability view + symptom timeline)* — p7.7. PR #… .
-- *Birth-control-switching recalibration support* — p7.8. PR #… .
+**Exit gate (Phase 7) — MET (2026-09-06):** each mode ships independently, opt-in, tested,
+non-diagnostic, with correlation / timeline views where the requirement calls for them.
+- *Postpartum cycle-return + loss/birth support + the mode framework* — **MET: p7.1 #73
+  `4e84c30`** (`LifeStageMode` enum + `app_settings` `mode.<name>` keys, `ModesPage`,
+  `mode_offer`, pure `derivePostpartumCycleReturn`, loss-vs-birth support resources).
+- *Pregnancy mode: gestational-age core + week view + enable/start-reference flow* — **MET:
+  p7.2a #74 `b058299`** (`gestational_age.dart` LMP/dueDate/conception → `lmpAnchor` seam,
+  `kPregnancyWeekNotes` wk 0–42, `pregnancy.start_reference` KV — no schema change).
+- *Pregnancy mode: pregnancy symptom set + prediction-UI suppression + end-pregnancy →
+  postpartum* — **MET: p7.2b #76 `5fb2734`** (`kPregnancySymptomNames` logged through the p1.5
+  repo, `_PredictionCard` gated `!pregnancyModeOn`, loss/birth clears the mode then offers
+  postpartum). Enablement criterion altered at negotiation — Modes-section-only (Option A),
+  the start-reference input doubles as the "I'm pregnant" record; `docs/plan/decisions.md`
+  2026-09-06.
+- *TTC mode with an honest daily fertility score* — **MET: p7.3 #77 `0553215`**
+  (`daily_fertility_score.dart` — a day-relative shape curve on the p3 ovulation estimate,
+  re-centred by an observed thermal shift + floored by fertile mucus, `.clamp(1, 99)`, `< 2`
+  cycles → null; `thermal_shift.dart` retrospective 3-over-6 detector; **not** a second
+  engine; explicit "not contraception guidance" disclaimer).
+- *PCOS mode (irregular-cycle-aware UI + symptom correlation) + the reusable correlation core*
+  — **MET: p7.4 #79 `276420d`** (`cycle_phase_correlation.dart` `cyclePhaseCorrelations` —
+  rate-normalised concentration, no p-values; `cyclePhaseTimeline`; `CorrelationChart` shared
+  widget; `pcosMode` copy-softening — presentation only; anti-Flo `pcosNotSymptomCheckerLine`).
+- *Endometriosis mode (pain/flare log + cycle-phase correlation)* — **MET: p7.5 #80
+  `cf11233`** (schema **v7→v8** — new additive `pain_entries` table + pure `enum
+  SymptomSeverity`; `painFlareEvents` → `cyclePhaseCorrelations`; migration + matrix→v8 +
+  `pain_migration_test` + backup round-trip in the PR; `docs/plan/decisions.md` 2026-09-06).
+- *PMDD mode (daily rating + cycle-overlay chart)* — **MET: p7.6 #82 `25afc44`** (schema
+  **v8→v9** — new additive `pmdd_ratings` table, composite `{date, item}` PK, `PmddSymptom`
+  fixed enum, `SymptomSeverity` rating with `none` stored; pure `pmddOverlay` reuses
+  `cyclePhaseCorrelations` unchanged → `PmddLutealRead` enum, **no DRSP/numeric score**;
+  migration + matrix→v9 + `pmdd_migration_test` + backup round-trip in the PR;
+  `docs/plan/decisions.md` 2026-09-06).
+- *Perimenopause / menopause mode (variability view + symptom timeline)* — **MET: p7.7 #81
+  `3d8d788`** (`perimenopause_transition.dart` — `PerimenopauseVariabilityTrend` +
+  `PerimenopauseStageHint` enums over `CycleStats` + gap logic, **NO numeric "Perimenopause
+  Score"** — content test asserts it; "12 months" surfaced factually; forecast withheld past a
+  long gap).
+- *Birth-control-switching recalibration support* — **MET: p7.8 #78 `91df394`**
+  (`birth_control_recalibration.dart` — `isHormonal` on the p1.7 `BirthControlMethod`, no
+  schema change; forecast **withheld** during a 90-day / 3-cycle window, sticky dismissal;
+  predictor untouched — `AdaptivePredictor` has no time-scoped exclusion seam).
 - *Phase-wide:* every mode opt-in + reversible with no data loss on disable; every derivation
   pure `core` / `DateTime.now()`-free; no diagnostic or alarming language (§9(12)); each mode
-  carries the not-a-medical-device line; any schema change shipped with its migration + matrix
-  extension + backup round-trip in the same PR; nothing gated behind payment (§5).
+  carries the not-a-medical-device line; two schema changes (p7.5 v7→v8, p7.6 v8→v9) each
+  shipped with its migration + matrix extension + backup round-trip in the same PR; nothing
+  gated behind payment (§5).
 
-(PR / SHA blanks filled at phase close.)
+**Phase 7 — phase-wide truths (p7.1–p7.8):**
+- **Everything free.** The Phase 7 stub's "insights may later be paid" line is dead — every
+  mode's logging *and* its correlation/insight/overlay views ship free (§5).
+- **`core` stayed Flutter-free / `DateTime.now()`-free.** Every derivation is pure, clock-
+  injected Dart in `core`: `derivePostpartumCycleReturn`, `gestationalAgeAsOf`,
+  `dailyFertilityScore` + `thermalShift`, `cyclePhaseCorrelations` + `cyclePhaseTimeline`,
+  `painFlareEvents`, `pmddOverlay`, `derivePerimenopauseTransition`,
+  `deriveBirthControlRecalibration`. Mode *screens* live in `app`; `DateTime.now()` is read
+  only at the provider edge.
+- **Two schema bumps, both additive, both in their slice's PR.** p7.5 `schemaVersion` **7→8**:
+  `pain_entries` (endometriosis pain/flare log, one row/day, free-text note). p7.6 **8→9**:
+  `pmdd_ratings` (composite `{date, item}` PK, one row per rated item per day, enum-only).
+  Both plain `createTable`, no `to >=` guard (an extra table is tolerated at every
+  intermediate `migration_matrix_test` target — only the v7 *column* add needed the guard).
+  Each shipped with `migration_matrix_test` extended to the new version, a dedicated
+  `*_migration_test.dart`, a real `drift_dev schema dump` (v8, v9 in `_dumpedVersions`), and a
+  backup round-trip carrying real rows across the migration. `BackupService.tableOrder` +
+  `RetentionService.deleteWhere` cover both new tables. §5 negotiated both times
+  (`docs/plan/decisions.md`); the p1.5 presence-only symptom model was shown structurally
+  unable to carry an ordered scale / free text / per-item daily ratings.
+- **The shared framework, built once in p7.1 + p7.4, reused by the rest.** p7.1: the
+  `LifeStageMode` enum, the `app_settings` `mode.<name>` enablement seam, `ModesPage`,
+  `mode_offer`. p7.4: `cyclePhaseCorrelations` (the descriptive correlation core — p7.5, p7.6,
+  p7.7 all parameterise it unchanged), `cyclePhaseTimeline`, and the `CorrelationChart`
+  widget (p7.1-deferred; p7.5–p7.7 reuse it as-is). The `period_calendar_page.dart`
+  prediction-card region became a composed gate across pregnancy / bcRecal / perimenopause
+  modes with `pcosMode` + `perimenopauseMode` wording flags threaded through the cards and
+  `cycle_format.dart` — presentation only, `deriveCycles` / `CycleStats` / predictor never
+  touched.
+- **Reuse, don't fork — held.** No mode forked the cycle engine or the predictor. The
+  predictor stayed behind its unchanged seam; where a mode needed the forecast to back off
+  (pregnancy, BC-switch, perimenopause past a gap) the card is **withheld or annotated**, not
+  rebuilt.
+- **§9(12) — no diagnoses, enforced by tests.** No mode emits a verdict, a directive, or a
+  numeric medical score. p7.4 (anti-Flo "ask your doctor about PCOS"), p7.6 (no DRSP / 0–100),
+  p7.7 (no "Perimenopause Score") each carry a content test that locks the copy and asserts
+  the absence of a score. Every mode screen shows `SupportResources.notMedicalDeviceLine`.
+- **Threat model.** Each slice's review-log entry is in `docs/threat-model.md` (p7.3's added
+  at close — a derived read, no new asset/egress/schema/permission/CI). Two new encrypted
+  local assets (`pain_entries` incl. free-text notes, `pmdd_ratings` enum-only) added to the
+  Assets table; both SQLCipher-encrypted at rest, both covered by backup + retention, never
+  leaving the device. No new adversary, trust boundary, network path, dependency, permission,
+  manifest/plist, or CI gate anywhere in the phase.
+
+**Deferred to backlog (see `backlog.md`):** pregnancy-mode offer from a logged positive-
+pregnancy state (needs a `pregnancyStart` `CycleEventType` — a schema change) · `thermalShift`
+operating on the reading sequence not calendar-spaced days · endometriosis v1 scope cuts (one
+region/day, no retroactive severity on the p1.5 log, plain chips not a body-map, no standalone
+pain time-series widget) · PMDD v1 scope cuts (no user-configurable rating items or scale;
+"checked in, all fine" not distinct from an all-`none` day).
+
+### Notes — per-slice record (frozen at close)
+
+The live per-slice build log lived in `.herdsman/state.md` during the phase; the merged record:
+
+| Slice | PR | SHA | One-line |
+|---|---|---|---|
+| p7.1 | #73 | `4e84c30` | Loss/birth/postpartum flows + the mode framework (`LifeStageMode`, `mode.<name>` KV, `ModesPage`, `mode_offer`, `derivePostpartumCycleReturn`, support resources). No schema change. Correlation-chart widget deferred to p7.4. |
+| p7.2a | #74 | `b058299` | Pregnancy part 1: `gestational_age.dart` (LMP/dueDate/conception → `lmpAnchor` seam, honest null before anchor), `kPregnancyWeekNotes` wk 0–42, `pregnancy.start_reference` KV. No schema change. |
+| p7.2b | #76 | `5fb2734` | Pregnancy part 2 (app-only): `kPregnancySymptomNames` via the p1.5 repo, `_PredictionCard` gated `!pregnancyModeOn`, loss/birth → clear mode → offer postpartum. Enablement criterion altered (Option A) at negotiation. |
+| p7.3 | #77 | `0553215` | TTC mode: `daily_fertility_score.dart` (day-relative curve on the p3 estimate, re-centred by `thermalShift`, floored by fertile mucus, clamp 1–99, `<2` cycles → null) + `thermal_shift.dart`. Not a second engine. `// SHORTCUT`: shift detector walks the reading sequence, not calendar days (backlog). No schema change. Threat-model entry added at close. |
+| p7.4 | #79 | `276420d` | PCOS mode + the reusable correlation core: `cyclePhaseCorrelations` (rate-normalised concentration, no p-values, `today` injected), `cyclePhaseTimeline`, `CorrelationChart` widget, `pcosMode` copy-softening (presentation only). No schema change. |
+| p7.5 | #80 | `cf11233` | Endometriosis mode + **schema v7→v8**: new additive `pain_entries` table (PK `date`, `SymptomSeverity` intensity + `PainRegion` + free-text note + flare flag) + pure `enum SymptomSeverity`. `painFlareEvents` → `cyclePhaseCorrelations`. Migration + matrix→v8 + `pain_migration_test` + backup round-trip + `drift_schema_v8` in the PR. §5 negotiated. |
+| p7.6 | #82 | `25afc44` | PMDD mode + **schema v8→v9**: new additive `pmdd_ratings` table (composite `{date, item}` PK, `PmddSymptom` fixed enum, `SymptomSeverity` rating with `none` stored). Pure `pmddOverlay` reuses `cyclePhaseCorrelations` unchanged → `PmddLutealRead` enum. **No DRSP/numeric score** (content test). Migration + matrix→v9 + `pmdd_migration_test` + backup round-trip + `drift_schema_v9` in the PR. §5 negotiated. `modeHasScreen` made exhaustive. |
+| p7.7 | #81 | `3d8d788` | Perimenopause mode: `perimenopause_transition.dart` — `PerimenopauseVariabilityTrend` + `PerimenopauseStageHint` enums over `CycleStats` + gap logic; **NO numeric score** (content test); "12 months" factual; forecast withheld past a long gap; symptom timeline reuses `cyclePhaseCorrelations`. No schema change. |
+| p7.8 | #78 | `91df394` | Birth-control-switching recalibration: `birth_control_recalibration.dart` — `isHormonal` on the p1.7 `BirthControlMethod` (no schema change — §5 pre-check cleared); forecast **withheld** during a 90-day / 3-cycle window, dismissal sticky until a newer switch; predictor untouched. |
+| close | #83 | `(squash SHA on merge)` | Exit gate, `overview.md` row 7 → DONE, `architecture.md` refresh, p7.3 threat-model entry, this frozen record; carries the batched local-`main` bookkeeping stack. |
 
 ---
