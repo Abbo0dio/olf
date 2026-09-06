@@ -36,8 +36,7 @@ import 'package:olf_core/olf_core.dart';
       LifeStageMode.endometriosis => (
         title: 'Endometriosis',
         description:
-            'Log pain and flares and see how they line up with cycle phase. '
-            'Coming soon.',
+            'Log pain and flares and see how they line up with cycle phase.',
       ),
       LifeStageMode.pmdd => (
         title: 'PMDD',
@@ -61,14 +60,15 @@ import 'package:olf_core/olf_core.dart';
     };
 
 /// Whether this mode has an interactive screen in the current build. Postpartum
-/// (p7.1), pregnancy (p7.2a), TTC (p7.3), PCOS (p7.4), perimenopause (p7.7) and
-/// birth-control change (p7.8) do; the others can still be toggled so their
-/// state is ready when their slice lands.
+/// (p7.1), pregnancy (p7.2a), TTC (p7.3), PCOS (p7.4), endometriosis (p7.5),
+/// perimenopause (p7.7) and birth-control change (p7.8) do; the others can still
+/// be toggled so their state is ready when their slice lands.
 bool modeHasScreen(LifeStageMode mode) => switch (mode) {
   LifeStageMode.postpartum ||
   LifeStageMode.pregnancy ||
   LifeStageMode.ttc ||
   LifeStageMode.pcos ||
+  LifeStageMode.endometriosis ||
   LifeStageMode.perimenopause ||
   LifeStageMode.birthControlSwitch => true,
   _ => false,

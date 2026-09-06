@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../symptom/symptom_severity.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
@@ -23,6 +24,7 @@ part 'app_database.g.dart';
     Medications,
     BirthControlEntries,
     Reminders,
+    PainEntries,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -45,8 +47,14 @@ class AppDatabase extends _$AppDatabase {
   ///            **First migration that alters an existing table** — see
   ///            `tool/dump_historical_schemas.dart` for why v6 is the snapshot
   ///            reconstruction anchor.
+  /// v8 (p7.5): added `pain_entries` (endometriosis pain / flare log — one row
+  ///            per day: ordered `SymptomSeverity` intensity, optional
+  ///            `PainRegion`, optional free-text note, flare flag). Purely
+  ///            additive — a new table, nothing backfilled. Dumped as its own
+  ///            real snapshot (v6+ history is frozen; only v1..v5 are
+  ///            reconstructed).
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -120,6 +128,13 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(bbtEntries, bbtEntries.source);
           await m.addColumn(bbtEntries, bbtEntries.externalId);
         }
+      }
+      if (from < 8) {
+        // p7.5: the endometriosis pain / flare log. Purely additive — a new
+        // table, nothing to backfill. No `to >=` guard needed: an extra *table*
+        // is tolerated by the schema verifier at every intermediate target (only
+        // the v7 *column* add needed that dance).
+        await m.createTable(painEntries);
       }
     },
     beforeOpen: (details) async {

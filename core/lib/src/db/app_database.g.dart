@@ -4229,6 +4229,486 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
   }
 }
 
+class $PainEntriesTable extends PainEntries
+    with TableInfo<$PainEntriesTable, PainEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PainEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<SymptomSeverity, String>
+  intensity = GeneratedColumn<String>(
+    'intensity',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  ).withConverter<SymptomSeverity>($PainEntriesTable.$converterintensity);
+  @override
+  late final GeneratedColumnWithTypeConverter<PainRegion?, String> region =
+      GeneratedColumn<String>(
+        'region',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      ).withConverter<PainRegion?>($PainEntriesTable.$converterregionn);
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isFlareMeta = const VerificationMeta(
+    'isFlare',
+  );
+  @override
+  late final GeneratedColumn<bool> isFlare = GeneratedColumn<bool>(
+    'is_flare',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_flare" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    date,
+    intensity,
+    region,
+    note,
+    isFlare,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'pain_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PainEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('is_flare')) {
+      context.handle(
+        _isFlareMeta,
+        isFlare.isAcceptableOrUnknown(data['is_flare']!, _isFlareMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {date};
+  @override
+  PainEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PainEntry(
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      intensity: $PainEntriesTable.$converterintensity.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}intensity'],
+        )!,
+      ),
+      region: $PainEntriesTable.$converterregionn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}region'],
+        ),
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      isFlare: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_flare'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PainEntriesTable createAlias(String alias) {
+    return $PainEntriesTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<SymptomSeverity, String, String>
+  $converterintensity = const EnumNameConverter<SymptomSeverity>(
+    SymptomSeverity.values,
+  );
+  static JsonTypeConverter2<PainRegion, String, String> $converterregion =
+      const EnumNameConverter<PainRegion>(PainRegion.values);
+  static JsonTypeConverter2<PainRegion?, String?, String?> $converterregionn =
+      JsonTypeConverter2.asNullable($converterregion);
+}
+
+class PainEntry extends DataClass implements Insertable<PainEntry> {
+  /// Calendar date, time-of-day zeroed on write. Primary key.
+  final DateTime date;
+
+  /// Ordered pain intensity, stored as the [SymptomSeverity] enum name (`mild` /
+  /// `moderate` / `severe` in practice; the repository never writes `none`).
+  final SymptomSeverity intensity;
+
+  /// Optional coarse location, stored as the [PainRegion] enum name, or `null`.
+  final PainRegion? region;
+
+  /// Optional free-text note. Lives only in the SQLCipher-encrypted database and
+  /// is **never** placed in a notification (same rule as [Medications.notes]).
+  final String? note;
+
+  /// Whether the user marked this day a flare (a distinct bad episode), as
+  /// opposed to background pain. Drives the flare-vs-cycle-phase view.
+  final bool isFlare;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const PainEntry({
+    required this.date,
+    required this.intensity,
+    this.region,
+    this.note,
+    required this.isFlare,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['date'] = Variable<DateTime>(date);
+    {
+      map['intensity'] = Variable<String>(
+        $PainEntriesTable.$converterintensity.toSql(intensity),
+      );
+    }
+    if (!nullToAbsent || region != null) {
+      map['region'] = Variable<String>(
+        $PainEntriesTable.$converterregionn.toSql(region),
+      );
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['is_flare'] = Variable<bool>(isFlare);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  PainEntriesCompanion toCompanion(bool nullToAbsent) {
+    return PainEntriesCompanion(
+      date: Value(date),
+      intensity: Value(intensity),
+      region: region == null && nullToAbsent
+          ? const Value.absent()
+          : Value(region),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      isFlare: Value(isFlare),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory PainEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PainEntry(
+      date: serializer.fromJson<DateTime>(json['date']),
+      intensity: $PainEntriesTable.$converterintensity.fromJson(
+        serializer.fromJson<String>(json['intensity']),
+      ),
+      region: $PainEntriesTable.$converterregionn.fromJson(
+        serializer.fromJson<String?>(json['region']),
+      ),
+      note: serializer.fromJson<String?>(json['note']),
+      isFlare: serializer.fromJson<bool>(json['isFlare']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'date': serializer.toJson<DateTime>(date),
+      'intensity': serializer.toJson<String>(
+        $PainEntriesTable.$converterintensity.toJson(intensity),
+      ),
+      'region': serializer.toJson<String?>(
+        $PainEntriesTable.$converterregionn.toJson(region),
+      ),
+      'note': serializer.toJson<String?>(note),
+      'isFlare': serializer.toJson<bool>(isFlare),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  PainEntry copyWith({
+    DateTime? date,
+    SymptomSeverity? intensity,
+    Value<PainRegion?> region = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    bool? isFlare,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => PainEntry(
+    date: date ?? this.date,
+    intensity: intensity ?? this.intensity,
+    region: region.present ? region.value : this.region,
+    note: note.present ? note.value : this.note,
+    isFlare: isFlare ?? this.isFlare,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  PainEntry copyWithCompanion(PainEntriesCompanion data) {
+    return PainEntry(
+      date: data.date.present ? data.date.value : this.date,
+      intensity: data.intensity.present ? data.intensity.value : this.intensity,
+      region: data.region.present ? data.region.value : this.region,
+      note: data.note.present ? data.note.value : this.note,
+      isFlare: data.isFlare.present ? data.isFlare.value : this.isFlare,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PainEntry(')
+          ..write('date: $date, ')
+          ..write('intensity: $intensity, ')
+          ..write('region: $region, ')
+          ..write('note: $note, ')
+          ..write('isFlare: $isFlare, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(date, intensity, region, note, isFlare, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PainEntry &&
+          other.date == this.date &&
+          other.intensity == this.intensity &&
+          other.region == this.region &&
+          other.note == this.note &&
+          other.isFlare == this.isFlare &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class PainEntriesCompanion extends UpdateCompanion<PainEntry> {
+  final Value<DateTime> date;
+  final Value<SymptomSeverity> intensity;
+  final Value<PainRegion?> region;
+  final Value<String?> note;
+  final Value<bool> isFlare;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const PainEntriesCompanion({
+    this.date = const Value.absent(),
+    this.intensity = const Value.absent(),
+    this.region = const Value.absent(),
+    this.note = const Value.absent(),
+    this.isFlare = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PainEntriesCompanion.insert({
+    required DateTime date,
+    required SymptomSeverity intensity,
+    this.region = const Value.absent(),
+    this.note = const Value.absent(),
+    this.isFlare = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : date = Value(date),
+       intensity = Value(intensity);
+  static Insertable<PainEntry> custom({
+    Expression<DateTime>? date,
+    Expression<String>? intensity,
+    Expression<String>? region,
+    Expression<String>? note,
+    Expression<bool>? isFlare,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (date != null) 'date': date,
+      if (intensity != null) 'intensity': intensity,
+      if (region != null) 'region': region,
+      if (note != null) 'note': note,
+      if (isFlare != null) 'is_flare': isFlare,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PainEntriesCompanion copyWith({
+    Value<DateTime>? date,
+    Value<SymptomSeverity>? intensity,
+    Value<PainRegion?>? region,
+    Value<String?>? note,
+    Value<bool>? isFlare,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return PainEntriesCompanion(
+      date: date ?? this.date,
+      intensity: intensity ?? this.intensity,
+      region: region ?? this.region,
+      note: note ?? this.note,
+      isFlare: isFlare ?? this.isFlare,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (intensity.present) {
+      map['intensity'] = Variable<String>(
+        $PainEntriesTable.$converterintensity.toSql(intensity.value),
+      );
+    }
+    if (region.present) {
+      map['region'] = Variable<String>(
+        $PainEntriesTable.$converterregionn.toSql(region.value),
+      );
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (isFlare.present) {
+      map['is_flare'] = Variable<bool>(isFlare.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PainEntriesCompanion(')
+          ..write('date: $date, ')
+          ..write('intensity: $intensity, ')
+          ..write('region: $region, ')
+          ..write('note: $note, ')
+          ..write('isFlare: $isFlare, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4246,6 +4726,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BirthControlEntriesTable birthControlEntries =
       $BirthControlEntriesTable(this);
   late final $RemindersTable reminders = $RemindersTable(this);
+  late final $PainEntriesTable painEntries = $PainEntriesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4262,6 +4743,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     medications,
     birthControlEntries,
     reminders,
+    painEntries,
   ];
 }
 
@@ -6569,6 +7051,243 @@ typedef $$RemindersTableProcessedTableManager =
       Reminder,
       PrefetchHooks Function()
     >;
+typedef $$PainEntriesTableCreateCompanionBuilder =
+    PainEntriesCompanion Function({
+      required DateTime date,
+      required SymptomSeverity intensity,
+      Value<PainRegion?> region,
+      Value<String?> note,
+      Value<bool> isFlare,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$PainEntriesTableUpdateCompanionBuilder =
+    PainEntriesCompanion Function({
+      Value<DateTime> date,
+      Value<SymptomSeverity> intensity,
+      Value<PainRegion?> region,
+      Value<String?> note,
+      Value<bool> isFlare,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$PainEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $PainEntriesTable> {
+  $$PainEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<SymptomSeverity, SymptomSeverity, String>
+  get intensity => $composableBuilder(
+    column: $table.intensity,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<PainRegion?, PainRegion, String> get region =>
+      $composableBuilder(
+        column: $table.region,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isFlare => $composableBuilder(
+    column: $table.isFlare,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PainEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $PainEntriesTable> {
+  $$PainEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get intensity => $composableBuilder(
+    column: $table.intensity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get region => $composableBuilder(
+    column: $table.region,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isFlare => $composableBuilder(
+    column: $table.isFlare,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PainEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PainEntriesTable> {
+  $$PainEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<SymptomSeverity, String> get intensity =>
+      $composableBuilder(column: $table.intensity, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<PainRegion?, String> get region =>
+      $composableBuilder(column: $table.region, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<bool> get isFlare =>
+      $composableBuilder(column: $table.isFlare, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$PainEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PainEntriesTable,
+          PainEntry,
+          $$PainEntriesTableFilterComposer,
+          $$PainEntriesTableOrderingComposer,
+          $$PainEntriesTableAnnotationComposer,
+          $$PainEntriesTableCreateCompanionBuilder,
+          $$PainEntriesTableUpdateCompanionBuilder,
+          (
+            PainEntry,
+            BaseReferences<_$AppDatabase, $PainEntriesTable, PainEntry>,
+          ),
+          PainEntry,
+          PrefetchHooks Function()
+        > {
+  $$PainEntriesTableTableManager(_$AppDatabase db, $PainEntriesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PainEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PainEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PainEntriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<DateTime> date = const Value.absent(),
+                Value<SymptomSeverity> intensity = const Value.absent(),
+                Value<PainRegion?> region = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<bool> isFlare = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PainEntriesCompanion(
+                date: date,
+                intensity: intensity,
+                region: region,
+                note: note,
+                isFlare: isFlare,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required DateTime date,
+                required SymptomSeverity intensity,
+                Value<PainRegion?> region = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<bool> isFlare = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PainEntriesCompanion.insert(
+                date: date,
+                intensity: intensity,
+                region: region,
+                note: note,
+                isFlare: isFlare,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PainEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PainEntriesTable,
+      PainEntry,
+      $$PainEntriesTableFilterComposer,
+      $$PainEntriesTableOrderingComposer,
+      $$PainEntriesTableAnnotationComposer,
+      $$PainEntriesTableCreateCompanionBuilder,
+      $$PainEntriesTableUpdateCompanionBuilder,
+      (PainEntry, BaseReferences<_$AppDatabase, $PainEntriesTable, PainEntry>),
+      PainEntry,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6595,4 +7314,6 @@ class $AppDatabaseManager {
       $$BirthControlEntriesTableTableManager(_db, _db.birthControlEntries);
   $$RemindersTableTableManager get reminders =>
       $$RemindersTableTableManager(_db, _db.reminders);
+  $$PainEntriesTableTableManager get painEntries =>
+      $$PainEntriesTableTableManager(_db, _db.painEntries);
 }

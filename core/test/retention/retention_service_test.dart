@@ -78,6 +78,14 @@ void main() {
                 type: CervicalMucusType.dry,
               ),
             );
+        await db
+            .into(db.painEntries)
+            .insert(
+              PainEntriesCompanion.insert(
+                date: d,
+                intensity: SymptomSeverity.mild,
+              ),
+            );
       }
       final symptomId = await db
           .into(db.symptomTypes)
@@ -98,17 +106,19 @@ void main() {
       final result = await RetentionService(db).sweep(now: now, window: window);
 
       expect(result.cutoff, cutoff);
-      expect(result.total, 4);
+      expect(result.total, 5);
       expect(result.deletedByTable, {
         'cycle_events': 1,
         'bbt_entries': 1,
         'cervical_mucus_entries': 1,
+        'pain_entries': 1,
         'daily_symptom_entries': 1,
       });
       // The cutoff day itself and everything after it stay.
       expect(await count(db.cycleEvents), 2);
       expect(await count(db.bbtEntries), 2);
       expect(await count(db.cervicalMucusEntries), 2);
+      expect(await count(db.painEntries), 2);
       expect(await count(db.dailySymptomEntries), 2);
       // The catalogue row is untouched.
       expect(await count(db.symptomTypes), kBuiltInSymptomNames.length + 1);

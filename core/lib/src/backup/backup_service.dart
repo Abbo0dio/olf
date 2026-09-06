@@ -32,6 +32,7 @@ class BackupService {
     'medications',
     'birth_control_entries',
     'reminders',
+    'pain_entries',
   ];
 
   /// Snapshot the whole database.

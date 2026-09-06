@@ -1,5 +1,7 @@
 import 'package:drift/drift.dart';
 
+import '../symptom/symptom_severity.dart';
+
 /// The kinds of point-in-time event that can sit on the cycle timeline.
 ///
 /// v1 had exactly one — the day a period started. As of schema v2, period
@@ -324,6 +326,52 @@ enum ReminderKind {
   fertileWindow,
   bbtPrompt,
   latePeriodCheckIn,
+}
+
+/// A coarse body-region tag for a logged pain day (schema v8, p7.5).
+///
+/// A small fixed set on purpose — it keeps the pain/flare log structured and
+/// screen-reader-friendly without a free-text location field. Anything that
+/// does not fit goes in [PainEntries.note]. `other` is the catch-all so the
+/// tag never blocks logging.
+enum PainRegion { pelvic, lowerAbdomen, lowerBack, legs, other }
+
+/// One day's endometriosis pain / flare record (schema v8, p7.5).
+///
+/// Keyed by `date` (one row per calendar day), like [DailyFlows] and
+/// [BbtEntries], and deliberately **not** linked to a [Periods] row — editing a
+/// period must never disturb what was logged for a day. A day with no pain is
+/// simply the absence of a row (the repository deletes on clear), so
+/// [intensity] is non-null: every stored row is a day the user marked pain on.
+///
+/// This is the first table to carry an **ordered severity** (`SymptomSeverity`,
+/// stored by enum name in `intensity`); p7.6 (PMDD) reuses that scale.
+@DataClassName('PainEntry')
+class PainEntries extends Table {
+  /// Calendar date, time-of-day zeroed on write. Primary key.
+  DateTimeColumn get date => dateTime()();
+
+  /// Ordered pain intensity, stored as the [SymptomSeverity] enum name (`mild` /
+  /// `moderate` / `severe` in practice; the repository never writes `none`).
+  TextColumn get intensity => textEnum<SymptomSeverity>()();
+
+  /// Optional coarse location, stored as the [PainRegion] enum name, or `null`.
+  TextColumn get region => textEnum<PainRegion>().nullable()();
+
+  /// Optional free-text note. Lives only in the SQLCipher-encrypted database and
+  /// is **never** placed in a notification (same rule as [Medications.notes]).
+  TextColumn get note => text().nullable()();
+
+  /// Whether the user marked this day a flare (a distinct bad episode), as
+  /// opposed to background pain. Drives the flare-vs-cycle-phase view.
+  BoolColumn get isFlare => boolean().withDefault(const Constant(false))();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {date};
 }
 
 /// A single recurring local reminder (schema v6, p1.7; generalised p4.1).

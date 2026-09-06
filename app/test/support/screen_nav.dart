@@ -24,7 +24,7 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 34 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 37 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -34,7 +34,8 @@ import 'harness.dart';
 /// not-enough-history state; p7.4 the PCOS screen in its correlation-view and
 /// not-enough-data states; p7.8 the birth-control recalibration explainer; p7.7
 /// the perimenopause screen in its transition-read + symptom-timeline and its
-/// thin-history states).
+/// thin-history states; p7.5 the endometriosis screen in its correlation-view
+/// and empty states and the pain-logging sheet).
 /// The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -254,6 +255,37 @@ Future<void> _seedPerimenopauseModeThinHistory(AppDatabase db) async {
   ).addPeriod(PeriodDraft(start: _daysAgo(12), end: _daysAgo(9)));
 }
 
+/// Endometriosis mode on, four periods 28 days apart (three completed cycles +
+/// the open one) and pain / flare days logged in the luteal phase across them,
+/// so the correlation view renders its fullest state (a chart + a named phase).
+Future<void> _seedEndometriosisModeWithFlares(AppDatabase db) async {
+  await DriftSettingsRepository(
+    db,
+  ).set(LifeStageMode.endometriosis.settingKey, 'true');
+  final periods = DriftPeriodRepository(db);
+  for (final ago in const [112, 84, 56, 28]) {
+    await periods.addPeriod(
+      PeriodDraft(start: _daysAgo(ago), end: _daysAgo(ago - 3)),
+    );
+  }
+  final pain = DriftPainRepository(db);
+  for (final ago in const [95, 93, 91, 67, 65, 63, 39, 37, 35]) {
+    await pain.setPain(
+      _daysAgo(ago),
+      intensity: SymptomSeverity.moderate,
+      region: PainRegion.pelvic,
+      isFlare: true,
+    );
+  }
+}
+
+/// Endometriosis mode on with nothing logged — the screen's empty state.
+Future<void> _seedEndometriosisModeEmpty(AppDatabase db) async {
+  await DriftSettingsRepository(
+    db,
+  ).set(LifeStageMode.endometriosis.settingKey, 'true');
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
@@ -281,6 +313,10 @@ Future<void> _openPcosScreen(WidgetTester tester) async {
 
 Future<void> _openPerimenopauseScreen(WidgetTester tester) async {
   await _openModeScreen(tester, 'Open Perimenopause');
+}
+
+Future<void> _openEndometriosisScreen(WidgetTester tester) async {
+  await _openModeScreen(tester, 'Open Endometriosis');
 }
 
 Future<void> _openPregnancySymptomsScreen(WidgetTester tester) async {
@@ -844,6 +880,58 @@ final List<Surface> screenSurfaces = <Surface>[
           find.widgetWithText(AppBar, 'After a birth-control change'),
           findsOneWidget,
         );
+        await check(tester);
+      },
+    );
+  }),
+
+  // p7.5 — endometriosis mode: the pain/flare correlation view in its fullest
+  // (chart + named phase) and empty states, plus the pain-logging sheet.
+  Surface('endometriosis_screen — pain & flare correlation', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await _seedEndometriosisModeWithFlares(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openEndometriosisScreen(tester);
+        expect(find.widgetWithText(AppBar, 'Endometriosis'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('endometriosis_screen — nothing logged yet', (tester, check) async {
+    final db = memoryDb();
+    await _seedEndometriosisModeEmpty(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openEndometriosisScreen(tester);
+        expect(find.widgetWithText(AppBar, 'Endometriosis'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('endometriosis_pain_sheet — log today\'s pain', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await _seedEndometriosisModeEmpty(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openEndometriosisScreen(tester);
+        await tester.tap(find.text("Log today's pain"));
+        await tester.pumpAndSettle();
+        expect(find.widgetWithText(AppBar, 'Log pain'), findsOneWidget);
         await check(tester);
       },
     );
