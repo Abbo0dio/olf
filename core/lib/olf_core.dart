@@ -41,6 +41,8 @@ export 'src/db/tables.dart'
         DailySymptomEntries,
         FlowIntensity,
         Medications,
+        PainEntries,
+        PainRegion,
         Periods,
         ReminderKind,
         Reminders,
@@ -60,6 +62,7 @@ export 'src/meds/medication_repository.dart';
 export 'src/modes/birth_control_recalibration.dart';
 export 'src/modes/cycle_phase_correlation.dart';
 export 'src/modes/daily_fertility_score.dart';
+export 'src/modes/endometriosis_events.dart';
 export 'src/modes/gestational_age.dart';
 export 'src/modes/life_stage_mode.dart';
 export 'src/modes/perimenopause_transition.dart';
@@ -69,6 +72,8 @@ export 'src/mucus/cervical_mucus.dart';
 export 'src/mucus/cervical_mucus_repository.dart';
 export 'src/mucus/drift_cervical_mucus_repository.dart';
 export 'src/mucus/fertile_window_signal.dart';
+export 'src/pain/drift_pain_repository.dart';
+export 'src/pain/pain_repository.dart';
 export 'src/period/drift_period_repository.dart';
 export 'src/period/period_repository.dart';
 export 'src/period/period_validation.dart';
@@ -97,4 +102,5 @@ export 'src/settings/drift_settings_repository.dart';
 export 'src/settings/settings_repository.dart';
 export 'src/symptom/drift_symptom_repository.dart';
 export 'src/symptom/symptom_repository.dart';
+export 'src/symptom/symptom_severity.dart';
 export 'src/symptom/symptom_validation.dart';

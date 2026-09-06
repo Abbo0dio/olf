@@ -92,6 +92,17 @@ void main() {
             enabled: const Value(true),
           ),
         );
+    await db
+        .into(db.painEntries)
+        .insert(
+          PainEntriesCompanion.insert(
+            date: DateTime.utc(2026, 1, 4),
+            intensity: SymptomSeverity.moderate,
+            region: const Value(PainRegion.pelvic),
+            note: const Value('worse in the evening'),
+            isFlare: const Value(true),
+          ),
+        );
   }
 
   test(

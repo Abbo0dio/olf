@@ -223,6 +223,28 @@ the write path that sets `source` on import / flips it back to `manual` on edit 
 
 `schemaVersion = 7`.
 
+## Schema v8 (p7.5)
+
+Adds **`pain_entries`** — the endometriosis pain / flare log. One row per calendar day
+(`date` PK), like `daily_flows` / `bbt_entries`, and not linked to a `periods` row. A day with
+no pain is the absence of a row; the repository rejects `SymptomSeverity.none` and deletes on
+clear.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `date` | INTEGER (date), **PK** | Calendar day, time-of-day zeroed on write. |
+| `intensity` | TEXT, **NOT NULL** | `SymptomSeverity` name — `mild` / `moderate` / `severe` in practice (`none` is never stored). olf's first *ordered* symptom scale; p7.6 (PMDD) reuses the enum. |
+| `region` | TEXT, nullable | `PainRegion` name (`pelvic` / `lowerAbdomen` / `lowerBack` / `legs` / `other`), or `NULL`. |
+| `note` | TEXT, nullable | Optional free text. Encrypted at rest like every column; never placed in a notification. |
+| `is_flare` | INTEGER (bool), default `0` | Whether the user marked the day a distinct flare. |
+| `created_at` / `updated_at` | INTEGER (datetime) | Audit stamps; `created_at` preserved across upserts. |
+
+Purely additive — a new table, nothing backfilled. `BackupService.tableOrder` and
+`RetentionService.deleteWhere` both gained `pain_entries`, so it round-trips through
+encrypted export/restore and ages out on the retention window like every other dated table.
+
+`schemaVersion = 8`.
+
 ## Migrations
 
 `MigrationStrategy.onUpgrade` runs the steps below in order. Every schema change:
@@ -240,11 +262,14 @@ the write path that sets `source` on import / flips it back to `manual` on edit 
 | `from < 5` (p1.6) | Creates `bbt_entries`, `cervical_mucus_entries` and `app_settings`. Purely additive — nothing is backfilled, existing rows are untouched. Verified by `core/test/db/fertility_migration_test.dart` (real on-disk v4 file with period + flow + symptom rows → upgrade → assert the three new tables exist, old rows intact, all three new repos usable). |
 | `from < 6` (p1.7) | Creates `medications`, `birth_control_entries` and `reminders`. Purely additive — nothing is backfilled, existing rows are untouched. Verified by `core/test/db/meds_migration_test.dart` (real on-disk v5 file with period + settings rows → upgrade → assert the three new tables exist, old rows intact, all three new repos usable, and `reminders` rejects a second row for the same `kind`). |
 | `from < 7 && to >= 7` (p6.1) | `m.addColumn` × 4: `source` (default `'manual'`) + `external_id` (nullable) on `daily_flows` and `bbt_entries`. First ALTER migration — the `addColumn` is guarded so it only touches a table an earlier step created in its *pre-v7* shape (`daily_flows` from v3, `bbt_entries` from v5); when `from` predates the table, the `createTable` above already builds it with the columns. The `to >= 7` guard keeps the single-step `migration_matrix_test` targets honest. Verified by `core/test/db/migration_matrix_test.dart` (v1..v6 → v7: schema matches the committed v7 snapshot, every pre-v7 row comes out `source = 'manual'` / `external_id` NULL, backup/restore round-trips at v7). |
+| `from < 8` (p7.5) | Creates `pain_entries`. Purely additive — nothing backfilled, existing rows untouched; no `to >=` guard (an extra *table* is tolerated at every intermediate target, unlike the v7 column add). Verified by `core/test/db/pain_migration_test.dart` (real on-disk v7 file → upgrade → assert `pain_entries` shape, old rows intact, table usable through `DriftPainRepository` incl. the ordered scale / region enum / note / flare flag) and `migration_matrix_test.dart` (v1..v7 → v8: schema matches the committed v8 snapshot, `pain_entries` present-and-empty, backup/restore round-trips a real pain row at v8). |
 
-drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) is still **not** wired up
-— the migration tests hand-build the old schema. Adopting the snapshot tooling is a tracked
-follow-up (`docs/plan/backlog.md`); a hand-rolled test has been enough for the three small
-additive migrations so far.
+Since p5.6, drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) **is** wired
+up: `core/drift_schemas/` holds a JSON snapshot per version and `core/test/db/generated/` the
+verifier helpers. History v1..v5 is reconstructed from the v6 anchor by
+`tool/dump_historical_schemas.dart`; v6 and every version after it (v7 ALTER, v8 additive) is
+its own real `schema dump`, listed in that script's `_dumpedVersions`. The per-feature
+`*_migration_test.dart` files still hand-build one old schema each, kept for context.
 
 ## Derived data — not stored (p1.3, p1.4)
 

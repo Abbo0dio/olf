@@ -38,17 +38,19 @@ be waived in CI.
         verifier helpers with
         `dart run drift_dev schema generate drift_schemas/ test/db/generated/`.
         Commit all of `core/drift_schemas/` and `core/test/db/generated/`.
-        Since v7 (p6.1, the first migration that ALTERs an existing table),
-        `dump_historical_schemas.dart` only reconstructs the additive-only
-        stretch v1..v5; v6 (the anchor) and every ALTER version (v7+) must be
-        their own real `schema dump`, never reconstructed.
+        History past v6 is frozen: `dump_historical_schemas.dart` only
+        reconstructs the additive-only stretch v1..v5 (from the v6 anchor).
+        v6 and **every version after it** — additive (v8, `pain_entries`) or
+        ALTER (v7, provenance columns) alike — must be its own real
+        `schema dump`, never reconstructed, and listed in that script's
+        `_dumpedVersions` so its presence is checked.
   - [ ] Extend `core/test/db/migration_matrix_test.dart`: add the new version to
-        the `from` loops (and, if it adds a table, to the `_tableCountAtVersion`
-        map in `tool/dump_historical_schemas.dart`), and seed representative rows
+        the `from` loops and the single-step loop, and seed representative rows
         in any new/altered table so the `v(old) → v(new)` path is covered with
-        data. A column-level change must assert the new columns' post-migration
-        values on pre-existing rows (v7: `source = 'manual'`, `external_id`
-        NULL).
+        data. A new table asserts present-and-empty from every earlier version
+        and usable through its repository (v8: `pain_entries`). A column-level
+        change must assert the new columns' post-migration values on
+        pre-existing rows (v7: `source = 'manual'`, `external_id` NULL).
   - [ ] The migration matrix and every per-feature `*_migration_test.dart` are
         green. A lossy or missing historical step is a real bug — fix the
         migration and add a test; do not adjust a snapshot to hide it.

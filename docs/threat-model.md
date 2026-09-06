@@ -23,7 +23,7 @@ What an adversary would want, roughly in order of sensitivity.
 
 | Asset | Where it lives | Why it matters |
 |---|---|---|
-| Cycle & health entries (periods, flow, symptoms, BBT, mucus, meds, pregnancy-loss / birth events) | `olf.db`, an SQLCipher-encrypted drift database in app-private storage | The core secret. Can imply pregnancy, pregnancy loss, contraception use, sexual activity, transition-related care. |
+| Cycle & health entries (periods, flow, symptoms, BBT, mucus, meds, pregnancy-loss / birth events, endometriosis pain / flare log incl. free-text pain notes) | `olf.db`, an SQLCipher-encrypted drift database in app-private storage | The core secret. Can imply pregnancy, pregnancy loss, contraception use, sexual activity, transition-related care, a chronic pain / endometriosis condition. |
 | The database encryption key | OS keystore via `flutter_secure_storage` (Android Keystore / iOS Keychain), never in the DB or prefs | Whoever has this can read `olf.db` directly, no PIN needed. |
 | PIN hash and decoy-PIN hash | `flutter_secure_storage` | Brute-forcing these bypasses the gate; the decoy hash also reveals that a decoy exists. |
 | Preferences (theme, pronouns, reminder settings, retention window) | unencrypted `SharedPreferences` / `NSUserDefaults` | Low sensitivity on their own, but pronouns and a tight retention window are weak signals. |
@@ -694,4 +694,36 @@ The CI guard requires an entry naming the current phase.
     withholding the forecast card past a long gap / 12+ months) is
     **presentation / weighting only** — `deriveCycles`, `CycleStats` and the
     predictor are unchanged.
+  No design changes required by this review.
+- **2026-09-06 — Phase 7 / p7.5 landing — reviewer: worker: 1.** Endometriosis
+  mode (pain / flare log + flare-vs-cycle-phase correlation). **This is the
+  phase's one schema change; no new adversary, trust boundary, data flow,
+  network path, dependency, permission, manifest / plist change, or CI gate
+  change.**
+  - **New asset — a `pain_entries` table** (schema v7 → v8): one row per day,
+    holding an ordered `SymptomSeverity` intensity, an optional `PainRegion`
+    tag, an optional **free-text pain note**, and a flare flag. It sits inside
+    the same SQLCipher-encrypted `olf.db` as every other health entry, in the
+    same app ↔ DB trust boundary, and is **encrypted at rest like every other
+    column**. Added to the Assets table's top row. The free-text note is the
+    only genuinely new *kind* of content (a per-day journal line about pain); it
+    is never placed in a notification (repository contract, mirrors
+    `medications.notes`) and never leaves the device.
+  - The migration is **purely additive** (`createTable`, nothing backfilled),
+    bundled with its `migration_matrix_test` extension (every historical version
+    → v8), a dedicated `pain_migration_test`, and a backup round-trip carrying a
+    real `pain_entries` row across the migration. `BackupService.tableOrder` and
+    `RetentionService.deleteWhere` both gained `pain_entries`, so the pain log is
+    covered by encrypted export/restore **and** by the retention auto-delete
+    sweep — it ages out on the user's configured window exactly like flow / BBT
+    / symptom rows.
+  - The **flare ↔ cycle-phase read** reuses the p7.4 `cyclePhaseCorrelations`
+    core unchanged (pure `core`, `DateTime.now()`-free, deterministic) over the
+    new pain rows and the derived cycles — recomputed on read, never stored,
+    like the p3 predictions and the other Phase 7 views. It emits only counts
+    and a descriptive "shows up most in X" / "no clear pattern" / "not enough
+    data" — no p-value, no causal or diagnostic language, no verdict (a content
+    test locks the copy; the not-a-medical-device line is on the screen).
+  - The new `SymptomSeverity` value object is pure `core` with no storage of its
+    own beyond the `pain_entries.intensity` column above; p7.6 will reuse it.
   No design changes required by this review.
