@@ -62,6 +62,7 @@ export 'src/modes/cycle_phase_correlation.dart';
 export 'src/modes/daily_fertility_score.dart';
 export 'src/modes/gestational_age.dart';
 export 'src/modes/life_stage_mode.dart';
+export 'src/modes/perimenopause_transition.dart';
 export 'src/modes/postpartum_cycle_return.dart';
 export 'src/modes/pregnancy_week_notes.dart';
 export 'src/mucus/cervical_mucus.dart';

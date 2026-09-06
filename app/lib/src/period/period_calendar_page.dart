@@ -19,6 +19,8 @@ import '../modes/birth_control_recalibration_providers.dart';
 import '../modes/birth_control_recalibration_screen.dart';
 import '../modes/modes_providers.dart';
 import '../modes/pcos_correlation_format.dart';
+import '../modes/perimenopause_format.dart';
+import '../modes/perimenopause_mode_providers.dart';
 import '../modes/postpartum_screen.dart';
 import '../mucus/mucus_providers.dart';
 import '../pregnancy/pregnancy_format.dart';
@@ -290,6 +292,22 @@ class _LoadedState extends ConsumerState<_Loaded> {
             .watch(lifeStageModeEnabledProvider(LifeStageMode.pcos))
             .valueOrNull ??
         false;
+    // p7.7: perimenopause mode softens the same cycle-card / prediction wording
+    // — longer, variable and skipped cycles are the expected signal here, not
+    // errors. Presentation only; `deriveCycles`, `CycleStats` and the predictor
+    // are untouched. When history shows a long gap / 12+ months since the last
+    // period, the forecast card is withheld (a plain note takes its place)
+    // rather than asserting a forecast built on pre-gap cycles.
+    final perimenopauseModeOn =
+        ref
+            .watch(lifeStageModeEnabledProvider(LifeStageMode.perimenopause))
+            .valueOrNull ??
+        false;
+    final perimenopauseRead = perimenopauseModeOn
+        ? ref.watch(perimenopauseTransitionProvider)
+        : null;
+    final perimenopauseGapSuppress =
+        perimenopauseRead?.longGapsBetweenCycles ?? false;
     final pregnancyState = ref.watch(pregnancyRecoveryStateProvider);
     final pregnancySince = ref.watch(mostRecentPregnancyEndProvider)?.date;
 
@@ -351,19 +369,31 @@ class _LoadedState extends ConsumerState<_Loaded> {
               onDismiss: () => dismissBirthControlRecalibration(ref),
             ),
           ],
-          if (prediction != null && !pregnancyModeOn && !bcRecalActive) ...[
+          if (perimenopauseGapSuppress) ...[
+            const SizedBox(height: 16),
+            const _PerimenopausePausedNote(),
+          ],
+          if (prediction != null &&
+              !pregnancyModeOn &&
+              !bcRecalActive &&
+              !perimenopauseGapSuppress) ...[
             const SizedBox(height: 16),
             _PredictionCard(
               prediction: prediction,
               observedFertileWindow: observedFertile,
               reduceSpoken: reduceSpoken,
               pcosMode: pcosModeOn,
+              perimenopauseMode: perimenopauseModeOn,
               onLogPeriodStart: _addPeriod,
             ),
           ],
           if (_periods.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _CycleStatsCard(stats: cycleStats, pcosMode: pcosModeOn),
+            _CycleStatsCard(
+              stats: cycleStats,
+              pcosMode: pcosModeOn,
+              perimenopauseMode: perimenopauseModeOn,
+            ),
           ],
           if (bbtPoints.length >= 2) ...[
             const SizedBox(height: 16),
@@ -403,6 +433,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
             onEdit: _edit,
             onDelete: _deleteFromHistory,
             pcosMode: pcosModeOn,
+            perimenopauseMode: perimenopauseModeOn,
           ),
           const SizedBox(height: 24),
           _RecentSymptoms(
@@ -778,6 +809,7 @@ class _History extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     this.pcosMode = false,
+    this.perimenopauseMode = false,
   });
 
   final List<Period> periods;
@@ -788,9 +820,10 @@ class _History extends StatelessWidget {
   final ValueChanged<Period> onEdit;
   final ValueChanged<Period> onDelete;
 
-  /// p7.4: soften the likely-gap length note (long gaps are expected in PCOS
-  /// mode).
+  /// p7.4 / p7.7: soften the likely-gap length note (long / skipped cycles are
+  /// expected in PCOS and perimenopause modes).
   final bool pcosMode;
+  final bool perimenopauseMode;
 
   @override
   Widget build(BuildContext context) {
@@ -818,6 +851,7 @@ class _History extends StatelessWidget {
                 ),
                 cycle: cycleByStart[dateOnly(period.startDate)],
                 pcosMode: pcosMode,
+                perimenopauseMode: perimenopauseMode,
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -908,11 +942,13 @@ class _HistoryRowDetail extends StatelessWidget {
     required this.periodLength,
     required this.cycle,
     this.pcosMode = false,
+    this.perimenopauseMode = false,
   });
 
   final String periodLength;
   final Cycle? cycle;
   final bool pcosMode;
+  final bool perimenopauseMode;
 
   @override
   Widget build(BuildContext context) {
@@ -924,7 +960,11 @@ class _HistoryRowDetail extends StatelessWidget {
         Text(periodLength),
         if (c != null)
           Text(
-            cycleLengthNote(c, pcosMode: pcosMode),
+            cycleLengthNote(
+              c,
+              pcosMode: pcosMode,
+              perimenopauseMode: perimenopauseMode,
+            ),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -944,6 +984,7 @@ class _PredictionCard extends StatelessWidget {
     required this.onLogPeriodStart,
     required this.reduceSpoken,
     this.pcosMode = false,
+    this.perimenopauseMode = false,
     this.observedFertileWindow,
   });
 
@@ -954,6 +995,11 @@ class _PredictionCard extends StatelessWidget {
   /// p7.4: append a wider-interval note (PCOS cycles vary more, so the range is
   /// wide and the estimate loose). The prediction itself is unchanged.
   final bool pcosMode;
+
+  /// p7.7: append a wider-interval note (cycle length gets more variable through
+  /// the perimenopause transition). The prediction itself is unchanged. When
+  /// history shows a long gap the card is withheld upstream instead.
+  final bool perimenopauseMode;
 
   /// Fertile window observed from this cycle's cervical-mucus notes (p1.6).
   /// Shown as an extra line alongside the statistical estimate when present.
@@ -1041,6 +1087,13 @@ class _PredictionCard extends StatelessWidget {
             style: theme.textTheme.bodySmall?.copyWith(color: onColor),
           ),
         ],
+        if (perimenopauseMode) ...[
+          const SizedBox(height: 4),
+          Text(
+            perimenopauseWiderIntervalNote,
+            style: theme.textTheme.bodySmall?.copyWith(color: onColor),
+          ),
+        ],
       ],
     );
   }
@@ -1094,7 +1147,11 @@ class _PredictionCard extends StatelessWidget {
         ? ''
         : 'Fertile signs from your notes '
               '${formatDateRange(observedFertileWindow!)}. ';
-    final widerNote = pcosMode ? ' $pcosWiderIntervalNote' : '';
+    final widerNote = pcosMode
+        ? ' $pcosWiderIntervalNote'
+        : perimenopauseMode
+        ? ' $perimenopauseWiderIntervalNote'
+        : '';
     return 'Next period estimated ${formatDateRange(prediction.nextPeriod)}, '
         'most likely ${formatDay(prediction.nextPeriodExpected)}. '
         'Fertile window estimated ${formatDateRange(prediction.fertileWindow)}. '
@@ -1223,13 +1280,19 @@ class _CorrectionNoticeState extends State<_CorrectionNotice> {
 /// Cycle-length and variability summary, shown once at least one period exists.
 /// Falls back to a "keep logging" nudge rather than assuming any cycle length.
 class _CycleStatsCard extends StatelessWidget {
-  const _CycleStatsCard({required this.stats, this.pcosMode = false});
+  const _CycleStatsCard({
+    required this.stats,
+    this.pcosMode = false,
+    this.perimenopauseMode = false,
+  });
 
   final CycleStats stats;
 
-  /// p7.4: soften the likely-gap / irregular wording (long, variable cycles are
-  /// expected in PCOS mode). The [stats] themselves are unchanged.
+  /// p7.4 / p7.7: soften the likely-gap / irregular wording (long, variable and
+  /// skipped cycles are expected in PCOS and perimenopause modes). The [stats]
+  /// themselves are unchanged.
   final bool pcosMode;
+  final bool perimenopauseMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1237,13 +1300,16 @@ class _CycleStatsCard extends StatelessWidget {
     final typical = stats.typicalCycleLength;
     final hasRange = stats.shortestCycleLength != stats.longestCycleLength;
     final regularityLabel =
-        pcosMode && stats.regularity == CycleRegularity.irregular
+        (pcosMode || perimenopauseMode) &&
+            stats.regularity == CycleRegularity.irregular
         ? '${stats.regularity.label} — expected in this mode'
         : stats.regularity.label;
 
     return Semantics(
       container: true,
-      label: 'Cycle insights. ${summariseStats(stats, pcosMode: pcosMode)}',
+      label:
+          'Cycle insights. '
+          '${summariseStats(stats, pcosMode: pcosMode, perimenopauseMode: perimenopauseMode)}',
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
@@ -1288,6 +1354,8 @@ class _CycleStatsCard extends StatelessWidget {
                 Text(
                   pcosMode
                       ? pcosSoftenedGapLine
+                      : perimenopauseMode
+                      ? perimenopauseSoftenedGapLine
                       : 'A long gap is set aside — a period may not have been '
                             'logged then.',
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -1297,7 +1365,11 @@ class _CycleStatsCard extends StatelessWidget {
               ],
             ] else
               Text(
-                summariseStats(stats, pcosMode: pcosMode),
+                summariseStats(
+                  stats,
+                  pcosMode: pcosMode,
+                  perimenopauseMode: perimenopauseMode,
+                ),
                 style: theme.textTheme.bodyMedium,
               ),
           ],
@@ -1479,6 +1551,50 @@ class _RecalibrationNote extends StatelessWidget {
               BirthControlRecalibrationContent.notMedicalDeviceLine,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSecondaryContainer,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// p7.7: shown in place of the forecast card while perimenopause mode is on and
+/// the logged history shows a long gap / 12+ months since the last period. A
+/// plain, non-alarming note — longer and skipped cycles are the expected signal
+/// in this stage, so the estimate pauses rather than asserting a forecast built
+/// on pre-gap cycles.
+class _PerimenopausePausedNote extends StatelessWidget {
+  const _PerimenopausePausedNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      container: true,
+      label: perimenopauseForecastSuppressedNote,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.timelapse_outlined,
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                perimenopauseForecastSuppressedNote,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSecondaryContainer,
+                ),
               ),
             ),
           ],

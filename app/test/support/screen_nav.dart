@@ -24,7 +24,7 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 31 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 34 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -32,7 +32,9 @@ import 'harness.dart';
 /// pregnancy week view in its needs-a-start-date and populated states; p7.2b the
 /// pregnancy symptom-logging screen; p7.3 the TTC fertility-score screen and its
 /// not-enough-history state; p7.4 the PCOS screen in its correlation-view and
-/// not-enough-data states; p7.8 the birth-control recalibration explainer).
+/// not-enough-data states; p7.8 the birth-control recalibration explainer; p7.7
+/// the perimenopause screen in its transition-read + symptom-timeline and its
+/// thin-history states).
 /// The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -210,6 +212,48 @@ Future<void> _seedPcosModeNotEnoughData(AppDatabase db) async {
   await symptoms.setSymptom(_daysAgo(2), cramps.id, present: true);
 }
 
+/// Perimenopause mode on, a history whose cycle-length spread widens over time
+/// (no missed-entry gap), and a perimenopause-relevant built-in symptom
+/// ("Low mood") logged on luteal-phase days across the recent cycles — so the
+/// mode screen renders its fullest state: a "becoming less regular" transition
+/// read plus a symptom timeline with a chart.
+Future<void> _seedPerimenopauseMode(AppDatabase db) async {
+  await DriftSettingsRepository(
+    db,
+  ).set(LifeStageMode.perimenopause.settingKey, 'true');
+  final periods = DriftPeriodRepository(db);
+  // Oldest → newest, most recent 8 days ago. Earlier gaps tight (27–29),
+  // later gaps wide (24–41) — spread widens, nothing over 45 days.
+  var start = _daysAgo(8 + 28 + 27 + 29 + 28 + 41 + 24 + 39);
+  for (final gap in const [28, 27, 29, 28, 41, 24, 39]) {
+    await periods.addPeriod(
+      PeriodDraft(start: start, end: start.add(const Duration(days: 3))),
+    );
+    start = start.add(Duration(days: gap));
+  }
+  await periods.addPeriod(
+    PeriodDraft(start: start, end: start.add(const Duration(days: 3))),
+  );
+  final symptoms = DriftSymptomRepository(db);
+  final lowMood = (await symptoms.activeTypes()).firstWhere(
+    (t) => t.name == 'Low mood',
+  );
+  for (var ago = 12; ago <= 120; ago += 12) {
+    await symptoms.setSymptom(_daysAgo(ago), lowMood.id, present: true);
+  }
+}
+
+/// Perimenopause mode on with a single logged period — not enough history, so
+/// the transition read is the "keep logging" state and the timeline is empty.
+Future<void> _seedPerimenopauseModeThinHistory(AppDatabase db) async {
+  await DriftSettingsRepository(
+    db,
+  ).set(LifeStageMode.perimenopause.settingKey, 'true');
+  await DriftPeriodRepository(
+    db,
+  ).addPeriod(PeriodDraft(start: _daysAgo(12), end: _daysAgo(9)));
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
@@ -233,6 +277,10 @@ Future<void> _openTtcScreen(WidgetTester tester) async {
 
 Future<void> _openPcosScreen(WidgetTester tester) async {
   await _openModeScreen(tester, 'Open PCOS');
+}
+
+Future<void> _openPerimenopauseScreen(WidgetTester tester) async {
+  await _openModeScreen(tester, 'Open Perimenopause');
 }
 
 Future<void> _openPregnancySymptomsScreen(WidgetTester tester) async {
@@ -658,6 +706,38 @@ final List<Surface> screenSurfaces = <Surface>[
       body: () async {
         await _openPcosScreen(tester);
         expect(find.widgetWithText(AppBar, 'PCOS'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('perimenopause_screen — transition read + symptom timeline', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await _seedPerimenopauseMode(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPerimenopauseScreen(tester);
+        expect(find.widgetWithText(AppBar, 'Perimenopause'), findsOneWidget);
+        expect(find.text('Low mood'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('perimenopause_screen — thin history', (tester, check) async {
+    final db = memoryDb();
+    await _seedPerimenopauseModeThinHistory(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPerimenopauseScreen(tester);
+        expect(find.widgetWithText(AppBar, 'Perimenopause'), findsOneWidget);
         await check(tester);
       },
     );
