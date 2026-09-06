@@ -363,4 +363,13 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   and hang the offer + an "open pregnancy" state on it, which p7.3 (TTC → conceived) and the
   postpartum chain would also benefit from. Deferred as disproportionate to a single
   enable-offer. — noted by worker: 1 during p7.2 negotiation.
+- **p7.3 (2026-09-06) — `thermal_shift.dart` operates on the reading sequence, not calendar
+  days.** The 3-over-6 post-ovulatory shift detector walks the ordered list of logged BBT
+  readings; it does not require the baseline-6 and elevated-3 to fall within a bounded date
+  span. A multi-day gap in logging can put the coverline on stale readings and mistime (or
+  misfire) the detected shift, which then feeds `dailyFertilityScore`'s ovulation re-centring.
+  `// SHORTCUT:` marked at `thermalShift(...)`. Acceptable because near-daily BBT logging is the
+  norm for someone charting to conceive (the only caller). Upgrade path: require the baseline +
+  elevated runs to sit inside a bounded span, or interpolate missing days, before trusting a
+  run. — noted by worker: 1 during p7.3.
 - (add more here)
