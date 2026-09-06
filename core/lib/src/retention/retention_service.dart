@@ -57,6 +57,7 @@ class RetentionService {
     'bbt_entries': 'date < ?',
     'cervical_mucus_entries': 'date < ?',
     'pain_entries': 'date < ?',
+    'pmdd_ratings': 'date < ?',
     'cycle_events': 'date < ?',
     'periods': 'COALESCE(end_date, start_date) < ?',
     'birth_control_entries': 'ended_on IS NOT NULL AND ended_on < ?',

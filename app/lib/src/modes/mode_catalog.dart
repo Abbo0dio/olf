@@ -41,8 +41,8 @@ import 'package:olf_core/olf_core.dart';
       LifeStageMode.pmdd => (
         title: 'PMDD',
         description:
-            'A quick daily rating and a chart of it across your cycles. '
-            'Coming soon.',
+            'A quick daily rating, an overlay of it across your cycles, and a '
+            'plain luteal-vs-rest-of-cycle read.',
       ),
       LifeStageMode.perimenopause => (
         title: 'Perimenopause',
@@ -59,17 +59,19 @@ import 'package:olf_core/olf_core.dart';
       ),
     };
 
-/// Whether this mode has an interactive screen in the current build. Postpartum
-/// (p7.1), pregnancy (p7.2a), TTC (p7.3), PCOS (p7.4), endometriosis (p7.5),
-/// perimenopause (p7.7) and birth-control change (p7.8) do; the others can still
-/// be toggled so their state is ready when their slice lands.
+/// Whether this mode has an interactive screen in the current build. As of p7.6
+/// every Phase 7 mode does — postpartum (p7.1), pregnancy (p7.2a), TTC (p7.3),
+/// PCOS (p7.4), endometriosis (p7.5), PMDD (p7.6), perimenopause (p7.7) and
+/// birth-control change (p7.8). Kept as a predicate (not a constant `true`) so
+/// the wiring stays explicit and a future mode without a screen is a one-line
+/// change here.
 bool modeHasScreen(LifeStageMode mode) => switch (mode) {
   LifeStageMode.postpartum ||
   LifeStageMode.pregnancy ||
   LifeStageMode.ttc ||
   LifeStageMode.pcos ||
   LifeStageMode.endometriosis ||
+  LifeStageMode.pmdd ||
   LifeStageMode.perimenopause ||
   LifeStageMode.birthControlSwitch => true,
-  _ => false,
 };

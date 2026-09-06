@@ -24,7 +24,7 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 37 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 40 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -35,7 +35,8 @@ import 'harness.dart';
 /// not-enough-data states; p7.8 the birth-control recalibration explainer; p7.7
 /// the perimenopause screen in its transition-read + symptom-timeline and its
 /// thin-history states; p7.5 the endometriosis screen in its correlation-view
-/// and empty states and the pain-logging sheet).
+/// and empty states and the pain-logging sheet; p7.6 the PMDD screen in its
+/// overlay-view and empty states and the daily rating sheet).
 /// The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -286,6 +287,38 @@ Future<void> _seedEndometriosisModeEmpty(AppDatabase db) async {
   ).set(LifeStageMode.endometriosis.settingKey, 'true');
 }
 
+/// PMDD mode on, four periods 28 days apart (three completed cycles + the open
+/// one) and higher-rated days in the luteal phase across them, so the overlay
+/// renders its fullest state (a chart + the "runs higher in luteal" read).
+Future<void> _seedPmddModeWithRatings(AppDatabase db) async {
+  await DriftSettingsRepository(db).set(LifeStageMode.pmdd.settingKey, 'true');
+  final periods = DriftPeriodRepository(db);
+  for (final ago in const [112, 84, 56, 28]) {
+    await periods.addPeriod(
+      PeriodDraft(start: _daysAgo(ago), end: _daysAgo(ago - 3)),
+    );
+  }
+  final pmdd = DriftPmddRatingRepository(db);
+  // Luteal days (~d17..d28) of each completed cycle, plus one milder day.
+  for (final ago in const [95, 93, 91, 67, 65, 63, 39, 37, 35]) {
+    await pmdd.rateDay(_daysAgo(ago), const {
+      PmddSymptom.irritability: SymptomSeverity.severe,
+      PmddSymptom.lowMood: SymptomSeverity.moderate,
+      PmddSymptom.bloating: SymptomSeverity.none,
+    });
+  }
+  for (final ago in const [104, 76, 48]) {
+    await pmdd.rateDay(_daysAgo(ago), const {
+      PmddSymptom.fatigue: SymptomSeverity.mild,
+    });
+  }
+}
+
+/// PMDD mode on with nothing rated — the screen's empty state.
+Future<void> _seedPmddModeEmpty(AppDatabase db) async {
+  await DriftSettingsRepository(db).set(LifeStageMode.pmdd.settingKey, 'true');
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
@@ -317,6 +350,10 @@ Future<void> _openPerimenopauseScreen(WidgetTester tester) async {
 
 Future<void> _openEndometriosisScreen(WidgetTester tester) async {
   await _openModeScreen(tester, 'Open Endometriosis');
+}
+
+Future<void> _openPmddScreen(WidgetTester tester) async {
+  await _openModeScreen(tester, 'Open PMDD');
 }
 
 Future<void> _openPregnancySymptomsScreen(WidgetTester tester) async {
@@ -932,6 +969,52 @@ final List<Surface> screenSurfaces = <Surface>[
         await tester.tap(find.text("Log today's pain"));
         await tester.pumpAndSettle();
         expect(find.widgetWithText(AppBar, 'Log pain'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  // p7.6 — PMDD mode: the cycle-overlay view in its fullest (chart + luteal
+  // read) and empty states, plus the daily rating sheet.
+  Surface('pmdd_screen — ratings across your cycle', (tester, check) async {
+    final db = memoryDb();
+    await _seedPmddModeWithRatings(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPmddScreen(tester);
+        expect(find.widgetWithText(AppBar, 'PMDD'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('pmdd_screen — nothing rated yet', (tester, check) async {
+    final db = memoryDb();
+    await _seedPmddModeEmpty(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPmddScreen(tester);
+        expect(find.widgetWithText(AppBar, 'PMDD'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('pmdd_rating_sheet — rate today', (tester, check) async {
+    final db = memoryDb();
+    await _seedPmddModeEmpty(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPmddScreen(tester);
+        await tester.tap(find.text('Rate today'));
+        await tester.pumpAndSettle();
+        expect(find.widgetWithText(AppBar, 'Rate today'), findsOneWidget);
         await check(tester);
       },
     );

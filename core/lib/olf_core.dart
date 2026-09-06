@@ -44,10 +44,13 @@ export 'src/db/tables.dart'
         PainEntries,
         PainRegion,
         Periods,
+        PmddRatings,
+        PmddSymptom,
         ReminderKind,
         Reminders,
         SymptomTypes,
-        kBuiltInSymptomNames;
+        kBuiltInSymptomNames,
+        pmddSymptomLabel;
 export 'src/flow/daily_flow_repository.dart';
 export 'src/flow/drift_daily_flow_repository.dart';
 export 'src/health/health_platform_gateway.dart';
@@ -66,6 +69,7 @@ export 'src/modes/endometriosis_events.dart';
 export 'src/modes/gestational_age.dart';
 export 'src/modes/life_stage_mode.dart';
 export 'src/modes/perimenopause_transition.dart';
+export 'src/modes/pmdd_overlay.dart';
 export 'src/modes/postpartum_cycle_return.dart';
 export 'src/modes/pregnancy_week_notes.dart';
 export 'src/mucus/cervical_mucus.dart';
@@ -74,6 +78,8 @@ export 'src/mucus/drift_cervical_mucus_repository.dart';
 export 'src/mucus/fertile_window_signal.dart';
 export 'src/pain/drift_pain_repository.dart';
 export 'src/pain/pain_repository.dart';
+export 'src/pmdd/drift_pmdd_rating_repository.dart';
+export 'src/pmdd/pmdd_rating_repository.dart';
 export 'src/period/drift_period_repository.dart';
 export 'src/period/period_repository.dart';
 export 'src/period/period_validation.dart';

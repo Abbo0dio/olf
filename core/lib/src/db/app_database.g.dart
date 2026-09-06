@@ -4709,6 +4709,382 @@ class PainEntriesCompanion extends UpdateCompanion<PainEntry> {
   }
 }
 
+class $PmddRatingsTable extends PmddRatings
+    with TableInfo<$PmddRatingsTable, PmddRating> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PmddRatingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<PmddSymptom, String> item =
+      GeneratedColumn<String>(
+        'item',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<PmddSymptom>($PmddRatingsTable.$converteritem);
+  @override
+  late final GeneratedColumnWithTypeConverter<SymptomSeverity, String> rating =
+      GeneratedColumn<String>(
+        'rating',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<SymptomSeverity>($PmddRatingsTable.$converterrating);
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    date,
+    item,
+    rating,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'pmdd_ratings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PmddRating> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {date, item};
+  @override
+  PmddRating map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PmddRating(
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      item: $PmddRatingsTable.$converteritem.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}item'],
+        )!,
+      ),
+      rating: $PmddRatingsTable.$converterrating.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}rating'],
+        )!,
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PmddRatingsTable createAlias(String alias) {
+    return $PmddRatingsTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<PmddSymptom, String, String> $converteritem =
+      const EnumNameConverter<PmddSymptom>(PmddSymptom.values);
+  static JsonTypeConverter2<SymptomSeverity, String, String> $converterrating =
+      const EnumNameConverter<SymptomSeverity>(SymptomSeverity.values);
+}
+
+class PmddRating extends DataClass implements Insertable<PmddRating> {
+  /// Calendar date, time-of-day zeroed on write.
+  final DateTime date;
+
+  /// Which rated item this row is, stored as the [PmddSymptom] enum name.
+  final PmddSymptom item;
+
+  /// The rating on the shared ordered scale, stored as the [SymptomSeverity]
+  /// enum name — `none` included ("rated, nothing today").
+  final SymptomSeverity rating;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const PmddRating({
+    required this.date,
+    required this.item,
+    required this.rating,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['date'] = Variable<DateTime>(date);
+    {
+      map['item'] = Variable<String>(
+        $PmddRatingsTable.$converteritem.toSql(item),
+      );
+    }
+    {
+      map['rating'] = Variable<String>(
+        $PmddRatingsTable.$converterrating.toSql(rating),
+      );
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  PmddRatingsCompanion toCompanion(bool nullToAbsent) {
+    return PmddRatingsCompanion(
+      date: Value(date),
+      item: Value(item),
+      rating: Value(rating),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory PmddRating.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PmddRating(
+      date: serializer.fromJson<DateTime>(json['date']),
+      item: $PmddRatingsTable.$converteritem.fromJson(
+        serializer.fromJson<String>(json['item']),
+      ),
+      rating: $PmddRatingsTable.$converterrating.fromJson(
+        serializer.fromJson<String>(json['rating']),
+      ),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'date': serializer.toJson<DateTime>(date),
+      'item': serializer.toJson<String>(
+        $PmddRatingsTable.$converteritem.toJson(item),
+      ),
+      'rating': serializer.toJson<String>(
+        $PmddRatingsTable.$converterrating.toJson(rating),
+      ),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  PmddRating copyWith({
+    DateTime? date,
+    PmddSymptom? item,
+    SymptomSeverity? rating,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => PmddRating(
+    date: date ?? this.date,
+    item: item ?? this.item,
+    rating: rating ?? this.rating,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  PmddRating copyWithCompanion(PmddRatingsCompanion data) {
+    return PmddRating(
+      date: data.date.present ? data.date.value : this.date,
+      item: data.item.present ? data.item.value : this.item,
+      rating: data.rating.present ? data.rating.value : this.rating,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PmddRating(')
+          ..write('date: $date, ')
+          ..write('item: $item, ')
+          ..write('rating: $rating, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(date, item, rating, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PmddRating &&
+          other.date == this.date &&
+          other.item == this.item &&
+          other.rating == this.rating &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class PmddRatingsCompanion extends UpdateCompanion<PmddRating> {
+  final Value<DateTime> date;
+  final Value<PmddSymptom> item;
+  final Value<SymptomSeverity> rating;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const PmddRatingsCompanion({
+    this.date = const Value.absent(),
+    this.item = const Value.absent(),
+    this.rating = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PmddRatingsCompanion.insert({
+    required DateTime date,
+    required PmddSymptom item,
+    required SymptomSeverity rating,
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : date = Value(date),
+       item = Value(item),
+       rating = Value(rating);
+  static Insertable<PmddRating> custom({
+    Expression<DateTime>? date,
+    Expression<String>? item,
+    Expression<String>? rating,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (date != null) 'date': date,
+      if (item != null) 'item': item,
+      if (rating != null) 'rating': rating,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PmddRatingsCompanion copyWith({
+    Value<DateTime>? date,
+    Value<PmddSymptom>? item,
+    Value<SymptomSeverity>? rating,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return PmddRatingsCompanion(
+      date: date ?? this.date,
+      item: item ?? this.item,
+      rating: rating ?? this.rating,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (item.present) {
+      map['item'] = Variable<String>(
+        $PmddRatingsTable.$converteritem.toSql(item.value),
+      );
+    }
+    if (rating.present) {
+      map['rating'] = Variable<String>(
+        $PmddRatingsTable.$converterrating.toSql(rating.value),
+      );
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PmddRatingsCompanion(')
+          ..write('date: $date, ')
+          ..write('item: $item, ')
+          ..write('rating: $rating, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4727,6 +5103,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $BirthControlEntriesTable(this);
   late final $RemindersTable reminders = $RemindersTable(this);
   late final $PainEntriesTable painEntries = $PainEntriesTable(this);
+  late final $PmddRatingsTable pmddRatings = $PmddRatingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4744,6 +5121,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     birthControlEntries,
     reminders,
     painEntries,
+    pmddRatings,
   ];
 }
 
@@ -7288,6 +7666,208 @@ typedef $$PainEntriesTableProcessedTableManager =
       PainEntry,
       PrefetchHooks Function()
     >;
+typedef $$PmddRatingsTableCreateCompanionBuilder =
+    PmddRatingsCompanion Function({
+      required DateTime date,
+      required PmddSymptom item,
+      required SymptomSeverity rating,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$PmddRatingsTableUpdateCompanionBuilder =
+    PmddRatingsCompanion Function({
+      Value<DateTime> date,
+      Value<PmddSymptom> item,
+      Value<SymptomSeverity> rating,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$PmddRatingsTableFilterComposer
+    extends Composer<_$AppDatabase, $PmddRatingsTable> {
+  $$PmddRatingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<PmddSymptom, PmddSymptom, String> get item =>
+      $composableBuilder(
+        column: $table.item,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnWithTypeConverterFilters<SymptomSeverity, SymptomSeverity, String>
+  get rating => $composableBuilder(
+    column: $table.rating,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PmddRatingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PmddRatingsTable> {
+  $$PmddRatingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get item => $composableBuilder(
+    column: $table.item,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rating => $composableBuilder(
+    column: $table.rating,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PmddRatingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PmddRatingsTable> {
+  $$PmddRatingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<PmddSymptom, String> get item =>
+      $composableBuilder(column: $table.item, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<SymptomSeverity, String> get rating =>
+      $composableBuilder(column: $table.rating, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$PmddRatingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PmddRatingsTable,
+          PmddRating,
+          $$PmddRatingsTableFilterComposer,
+          $$PmddRatingsTableOrderingComposer,
+          $$PmddRatingsTableAnnotationComposer,
+          $$PmddRatingsTableCreateCompanionBuilder,
+          $$PmddRatingsTableUpdateCompanionBuilder,
+          (
+            PmddRating,
+            BaseReferences<_$AppDatabase, $PmddRatingsTable, PmddRating>,
+          ),
+          PmddRating,
+          PrefetchHooks Function()
+        > {
+  $$PmddRatingsTableTableManager(_$AppDatabase db, $PmddRatingsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PmddRatingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PmddRatingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PmddRatingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<DateTime> date = const Value.absent(),
+                Value<PmddSymptom> item = const Value.absent(),
+                Value<SymptomSeverity> rating = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PmddRatingsCompanion(
+                date: date,
+                item: item,
+                rating: rating,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required DateTime date,
+                required PmddSymptom item,
+                required SymptomSeverity rating,
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PmddRatingsCompanion.insert(
+                date: date,
+                item: item,
+                rating: rating,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PmddRatingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PmddRatingsTable,
+      PmddRating,
+      $$PmddRatingsTableFilterComposer,
+      $$PmddRatingsTableOrderingComposer,
+      $$PmddRatingsTableAnnotationComposer,
+      $$PmddRatingsTableCreateCompanionBuilder,
+      $$PmddRatingsTableUpdateCompanionBuilder,
+      (
+        PmddRating,
+        BaseReferences<_$AppDatabase, $PmddRatingsTable, PmddRating>,
+      ),
+      PmddRating,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7316,4 +7896,6 @@ class $AppDatabaseManager {
       $$RemindersTableTableManager(_db, _db.reminders);
   $$PainEntriesTableTableManager get painEntries =>
       $$PainEntriesTableTableManager(_db, _db.painEntries);
+  $$PmddRatingsTableTableManager get pmddRatings =>
+      $$PmddRatingsTableTableManager(_db, _db.pmddRatings);
 }

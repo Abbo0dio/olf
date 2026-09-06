@@ -50,8 +50,9 @@ const Map<int, int> _tableCountAtVersion = {1: 1, 2: 2, 3: 3, 4: 5, 5: 8};
 
 /// Schema versions that must exist as their own real `drift_dev schema dump`:
 /// the v6 anchor, every ALTER version (v7), and every additive version past the
-/// frozen v1..v5 stretch (v8 adds `pain_entries`). Checked, never rebuilt.
-const List<int> _dumpedVersions = [6, 7, 8];
+/// frozen v1..v5 stretch (v8 adds `pain_entries`, v9 adds `pmdd_ratings`).
+/// Checked, never rebuilt.
+const List<int> _dumpedVersions = [6, 7, 8, 9];
 
 void main() {
   final schemaDir = Directory('drift_schemas');

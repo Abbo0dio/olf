@@ -404,3 +404,60 @@ class Reminders extends Table {
   @override
   List<String> get customConstraints => ['UNIQUE (kind)'];
 }
+
+/// The fixed set of things a PMDD daily rating covers (schema v9, p7.6).
+///
+/// Deliberately small and **hard-coded** — v1 has no user-configurable rating
+/// items or scale (noted as a follow-up). Plain, gender-neutral, non-clinical
+/// names, the same tone bar as `kBuiltInSymptomNames` / `kPerimenopauseSymptomNames`.
+/// Stored by enum name in [PmddRatings.item]; [labelFor] gives the UI string.
+enum PmddSymptom {
+  irritability,
+  moodSwings,
+  anxiety,
+  lowMood,
+  tearfulness,
+  fatigue,
+  bloating,
+  chestTenderness,
+}
+
+/// Sentence-case label for a [PmddSymptom], for pickers and screen readers.
+String pmddSymptomLabel(PmddSymptom s) => switch (s) {
+  PmddSymptom.irritability => 'Irritability',
+  PmddSymptom.moodSwings => 'Mood swings',
+  PmddSymptom.anxiety => 'Anxiety',
+  PmddSymptom.lowMood => 'Low mood',
+  PmddSymptom.tearfulness => 'Tearfulness',
+  PmddSymptom.fatigue => 'Fatigue',
+  PmddSymptom.bloating => 'Bloating',
+  PmddSymptom.chestTenderness => 'Chest tenderness',
+};
+
+/// One `(day, item)` PMDD rating (schema v9, p7.6).
+///
+/// Keyed by `(date, item)` — several rows per calendar day, one per rated
+/// [PmddSymptom] — and, like [PainEntries], deliberately **not** linked to a
+/// [Periods] row. Unlike the pain log, [SymptomSeverity.none] **is** a stored
+/// value here: a PMDD rating is filled in every day it is opened, and "rated,
+/// nothing today" is a real data point (the follicular-relief half of the
+/// pattern). The repository still deletes the day's rows on an explicit clear.
+@DataClassName('PmddRating')
+class PmddRatings extends Table {
+  /// Calendar date, time-of-day zeroed on write.
+  DateTimeColumn get date => dateTime()();
+
+  /// Which rated item this row is, stored as the [PmddSymptom] enum name.
+  TextColumn get item => textEnum<PmddSymptom>()();
+
+  /// The rating on the shared ordered scale, stored as the [SymptomSeverity]
+  /// enum name — `none` included ("rated, nothing today").
+  TextColumn get rating => textEnum<SymptomSeverity>()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {date, item};
+}

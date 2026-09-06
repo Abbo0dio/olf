@@ -103,6 +103,26 @@ void main() {
             isFlare: const Value(true),
           ),
         );
+    // Two PMDD ratings on one day, one of them an explicit `none` — this table
+    // stores "rated, nothing today" as a real row, unlike the others.
+    await db
+        .into(db.pmddRatings)
+        .insert(
+          PmddRatingsCompanion.insert(
+            date: DateTime.utc(2026, 1, 4),
+            item: PmddSymptom.irritability,
+            rating: SymptomSeverity.severe,
+          ),
+        );
+    await db
+        .into(db.pmddRatings)
+        .insert(
+          PmddRatingsCompanion.insert(
+            date: DateTime.utc(2026, 1, 4),
+            item: PmddSymptom.bloating,
+            rating: SymptomSeverity.none,
+          ),
+        );
   }
 
   test(
