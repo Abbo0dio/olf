@@ -104,6 +104,19 @@ void main() {
       expect(entries.single.symptomTypeId, acne.id);
     });
 
+    test('allTypes includes archived entries; activeTypes does not', () async {
+      final acne = (await repo.activeTypes()).firstWhere(
+        (t) => t.name == 'Acne',
+      );
+      await repo.archiveType(acne.id);
+
+      final all = await repo.allTypes();
+      final active = await repo.activeTypes();
+      expect(all.any((t) => t.id == acne.id), isTrue);
+      expect(active.any((t) => t.id == acne.id), isFalse);
+      expect(all.length, active.length + 1);
+    });
+
     test('an archived name can be reused for a new custom symptom', () async {
       final types = await repo.activeTypes();
       final acne = types.firstWhere((t) => t.name == 'Acne');

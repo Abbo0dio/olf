@@ -78,9 +78,10 @@ class BackupController {
     await _sweepRetention?.call();
     final document = await _service.export();
     final bytes = await BackupCipher.seal(document, passphrase);
-    final path = await _files.writeBackup(
+    final path = await _files.saveFile(
       bytes,
       suggestedName: _suggestedFileName(document.createdAt),
+      dialogTitle: 'Save your olf backup',
     );
     return path == null ? const ExportCancelled() : ExportSaved(path);
   }

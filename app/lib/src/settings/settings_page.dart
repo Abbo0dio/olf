@@ -8,6 +8,7 @@ import '../a11y/spoken_detail.dart';
 import '../appearance/app_icon.dart';
 import '../appearance/app_icon_providers.dart';
 import '../backup/backup_page.dart';
+import '../export/export_report_screen.dart';
 import '../health/conflict_review_screen.dart';
 import '../health/health_import.dart';
 import '../health/health_providers.dart';
@@ -284,8 +285,21 @@ class SettingsPage extends ConsumerWidget {
               context,
             ).push(MaterialPageRoute<void>(builder: (_) => const BackupPage())),
           ),
+          const _SectionHeader('Apps & export'),
+          ListTile(
+            leading: const Icon(Icons.description_outlined),
+            title: const Text('Export report for a doctor'),
+            subtitle: const Text(
+              'A print-friendly PDF of your cycles, symptoms and temperature to '
+              'share with a clinician. Made on your device.',
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ExportReportScreen(),
+              ),
+            ),
+          ),
           if (healthAvailable) ...[
-            const _SectionHeader('Apps & export'),
             SwitchListTile(
               secondary: const Icon(Icons.sync_outlined),
               value: healthConnected,

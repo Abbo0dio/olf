@@ -36,19 +36,24 @@ void main() {
     externalId: id,
   );
 
-  testWidgets('the tile is hidden when no health platform is available', (
-    tester,
-  ) async {
-    await pumpOlf(
-      tester,
-      overrides: [dbOverride(memoryDb())],
-      body: () async {
-        await openSettings(tester);
-        expect(find.text('Apps & export'), findsNothing);
-        expect(find.text('Connect a health app'), findsNothing);
-      },
-    );
-  });
+  testWidgets(
+    'the health tile is hidden when no health platform is available',
+    (tester) async {
+      await pumpOlf(
+        tester,
+        overrides: [dbOverride(memoryDb())],
+        body: () async {
+          await openSettings(tester);
+          // The "Apps & export" section still shows — it also holds the doctor
+          // report export (p6.5), which does not depend on a health platform —
+          // but the health-connect tile itself is gone.
+          expect(find.text('Apps & export'), findsOneWidget);
+          expect(find.text('Export report for a doctor'), findsOneWidget);
+          expect(find.text('Connect a health app'), findsNothing);
+        },
+      );
+    },
+  );
 
   testWidgets('default state is off', (tester) async {
     await pumpOlf(

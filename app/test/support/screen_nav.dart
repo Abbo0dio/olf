@@ -23,9 +23,10 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 19 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 20 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
-/// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen). The
+/// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
+/// doctor-report export screen). The
 /// dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -288,6 +289,23 @@ final List<Surface> screenSurfaces = <Surface>[
       overrides: screenNavOverrides(memoryDb()),
       body: () async {
         await _openFromSettings(tester, find.text('Backup & restore'));
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('export_report_screen', (tester, check) async {
+    final db = memoryDb();
+    await _seedHistory(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openFromSettings(
+          tester,
+          find.text('Export report for a doctor'),
+        );
+        expect(find.text('Generate report'), findsOneWidget);
         await check(tester);
       },
     );

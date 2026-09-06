@@ -15,10 +15,16 @@ class PickedBackup {
 /// without the `file_picker` plugin channel (the same pattern p1.7 used for the
 /// notification scheduler).
 abstract interface class BackupFileGateway {
-  /// Show a "save as" dialog seeded with [suggestedName] and write [bytes] to
-  /// the chosen location. Returns the saved path, or `null` if the user
-  /// cancelled.
-  Future<String?> writeBackup(Uint8List bytes, {required String suggestedName});
+  /// Show a "save as" dialog titled [dialogTitle], seeded with [suggestedName],
+  /// and write [bytes] to the chosen location. Returns the saved path, or `null`
+  /// if the user cancelled. Used for the encrypted backup (p1.10) and the
+  /// doctor-ready PDF report (p6.5) — both go through the same SAF /
+  /// `UIDocumentPicker` seam, so neither needs a storage permission.
+  Future<String?> saveFile(
+    Uint8List bytes, {
+    required String suggestedName,
+    required String dialogTitle,
+  });
 
   /// Show an "open file" dialog. Returns the picked file, or `null` if the user
   /// cancelled.
@@ -32,12 +38,13 @@ class FilePickerBackupFileGateway implements BackupFileGateway {
   const FilePickerBackupFileGateway();
 
   @override
-  Future<String?> writeBackup(
+  Future<String?> saveFile(
     Uint8List bytes, {
     required String suggestedName,
+    required String dialogTitle,
   }) {
     return FilePicker.platform.saveFile(
-      dialogTitle: 'Save your olf backup',
+      dialogTitle: dialogTitle,
       fileName: suggestedName,
       bytes: bytes,
     );

@@ -75,6 +75,15 @@ dependencies:
   # .dart behind the BiometricGateway interface, so CI never loads the channel.
   local_auth: ^3.0.1
 
+  # Doctor-ready PDF report (p6.5). Pure Dart — generates the file bytes
+  # in-process, no native/platform code, no iOS/Android SDK-floor bump.
+  # Apache-2.0. The `printing` companion is deliberately NOT added: olf saves /
+  # shares the file through the existing BackupFileGateway SAF seam, it does not
+  # need the OS print dialog. Confined to lib/src/export/report_pdf.dart. No
+  # ad/analytics/telemetry surface (dependency-audit green with its transitive
+  # subtree: archive, barcode, bidi, image, path_parsing, posix, qr).
+  pdf: ^3.12.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

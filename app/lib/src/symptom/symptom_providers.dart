@@ -22,3 +22,11 @@ final symptomTypesProvider = StreamProvider<List<SymptomType>>((ref) {
 final symptomEntriesProvider = StreamProvider<List<DailySymptomEntry>>((ref) {
   return ref.watch(symptomRepositoryProvider).watchAllEntries();
 });
+
+/// The whole symptom catalogue, archived entries included — so a historical
+/// entry whose symptom was later removed can still be named (the p6.5 doctor
+/// report). One-shot, not live: callers read it at the moment they build a
+/// report.
+final allSymptomTypesProvider = FutureProvider<List<SymptomType>>((ref) {
+  return ref.watch(symptomRepositoryProvider).allTypes();
+});
