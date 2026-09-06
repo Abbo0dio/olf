@@ -56,6 +56,8 @@ export 'src/meds/drift_birth_control_repository.dart';
 export 'src/meds/drift_medication_repository.dart';
 export 'src/meds/medication.dart';
 export 'src/meds/medication_repository.dart';
+export 'src/modes/life_stage_mode.dart';
+export 'src/modes/postpartum_cycle_return.dart';
 export 'src/mucus/cervical_mucus.dart';
 export 'src/mucus/cervical_mucus_repository.dart';
 export 'src/mucus/drift_cervical_mucus_repository.dart';

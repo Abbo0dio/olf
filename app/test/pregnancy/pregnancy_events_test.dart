@@ -36,6 +36,10 @@ void main() {
         await tester.tap(find.widgetWithText(FilledButton, 'Save entry'));
         await tester.pumpAndSettle();
 
+        // p7.1: logging a birth offers postpartum mode — decline it here.
+        await tester.tap(find.widgetWithText(TextButton, 'Not now'));
+        await tester.pumpAndSettle();
+
         expect(find.text('Nothing recorded.'), findsNothing);
         expect(find.widgetWithText(ListTile, 'Birth'), findsOneWidget);
         final stored = await DriftCycleEventRepository(db).pregnancyEvents();

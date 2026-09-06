@@ -12,6 +12,7 @@ import '../export/export_report_screen.dart';
 import '../health/conflict_review_screen.dart';
 import '../health/health_import.dart';
 import '../health/health_providers.dart';
+import '../modes/modes_page.dart';
 import '../period/period_format.dart';
 import '../personalization/personalization_providers.dart';
 import '../prediction/accuracy_format.dart';
@@ -260,6 +261,18 @@ class SettingsPage extends ConsumerWidget {
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const AccuracyPage()),
             ),
+          ),
+          const _SectionHeader('Modes'),
+          ListTile(
+            leading: const Icon(Icons.tune_outlined),
+            title: const Text('Life-stage & condition modes'),
+            subtitle: const Text(
+              'Optional lenses — postpartum, pregnancy, PCOS and more. All '
+              'off until you turn them on.',
+            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const ModesPage())),
           ),
           const _SectionHeader('Notifications'),
           ListTile(

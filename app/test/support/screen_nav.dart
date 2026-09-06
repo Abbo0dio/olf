@@ -23,10 +23,11 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 20 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 23 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
-/// doctor-report export screen). The
+/// doctor-report export screen; p7.1 the Modes page, the postpartum
+/// cycle-return screen and the loss/birth support-resources screen). The
 /// dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -90,8 +91,53 @@ Future<void> _seedHealthAppConnected(AppDatabase db) async {
   await settings.set(SettingKeys.appleHealthLastSync, '2,1,0');
 }
 
+/// Seed postpartum mode on, a recorded birth, and three post-event periods so
+/// the postpartum cycle-return screen renders its fullest ("settling") state.
+Future<void> _seedPostpartumMode(AppDatabase db) async {
+  await DriftSettingsRepository(
+    db,
+  ).set(LifeStageMode.postpartum.settingKey, 'true');
+  await DriftCycleEventRepository(
+    db,
+  ).logPregnancyEnd(PregnancyEndKind.birth, _daysAgo(150));
+  final repo = DriftPeriodRepository(db);
+  for (final ago in const [90, 62, 34]) {
+    await repo.addPeriod(
+      PeriodDraft(start: _daysAgo(ago), end: _daysAgo(ago - 3)),
+    );
+  }
+}
+
+/// Same, but a loss — used to reach the loss variant of the resources screen.
+Future<void> _seedPostpartumAfterLoss(AppDatabase db) async {
+  await DriftSettingsRepository(
+    db,
+  ).set(LifeStageMode.postpartum.settingKey, 'true');
+  await DriftCycleEventRepository(
+    db,
+  ).logPregnancyEnd(PregnancyEndKind.loss, _daysAgo(40));
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openModesPage(WidgetTester tester) async {
+  await _openFromSettings(tester, find.text('Life-stage & condition modes'));
+}
+
+Future<void> _openPostpartumScreen(WidgetTester tester) async {
+  await _openModesPage(tester);
+  final row = find.text('Open Postpartum');
+  await tester.scrollUntilVisible(
+    row,
+    120,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.ensureVisible(row);
+  await tester.pumpAndSettle();
+  await tester.tap(row);
   await tester.pumpAndSettle();
 }
 
@@ -331,6 +377,50 @@ final List<Surface> screenSurfaces = <Surface>[
       overrides: screenNavOverrides(memoryDb()),
       body: () async {
         await _openFromSettings(tester, find.text('Pregnancy loss & birth'));
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('modes_page — Phase 7 mode list', (tester, check) async {
+    final db = memoryDb();
+    await _seedPostpartumMode(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openModesPage(tester);
+        expect(find.widgetWithText(AppBar, 'Modes'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('postpartum_screen — cycle-return view', (tester, check) async {
+    final db = memoryDb();
+    await _seedPostpartumMode(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPostpartumScreen(tester);
+        expect(find.widgetWithText(AppBar, 'Postpartum'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('support_resources_screen — after a loss', (tester, check) async {
+    final db = memoryDb();
+    await _seedPostpartumAfterLoss(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPostpartumScreen(tester);
+        await tester.tap(find.text('Support & resources'));
+        await tester.pumpAndSettle();
+        expect(find.widgetWithText(AppBar, 'After a loss'), findsOneWidget);
         await check(tester);
       },
     );
