@@ -211,13 +211,28 @@ that adds a pregnancy-start event — see `backlog.md`.
 - **Requirement refs:** §2 (endometriosis symptom-correlation), §9(12), §6
 - **Goal:** a user tracking endometriosis can log pain (location + intensity) and flares, and
   see how flares track cycle phase.
+
+**Storage model — decided at negotiation (2026-09-06, worker: 1, PR #80). Orchestrator
+approved a dedicated table (schema v7→v8).** The Worker showed the p1.5 presence-only
+`(date, symptomTypeId)` model structurally can't carry the three things this log needs — an
+*ordered* intensity scale (synthetic catalogue names aren't rankable and break on
+rename/archive; they also multiply with the region tag and would leave p7.6 without a real
+reusable scale), a free-text note (no text column near the symptom log; dropping the note
+criterion is itself a §5 stop), and a region tag. New DDL, shipped **in PR #80** on the p6.1
+precedent: additive `pain_entries` table (PK `date`, one row/day: `intensity`
+non-null · `region` nullable · `note` nullable TEXT · `isFlare` bool · `createdAt`/`updatedAt`),
+`schemaVersion` 7→8 with `if (from < 8) m.createTable(painEntries)`, regen `.g.dart` +
+`drift_schemas/v8` + `test/db/generated/schema_v8`, `migration_matrix_test` extended to 8,
+new `pain_migration_test.dart`, backup round-trip, `backup_service` `tableOrder` += `pain_entries`
+(appended last, no FK). New pure `core` `enum SymptomSeverity` (`.rank` + `.label`) — the
+reusable ordered scale; **p7.6 rates its items on this same enum**. `region` is a fixed `core`
+`enum PainRegion`, not user-editable. Threat-model p7.5 entry names the new asset (structured
+pain/flare rows + free-text pain notes, new local `pain_entries`, SQLCipher-encrypted at rest,
+no new egress/permission/CI gate); `docs/release-checklist.md` "Schema change" block updated.
 - **Acceptance criteria:**
   - A **pain / flare log**: intensity (an ordered scale) + optional body-region tag + optional
-    note, per day. **Decision point for the Worker:** whether this fits the p1.5 symptom model
-    (a set of "pain: <region>" symptoms + a severity — noting p1.5's follow-up that symptoms are
-    presence-only today) or needs a small dedicated table. A new table is a **schema change** —
-    §5 stop; it ships with its migration + matrix + round-trip in the same PR. Prefer the
-    symptom model if it's not a stretch.
+    note, per day — stored in the new `pain_entries` table (see the storage-model block above),
+    **not** the p1.5 symptom model.
   - Flare↔cycle-phase correlation via the p7.4 core function ("logged flares cluster in your
     late luteal / menstrual phase" — descriptive only).
   - A simple pain-over-time view (reuses the p7.1 chart widget) with cycle-phase banding.

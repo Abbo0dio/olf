@@ -2,6 +2,22 @@
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-06 — **p7.5 endometriosis pain/flare log gets a dedicated table; `schemaVersion` 7→8.**
+  The p1.5 symptom model is presence-only `(date, symptomTypeId)` and structurally can't hold
+  the p7.5 acceptance criteria: an *ordered* intensity scale (synthetic catalogue names like
+  "Pelvic pain – severe" aren't rankable, break on rename/archive, and multiply with the region
+  tag — and would leave p7.6 with no real reusable scale), a free-text note (no text column near
+  the symptom log; dropping the note is itself a §5 stop), and a region tag. Approved a new
+  additive `pain_entries` table (PK `date`, one row/day: `intensity` non-null · `region`
+  nullable · `note` nullable TEXT · `isFlare` bool · `createdAt`/`updatedAt`) on the p6.1
+  precedent — migration + `migration_matrix_test` extension to v8 + new `pain_migration_test.dart`
+  + backup round-trip + `drift_schemas/v8` fixture, all in **PR #80**. New pure `core`
+  `enum SymptomSeverity` (`.rank`/`.label`) is the reusable ordered scale — **p7.6 rates its
+  items on the same enum**. `region` is a fixed `core` `enum PainRegion` (not user-editable).
+  Flare↔phase correlation reuses `cyclePhaseCorrelations` unchanged. New asset for the threat
+  model: free-text pain notes + structured pain/flare rows in a new local table, SQLCipher-
+  encrypted at rest, no new egress/permission/CI gate. — orchestrator, §5 ruling during p7.5
+  negotiation.
 - 2026-09-05 — **Evaluated the `health` package for p6.2 health-platform interop; rejected.**
   It exposes no `BASAL_BODY_TEMPERATURE` (olf's primary temperature signal) in any version, so
   BBT sync would need a hand-rolled channel regardless; adopting it would additionally force
