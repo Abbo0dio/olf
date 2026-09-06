@@ -645,3 +645,25 @@ The CI guard requires an entry naming the current phase.
     content test and covered by the p1.9 inclusive-language lint. Nothing here
     phones home.
   No design changes required by this review.
+- **2026-09-06 — Phase 7 / p7.4 landing — reviewer: worker: 2.** PCOS mode
+  (irregular-cycle-aware UI + symptom-vs-cycle-phase correlation views + the
+  reusable correlation core). **No new asset, adversary, trust boundary, data
+  flow, network path, dependency, permission, manifest / plist change, or CI
+  gate change.**
+  - The **correlation** (`cyclePhaseCorrelations` + `cyclePhaseTimeline`, pure
+    `core`, `DateTime.now()`-free, deterministic) is a **derived read** over the
+    p1.5 symptom log and the p1.3 derived cycle history — recomputed on read,
+    never stored, like the p3 predictions and the p7.1 / p7.2a views. It emits
+    only counts and a descriptive "shows up most in X" / "no clear pattern" /
+    "not enough data" — no p-value, no causal or diagnostic language, no verdict
+    (a content test locks the copy against the Flo "ask your doctor about PCOS"
+    anti-pattern, §9(12)).
+  - Mode enablement is the existing `mode.pcos` row in the `app_settings` KV
+    store — same sensitivity class as the other `mode.<name>` keys already under
+    Assets. **No schema change.** Turning the mode off only clears the flag; no
+    logged data is touched.
+  - The cycle-UI softening (gap-copy wording, a wider-interval note) is
+    **presentation only** — `deriveCycles`, `CycleStats` and the predictor are
+    unchanged. The shared `CorrelationChart` widget renders bundled, on-device
+    data and phones home nothing.
+  No design changes required by this review.

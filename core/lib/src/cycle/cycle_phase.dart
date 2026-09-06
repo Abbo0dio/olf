@@ -2,6 +2,8 @@ import 'package:meta/meta.dart';
 
 import '../date_math.dart';
 import '../prediction/predictor.dart';
+import '../prediction/robust_predictor.dart'
+    show lutealPhaseDays, fertileDaysBeforeOvulation, fertileDaysAfterOvulation;
 import 'cycle.dart';
 
 /// The four physiologically distinct segments of a menstrual cycle (p1.12).
@@ -154,35 +156,14 @@ CyclePhase? currentCyclePhase({
   final menstrualEnd = cycle.periodEnd ?? day;
 
   final fertile = prediction.fertileWindow;
-  if (!fertile.start.isAfter(menstrualEnd)) return null;
-
-  final lutealStart = addDays(fertile.end, 1);
-  final lutealEnd = prediction.nextPeriodExpected.isAfter(fertile.end)
-      ? prediction.nextPeriodExpected
-      : lutealStart;
-
-  final segments = [
-    CyclePhaseSegment(
-      kind: CyclePhaseKind.menstrual,
-      start: periodStart,
-      end: menstrualEnd,
-    ),
-    CyclePhaseSegment(
-      kind: CyclePhaseKind.follicular,
-      start: addDays(menstrualEnd, 1),
-      end: addDays(fertile.start, -1),
-    ),
-    CyclePhaseSegment(
-      kind: CyclePhaseKind.ovulatory,
-      start: fertile.start,
-      end: fertile.end,
-    ),
-    CyclePhaseSegment(
-      kind: CyclePhaseKind.luteal,
-      start: lutealStart,
-      end: lutealEnd,
-    ),
-  ];
+  final segments = _phaseSegments(
+    periodStart: periodStart,
+    menstrualEnd: menstrualEnd,
+    fertileStart: fertile.start,
+    fertileEnd: fertile.end,
+    lutealEnd: prediction.nextPeriodExpected,
+  );
+  if (segments == null) return null;
 
   final index = segments.indexWhere((s) => s.contains(day));
   return CyclePhase(
@@ -192,4 +173,90 @@ CyclePhase? currentCyclePhase({
     // last one (luteal): still waiting on the period, not a new phase.
     currentIndex: index == -1 ? segments.length - 1 : index,
   );
+}
+
+/// The four ordered phase segments for a cycle whose bleeding ends on
+/// [menstrualEnd] and whose ovulatory window runs [fertileStart]..[fertileEnd],
+/// with the luteal phase reaching to [lutealEnd] (clamped to never precede
+/// [fertileEnd]). Shared by [currentCyclePhase] — whose fertile window comes
+/// from a [CyclePrediction] — and [cyclePhaseTimeline], whose fertile window is
+/// derived from the real logged next-period date.
+///
+/// `null` when [fertileStart] does not sit strictly after [menstrualEnd] — a
+/// degenerate estimate from a very short or irregular history.
+List<CyclePhaseSegment>? _phaseSegments({
+  required DateTime periodStart,
+  required DateTime menstrualEnd,
+  required DateTime fertileStart,
+  required DateTime fertileEnd,
+  required DateTime lutealEnd,
+}) {
+  if (!fertileStart.isAfter(menstrualEnd)) return null;
+  final lutealStart = addDays(fertileEnd, 1);
+  return [
+    CyclePhaseSegment(
+      kind: CyclePhaseKind.menstrual,
+      start: periodStart,
+      end: menstrualEnd,
+    ),
+    CyclePhaseSegment(
+      kind: CyclePhaseKind.follicular,
+      start: addDays(menstrualEnd, 1),
+      end: addDays(fertileStart, -1),
+    ),
+    CyclePhaseSegment(
+      kind: CyclePhaseKind.ovulatory,
+      start: fertileStart,
+      end: fertileEnd,
+    ),
+    CyclePhaseSegment(
+      kind: CyclePhaseKind.luteal,
+      start: lutealStart,
+      end: lutealEnd.isAfter(fertileEnd) ? lutealEnd : lutealStart,
+    ),
+  ];
+}
+
+/// Every completed cycle's four phase segments, oldest first, derived straight
+/// from the logged next-period date rather than a prediction. It is the
+/// retrospective twin of [currentCyclePhase]: the luteal length is the same
+/// fixed estimate the predictor uses ([lutealPhaseDays]) and the ovulatory
+/// window uses the same offsets ([fertileDaysBeforeOvulation] /
+/// [fertileDaysAfterOvulation]), but the anchor is the real next period rather
+/// than a forecast.
+///
+/// A cycle contributes nothing when it is the current (open) one, a
+/// likely-missed-entry gap ([Cycle.isLikelyGap]), a pregnancy gap
+/// ([Cycle.isPregnancyGap]), has no recorded bleeding end, starts after [today]
+/// (a future-dated entry), or collapses to a degenerate short estimate.
+///
+/// [today] is injected — never `DateTime.now()` — so this stays deterministic
+/// and offline, matching the rest of `core`.
+List<CyclePhaseSegment> cyclePhaseTimeline(
+  Iterable<Cycle> cycles, {
+  required DateTime today,
+}) {
+  final day = dateOnly(today);
+  final ordered = cycles.toList()
+    ..sort((a, b) => a.periodStart.compareTo(b.periodStart));
+
+  final out = <CyclePhaseSegment>[];
+  for (final cycle in ordered) {
+    if (cycle.isCurrent || cycle.isLikelyGap || cycle.isPregnancyGap) continue;
+    final menstrualEnd = cycle.periodEnd;
+    if (menstrualEnd == null) continue;
+    if (cycle.periodStart.isAfter(day)) continue;
+
+    final next = cycle.nextPeriodStart!;
+    final ovulation = addDays(next, -lutealPhaseDays);
+    final segments = _phaseSegments(
+      periodStart: cycle.periodStart,
+      menstrualEnd: menstrualEnd,
+      fertileStart: addDays(ovulation, -fertileDaysBeforeOvulation),
+      fertileEnd: addDays(ovulation, fertileDaysAfterOvulation),
+      lutealEnd: addDays(next, -1),
+    );
+    if (segments != null) out.addAll(segments);
+  }
+  return out;
 }

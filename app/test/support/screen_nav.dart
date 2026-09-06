@@ -24,14 +24,15 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 29 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 31 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
 /// cycle-return screen and the loss/birth support-resources screen; p7.2a the
 /// pregnancy week view in its needs-a-start-date and populated states; p7.2b the
 /// pregnancy symptom-logging screen; p7.3 the TTC fertility-score screen and its
-/// not-enough-history state; p7.8 the birth-control recalibration explainer).
+/// not-enough-history state; p7.4 the PCOS screen in its correlation-view and
+/// not-enough-data states; p7.8 the birth-control recalibration explainer).
 /// The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -178,6 +179,37 @@ Future<void> _seedBirthControlSwitchMode(AppDatabase db) async {
   ).set(LifeStageMode.birthControlSwitch.settingKey, 'true');
 }
 
+/// PCOS mode on, four periods 28 days apart (three completed cycles + the open
+/// one) and a "Cramps" symptom logged on luteal-phase days across them, so the
+/// correlation view renders its fullest state (a chart + a named phase).
+Future<void> _seedPcosModeWithCorrelation(AppDatabase db) async {
+  await DriftSettingsRepository(db).set(LifeStageMode.pcos.settingKey, 'true');
+  final periods = DriftPeriodRepository(db);
+  for (final ago in const [112, 84, 56, 28]) {
+    await periods.addPeriod(
+      PeriodDraft(start: _daysAgo(ago), end: _daysAgo(ago - 3)),
+    );
+  }
+  final symptoms = DriftSymptomRepository(db);
+  final cramps = (await symptoms.activeTypes()).firstWhere(
+    (t) => t.name == 'Cramps',
+  );
+  for (final ago in const [90, 88, 86, 62, 60, 58, 34, 32, 30]) {
+    await symptoms.setSymptom(_daysAgo(ago), cramps.id, present: true);
+  }
+}
+
+/// PCOS mode on with a single logged symptom and no cycle history — the
+/// correlation tile's "not enough data yet" state.
+Future<void> _seedPcosModeNotEnoughData(AppDatabase db) async {
+  await DriftSettingsRepository(db).set(LifeStageMode.pcos.settingKey, 'true');
+  final symptoms = DriftSymptomRepository(db);
+  final cramps = (await symptoms.activeTypes()).firstWhere(
+    (t) => t.name == 'Cramps',
+  );
+  await symptoms.setSymptom(_daysAgo(2), cramps.id, present: true);
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
@@ -197,6 +229,10 @@ Future<void> _openPregnancyScreen(WidgetTester tester) async {
 
 Future<void> _openTtcScreen(WidgetTester tester) async {
   await _openModeScreen(tester, 'Open Trying to conceive');
+}
+
+Future<void> _openPcosScreen(WidgetTester tester) async {
+  await _openModeScreen(tester, 'Open PCOS');
 }
 
 Future<void> _openPregnancySymptomsScreen(WidgetTester tester) async {
@@ -590,6 +626,38 @@ final List<Surface> screenSurfaces = <Surface>[
       body: () async {
         await _openTtcScreen(tester);
         expect(find.text('Not enough history yet'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('pcos_screen — symptom-vs-cycle-phase correlation view', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await _seedPcosModeWithCorrelation(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPcosScreen(tester);
+        expect(find.widgetWithText(AppBar, 'PCOS'), findsOneWidget);
+        expect(find.text('Cramps'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('pcos_screen — not enough data yet', (tester, check) async {
+    final db = memoryDb();
+    await _seedPcosModeNotEnoughData(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPcosScreen(tester);
+        expect(find.widgetWithText(AppBar, 'PCOS'), findsOneWidget);
         await check(tester);
       },
     );

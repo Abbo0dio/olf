@@ -18,6 +18,7 @@ import '../modes/birth_control_recalibration_content.dart';
 import '../modes/birth_control_recalibration_providers.dart';
 import '../modes/birth_control_recalibration_screen.dart';
 import '../modes/modes_providers.dart';
+import '../modes/pcos_correlation_format.dart';
 import '../modes/postpartum_screen.dart';
 import '../mucus/mucus_providers.dart';
 import '../pregnancy/pregnancy_format.dart';
@@ -281,6 +282,14 @@ class _LoadedState extends ConsumerState<_Loaded> {
             .watch(lifeStageModeEnabledProvider(LifeStageMode.pregnancy))
             .valueOrNull ??
         false;
+    // p7.4: PCOS mode softens the cycle-card / prediction wording — long and
+    // variable cycles are framed as expected, not as errors. Presentation only;
+    // `deriveCycles` and the predictor are untouched.
+    final pcosModeOn =
+        ref
+            .watch(lifeStageModeEnabledProvider(LifeStageMode.pcos))
+            .valueOrNull ??
+        false;
     final pregnancyState = ref.watch(pregnancyRecoveryStateProvider);
     final pregnancySince = ref.watch(mostRecentPregnancyEndProvider)?.date;
 
@@ -348,12 +357,13 @@ class _LoadedState extends ConsumerState<_Loaded> {
               prediction: prediction,
               observedFertileWindow: observedFertile,
               reduceSpoken: reduceSpoken,
+              pcosMode: pcosModeOn,
               onLogPeriodStart: _addPeriod,
             ),
           ],
           if (_periods.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _CycleStatsCard(stats: cycleStats),
+            _CycleStatsCard(stats: cycleStats, pcosMode: pcosModeOn),
           ],
           if (bbtPoints.length >= 2) ...[
             const SizedBox(height: 16),
@@ -392,6 +402,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
             cycleByStart: cycleByStart,
             onEdit: _edit,
             onDelete: _deleteFromHistory,
+            pcosMode: pcosModeOn,
           ),
           const SizedBox(height: 24),
           _RecentSymptoms(
@@ -766,6 +777,7 @@ class _History extends StatelessWidget {
     required this.cycleByStart,
     required this.onEdit,
     required this.onDelete,
+    this.pcosMode = false,
   });
 
   final List<Period> periods;
@@ -775,6 +787,10 @@ class _History extends StatelessWidget {
   final Map<DateTime, Cycle> cycleByStart;
   final ValueChanged<Period> onEdit;
   final ValueChanged<Period> onDelete;
+
+  /// p7.4: soften the likely-gap length note (long gaps are expected in PCOS
+  /// mode).
+  final bool pcosMode;
 
   @override
   Widget build(BuildContext context) {
@@ -801,6 +817,7 @@ class _History extends StatelessWidget {
                   today,
                 ),
                 cycle: cycleByStart[dateOnly(period.startDate)],
+                pcosMode: pcosMode,
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -887,10 +904,15 @@ class _RecentSymptoms extends StatelessWidget {
 /// A history row's two-line subtitle: the period's own length, then the cycle it
 /// opened (once one can be derived).
 class _HistoryRowDetail extends StatelessWidget {
-  const _HistoryRowDetail({required this.periodLength, required this.cycle});
+  const _HistoryRowDetail({
+    required this.periodLength,
+    required this.cycle,
+    this.pcosMode = false,
+  });
 
   final String periodLength;
   final Cycle? cycle;
+  final bool pcosMode;
 
   @override
   Widget build(BuildContext context) {
@@ -902,7 +924,7 @@ class _HistoryRowDetail extends StatelessWidget {
         Text(periodLength),
         if (c != null)
           Text(
-            cycleLengthNote(c),
+            cycleLengthNote(c, pcosMode: pcosMode),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -921,12 +943,17 @@ class _PredictionCard extends StatelessWidget {
     required this.prediction,
     required this.onLogPeriodStart,
     required this.reduceSpoken,
+    this.pcosMode = false,
     this.observedFertileWindow,
   });
 
   final CyclePrediction prediction;
   final VoidCallback onLogPeriodStart;
   final bool reduceSpoken;
+
+  /// p7.4: append a wider-interval note (PCOS cycles vary more, so the range is
+  /// wide and the estimate loose). The prediction itself is unchanged.
+  final bool pcosMode;
 
   /// Fertile window observed from this cycle's cervical-mucus notes (p1.6).
   /// Shown as an extra line alongside the statistical estimate when present.
@@ -1007,6 +1034,13 @@ class _PredictionCard extends StatelessWidget {
           confidenceNote(prediction),
           style: theme.textTheme.bodySmall?.copyWith(color: onColor),
         ),
+        if (pcosMode) ...[
+          const SizedBox(height: 4),
+          Text(
+            pcosWiderIntervalNote,
+            style: theme.textTheme.bodySmall?.copyWith(color: onColor),
+          ),
+        ],
       ],
     );
   }
@@ -1060,10 +1094,11 @@ class _PredictionCard extends StatelessWidget {
         ? ''
         : 'Fertile signs from your notes '
               '${formatDateRange(observedFertileWindow!)}. ';
+    final widerNote = pcosMode ? ' $pcosWiderIntervalNote' : '';
     return 'Next period estimated ${formatDateRange(prediction.nextPeriod)}, '
         'most likely ${formatDay(prediction.nextPeriodExpected)}. '
         'Fertile window estimated ${formatDateRange(prediction.fertileWindow)}. '
-        '$signs${confidenceNote(prediction)}';
+        '$signs${confidenceNote(prediction)}$widerNote';
   }
 }
 
@@ -1188,19 +1223,27 @@ class _CorrectionNoticeState extends State<_CorrectionNotice> {
 /// Cycle-length and variability summary, shown once at least one period exists.
 /// Falls back to a "keep logging" nudge rather than assuming any cycle length.
 class _CycleStatsCard extends StatelessWidget {
-  const _CycleStatsCard({required this.stats});
+  const _CycleStatsCard({required this.stats, this.pcosMode = false});
 
   final CycleStats stats;
+
+  /// p7.4: soften the likely-gap / irregular wording (long, variable cycles are
+  /// expected in PCOS mode). The [stats] themselves are unchanged.
+  final bool pcosMode;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final typical = stats.typicalCycleLength;
     final hasRange = stats.shortestCycleLength != stats.longestCycleLength;
+    final regularityLabel =
+        pcosMode && stats.regularity == CycleRegularity.irregular
+        ? '${stats.regularity.label} — expected in this mode'
+        : stats.regularity.label;
 
     return Semantics(
       container: true,
-      label: 'Cycle insights. ${summariseStats(stats)}',
+      label: 'Cycle insights. ${summariseStats(stats, pcosMode: pcosMode)}',
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
@@ -1227,8 +1270,8 @@ class _CycleStatsCard extends StatelessWidget {
               Text(
                 hasRange
                     ? '${stats.shortestCycleLength}–${stats.longestCycleLength} '
-                          'days  ·  ${stats.regularity.label}'
-                    : stats.regularity.label,
+                          'days  ·  $regularityLabel'
+                    : regularityLabel,
                 style: theme.textTheme.bodyMedium,
               ),
               if (stats.typicalPeriodLength != null) ...[
@@ -1243,15 +1286,20 @@ class _CycleStatsCard extends StatelessWidget {
               if (stats.hasLikelyGap) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'A long gap is set aside — a period may not have been logged '
-                  'then.',
+                  pcosMode
+                      ? pcosSoftenedGapLine
+                      : 'A long gap is set aside — a period may not have been '
+                            'logged then.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
             ] else
-              Text(summariseStats(stats), style: theme.textTheme.bodyMedium),
+              Text(
+                summariseStats(stats, pcosMode: pcosMode),
+                style: theme.textTheme.bodyMedium,
+              ),
           ],
         ),
       ),

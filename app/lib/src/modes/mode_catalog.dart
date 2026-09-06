@@ -31,7 +31,7 @@ import 'package:olf_core/olf_core.dart';
         title: 'PCOS',
         description:
             'A UI that expects irregular cycles, and views of how your '
-            'symptoms track your cycle. Coming soon.',
+            'symptoms track your cycle.',
       ),
       LifeStageMode.endometriosis => (
         title: 'Endometriosis',
@@ -61,12 +61,14 @@ import 'package:olf_core/olf_core.dart';
     };
 
 /// Whether this mode has an interactive screen in the current build. Postpartum
-/// (p7.1), pregnancy (p7.2a), TTC (p7.3) and birth-control change (p7.8) do; the
-/// others can still be toggled so their state is ready when their slice lands.
+/// (p7.1), pregnancy (p7.2a), TTC (p7.3), PCOS (p7.4) and birth-control change
+/// (p7.8) do; the others can still be toggled so their state is ready when their
+/// slice lands.
 bool modeHasScreen(LifeStageMode mode) => switch (mode) {
   LifeStageMode.postpartum ||
   LifeStageMode.pregnancy ||
   LifeStageMode.ttc ||
+  LifeStageMode.pcos ||
   LifeStageMode.birthControlSwitch => true,
   _ => false,
 };

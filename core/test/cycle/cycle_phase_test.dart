@@ -262,4 +262,114 @@ void main() {
       ]);
     });
   });
+
+  group('cyclePhaseTimeline', () {
+    // Three back-to-back 28-day completed cycles, period on the 1st–4th.
+    List<Cycle> threeCompleted() => [
+      Cycle(
+        periodStart: DateTime(2026, 3, 1),
+        periodEnd: DateTime(2026, 3, 4),
+        nextPeriodStart: DateTime(2026, 3, 29),
+      ),
+      Cycle(
+        periodStart: DateTime(2026, 2, 1),
+        periodEnd: DateTime(2026, 2, 4),
+        nextPeriodStart: DateTime(2026, 3, 1),
+      ),
+      Cycle(
+        periodStart: DateTime(2026, 1, 1),
+        periodEnd: DateTime(2026, 1, 4),
+        nextPeriodStart: DateTime(2026, 2, 1),
+      ),
+    ];
+
+    final today = DateTime(2026, 4, 1);
+
+    test('one completed cycle yields the four phases in order', () {
+      final segs = cyclePhaseTimeline([
+        Cycle(
+          periodStart: DateTime(2026, 1, 1),
+          periodEnd: DateTime(2026, 1, 4),
+          nextPeriodStart: DateTime(2026, 1, 29),
+        ),
+      ], today: today);
+      expect(segs.map((s) => s.kind), [
+        CyclePhaseKind.menstrual,
+        CyclePhaseKind.follicular,
+        CyclePhaseKind.ovulatory,
+        CyclePhaseKind.luteal,
+      ]);
+      // Menstrual is the logged bleeding days; luteal ends the day before the
+      // next period.
+      expect(segs.first.start, DateTime(2026, 1, 1));
+      expect(segs.first.end, DateTime(2026, 1, 4));
+      expect(segs.last.end, DateTime(2026, 1, 28));
+    });
+
+    test('segments run oldest cycle first regardless of input order', () {
+      final segs = cyclePhaseTimeline(threeCompleted(), today: today);
+      expect(segs.length, 12);
+      for (var i = 1; i < segs.length; i++) {
+        expect(
+          segs[i].start.isBefore(segs[i - 1].start),
+          isFalse,
+          reason: 'segment $i starts before its predecessor',
+        );
+      }
+    });
+
+    test('the current, gap and pregnancy-gap cycles contribute nothing', () {
+      final cycles = [
+        Cycle(
+          periodStart: DateTime(2026, 4, 1),
+          periodEnd: DateTime(2026, 4, 4),
+        ), // current / open
+        Cycle(
+          periodStart: DateTime(2026, 1, 1),
+          periodEnd: DateTime(2026, 1, 4),
+          nextPeriodStart: DateTime(2026, 3, 15),
+        ), // likely missed entry (> 45 days)
+        Cycle(
+          periodStart: DateTime(2025, 1, 1),
+          periodEnd: DateTime(2025, 1, 4),
+          nextPeriodStart: DateTime(2025, 11, 1),
+          interruptedBy: PregnancyEndKind.birth,
+        ), // pregnancy gap
+      ];
+      expect(cyclePhaseTimeline(cycles, today: today), isEmpty);
+    });
+
+    test('a cycle with no recorded bleeding end is skipped', () {
+      final segs = cyclePhaseTimeline([
+        Cycle(
+          periodStart: DateTime(2026, 1, 1),
+          nextPeriodStart: DateTime(2026, 1, 29),
+        ),
+      ], today: today);
+      expect(segs, isEmpty);
+    });
+
+    test('a cycle that starts after today is skipped (clock injection)', () {
+      final cycles = [
+        Cycle(
+          periodStart: DateTime(2026, 5, 1),
+          periodEnd: DateTime(2026, 5, 4),
+          nextPeriodStart: DateTime(2026, 5, 29),
+        ),
+        ...threeCompleted(),
+      ];
+      final segs = cyclePhaseTimeline(cycles, today: today);
+      expect(segs.length, 12); // only the three completed pre-today cycles
+      expect(
+        segs.every((s) => !s.start.isAfter(DateTime(2026, 3, 29))),
+        isTrue,
+      );
+    });
+
+    test('is deterministic across repeated calls and input order', () {
+      final a = cyclePhaseTimeline(threeCompleted(), today: today);
+      final b = cyclePhaseTimeline(threeCompleted().reversed, today: today);
+      expect(a, b);
+    });
+  });
 }
