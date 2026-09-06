@@ -25,7 +25,7 @@ import 'package:olf_core/olf_core.dart';
         title: 'Trying to conceive',
         description:
             'A daily fertility estimate from your own patterns, and plain '
-            'timing notes. Coming soon.',
+            'timing notes.',
       ),
       LifeStageMode.pcos => (
         title: 'PCOS',
@@ -60,9 +60,11 @@ import 'package:olf_core/olf_core.dart';
     };
 
 /// Whether this mode has an interactive screen in the current build. Postpartum
-/// (p7.1) and pregnancy (p7.2a) do; the others can still be toggled so their
-/// state is ready when their slice lands.
+/// (p7.1), pregnancy (p7.2a) and TTC (p7.3) do; the others can still be toggled
+/// so their state is ready when their slice lands.
 bool modeHasScreen(LifeStageMode mode) => switch (mode) {
-  LifeStageMode.postpartum || LifeStageMode.pregnancy => true,
+  LifeStageMode.postpartum ||
+  LifeStageMode.pregnancy ||
+  LifeStageMode.ttc => true,
   _ => false,
 };
