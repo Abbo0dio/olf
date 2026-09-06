@@ -258,7 +258,7 @@ means delete").
 - **Not retroactive to saved backups.** `.olfbackup` files the user already saved
   elsewhere are **not** reached — the app keeps no record of where they went. Only
   backups written *after* a window is set are pre-purged. See the p2.3 follow-up
-  in `DEVELOPMENT_PLAN.md` §9.
+  in `docs/plan/backlog.md`.
 
 ## Background privacy (p2.4)
 

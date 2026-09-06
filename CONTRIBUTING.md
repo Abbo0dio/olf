@@ -4,10 +4,12 @@ This project is built **one complete, tested, shippable slice at a time**. We do
 skeleton and flesh it out later. A feature is designed → built → tested → reviewed → merged →
 marked `DONE`, and only then does the next feature start.
 
-The authoritative roadmap is [`DEVELOPMENT_PLAN.md`](./DEVELOPMENT_PLAN.md). Product scope lives
-in [`requirements.md`](./requirements.md). This file is the day-to-day workflow contract; it
-mirrors §1 of the development plan. If the two ever disagree, the development plan wins — fix
-this file.
+The authoritative roadmap is [`docs/plan/`](./docs/plan/) — `overview.md` for the phase table,
+`phases/phase-XX.md` for task specs, `conventions.md` for the principles and Definition of Done.
+Product scope lives in [`requirements.md`](./requirements.md). **Live task status is in
+[`.herdsman/state.md`](./.herdsman/state.md)**, written only by the Orchestrator (herdsman
+workflow) — not in the plan files. This file is the day-to-day workflow contract; it mirrors
+`docs/plan/conventions.md`. If the two ever disagree, the plan wins — fix this file.
 
 ---
 
@@ -21,8 +23,7 @@ at the repo root. Current pins: **Flutter 3.35.5**, **Dart 3.9.2** (bundled with
   (e.g. `mise exec -- flutter test`, `mise exec -- dart format .`), or run **`mise activate`**
   in your shell so `flutter` / `dart` resolve to the pinned versions automatically.
 - CI pins the same version (`FLUTTER_VERSION` in `.github/workflows/ci.yml`). If you change the
-  SDK version, change it in **both** places and record it in `DEVELOPMENT_PLAN.md` §7
-  (Decisions Log).
+  SDK version, change it in **both** places and record it in `docs/plan/decisions.md`.
 
 ---
 
@@ -30,22 +31,25 @@ at the repo root. Current pins: **Flutter 3.35.5**, **Dart 3.9.2** (bundled with
 
 1. **No direct commits to `main`.** All work lands via a pull request from a feature branch that
    lives in its own git worktree.
-2. **One worktree = one task = one PR.** If a task is too big for a reviewable PR, split it into
-   sub-tasks (`p1.4a`, `p1.4b`, …) in `DEVELOPMENT_PLAN.md` *before* starting.
-3. **The plan is a living document.** You update `DEVELOPMENT_PLAN.md` *in the same branch* as
-   the work — status, Log lines, and any real detail you nailed down (schema, chosen libraries
-   and versions, edge cases, follow-ups discovered).
+2. **One worktree = one task = one PR.** If a task is too big for a reviewable PR, the
+   Orchestrator splits it into sub-tasks (`p1.4a`, `p1.4b`, …) in `docs/plan/phases/phase-XX.md`
+   *before* dispatch.
+3. **Contributors do not edit `docs/plan/` or `.herdsman/state.md`.** Your slice's real detail
+   (schema, chosen libraries **with versions**, edge cases, follow-ups discovered) goes in the
+   **draft PR body**, opened early. The Orchestrator folds it into the phase file and tracks
+   status in `.herdsman/state.md` at merge.
 4. **Definition of Done is non-negotiable.** See §4. Every checkbox must hold before a task is
    `DONE`.
-5. **Never expand scope silently.** If a slice reveals new work, add new `TODO` rows (in the
-   plan or its Backlog), don't grow the current PR.
+5. **Never expand scope silently.** If a slice reveals new work, note it in the PR body for the
+   Orchestrator to add to `docs/plan/backlog.md` — don't grow the current PR.
 
 ---
 
 ## 2. Status legend
 
-Every task and phase in `DEVELOPMENT_PLAN.md` carries exactly one status. When you change a
-status, also append a dated line to that task's **Log**.
+Every task carries exactly one status, tracked in [`.herdsman/state.md`](./.herdsman/state.md)
+by the Orchestrator (at dispatch and at merge). Closed phases freeze their final per-task
+outcomes into `docs/plan/phases/phase-XX.md`.
 
 | Status        | Meaning |
 |---------------|---------|
@@ -64,11 +68,9 @@ status, also append a dated line to that task's **Log**.
 
 ### 3.1 Claim the task
 
-In `DEVELOPMENT_PLAN.md`, on the task you are about to start:
-
-- Set **Status** to `IN PROGRESS`.
-- Fill in **Branch / worktree** and **Owner**.
-- Add a dated **Log** line: `YYYY-MM-DD — claimed by <owner>; worktree ../olf-wt/<task-id>.`
+The Orchestrator marks the claim — sets the task `IN PROGRESS` in `.herdsman/state.md` with the
+owning worker, branch, and worktree — then dispatches it. If you are a contributor working a
+slice, that dispatch is your go-ahead; you do not edit the plan or state files.
 
 ### 3.2 Create the worktree from an up-to-date `main`
 
@@ -86,10 +88,10 @@ Example: branch `feat/p1.1-log-period` in worktree `../olf-wt/p1.1`.
 - Work only inside your worktree.
 - Keep the app runnable and every previously-`DONE` feature working at every commit that could
   be reviewed.
-- As you lock decisions down, write them into `DEVELOPMENT_PLAN.md` on this same branch:
-  real schema, library names **with versions**, edge cases handled, follow-ups found. If you
-  change a **Foundational decision** (§3 of the plan), record it in the **Decisions Log** (§7)
-  with rationale, and update dependent tasks — never mid-slice.
+- As you lock decisions down, write them into the **draft PR body**: real schema, library names
+  **with versions**, edge cases handled, follow-ups found. If a change would touch a
+  **Foundational decision** (`docs/plan/conventions.md`), stop and raise it with the Orchestrator
+  first — never mid-slice; it records the outcome in `docs/plan/decisions.md`.
 
 ### 3.4 Test — see §4
 
@@ -103,11 +105,13 @@ git push -u origin <branch>
 gh pr create --base main --fill
 ```
 
+- Open the PR **as a draft early**, with the plan in the body (files, seams, edge cases, test
+  plan). Mark it ready when the slice meets the Definition of Done.
 - The PR description must list the task's acceptance criteria and **how each was verified**.
 - The PR template checklist (`.github/pull_request_template.md`) is the Definition of Done —
   tick every box or explain why an item is `n/a`.
-- In `DEVELOPMENT_PLAN.md`: set the task `IN REVIEW`, link the PR, add a Log line. Push that
-  change on the branch.
+- Do not set task status yourself — the Orchestrator moves it to `IN REVIEW` in
+  `.herdsman/state.md` when the PR is ready.
 
 ### 3.6 Review
 
@@ -125,9 +129,11 @@ Address every comment. Re-request review after pushing fixes.
 git worktree remove ../olf-wt/<task-id>
 ```
 
-- Set the task `DONE` in `DEVELOPMENT_PLAN.md`, link the merged PR, add a Log line.
+- The Orchestrator sets the task `DONE` in `.herdsman/state.md` (PR #, squash SHA, dated line)
+  and folds the durable detail from the PR body into `docs/plan/phases/phase-XX.md` — one
+  direct commit on `main`.
 - Verify on `main`: pull, run tests, manually confirm the feature.
-- If the slice revealed new work, add `TODO` rows rather than reopening the PR.
+- If the slice revealed new work, it goes to `docs/plan/backlog.md`, not a reopened PR.
 
 ---
 
@@ -146,8 +152,8 @@ A task is not `DONE` until **all** of these hold (this list is the PR template):
       text scales; contrast ≥ 4.5:1; touch targets are adequate.
 - [ ] **Dark mode** and **gender-neutral, non-heteronormative copy** for any new UI.
 - [ ] Works offline / on-device. No feature silently requires a network call.
-- [ ] Runs acceptably on a low-end device (performance budget in `DEVELOPMENT_PLAN.md` §3).
-- [ ] `DEVELOPMENT_PLAN.md` updated: status, Log, and any detail/schema the slice locked in.
+- [ ] Runs acceptably on a low-end device (performance budget in `docs/plan/conventions.md`).
+- [ ] Draft PR body carries the schema / library / edge-case detail the slice locked in.
 
 ---
 

@@ -27,7 +27,7 @@ enum HealthAuthStatus { granted, denied, notDetermined }
 
 /// A platform-agnostic bridge to the OS health store.
 ///
-/// This is the "swap the plugin" seam (DEVELOPMENT_PLAN.md §2): `core` owns the
+/// This is the "swap the plugin" seam (docs/plan/conventions.md §2): `core` owns the
 /// interface, the sample model and the reconciliation engine; the concrete
 /// implementations live in `app/` — one per platform (p6.2 Apple HealthKit,
 /// p6.3 Android Health Connect) — and the desktop shell (Phase 13) simply binds

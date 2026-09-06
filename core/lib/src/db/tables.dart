@@ -148,7 +148,7 @@ class SymptomTypes extends Table {
 
 /// One (calendar day, symptom) pair the user marked as present.
 ///
-/// Presence-only in v1 — no severity or scale (see DEVELOPMENT_PLAN.md §9).
+/// Presence-only in v1 — no severity or scale (see docs/plan/backlog.md).
 /// The composite primary key `{date, symptomTypeId}` makes toggling idempotent;
 /// a multi-select day is simply several rows. `ON DELETE CASCADE` means hard-
 /// deleting a [SymptomTypes] row (not something the app does — it archives)

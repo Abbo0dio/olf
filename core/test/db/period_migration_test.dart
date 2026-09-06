@@ -11,7 +11,7 @@ import 'package:test/test.dart';
 /// This is hand-rolled: a real on-disk SQLite file is created at the v1 shape,
 /// then opened through [AppDatabase] so `migration.onUpgrade` runs for real.
 /// (Adopting `drift_dev schema` snapshot tooling is a tracked follow-up for the
-/// next migration — see DEVELOPMENT_PLAN.md §9.)
+/// next migration — see docs/plan/backlog.md.)
 void main() {
   late Directory tmp;
   late File dbFile;

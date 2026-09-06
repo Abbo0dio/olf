@@ -12,7 +12,7 @@ import '../support/harness.dart';
 /// every main screen pumps under `olfTheme(light)` and `olfTheme(dark)` with no
 /// exception and no `RenderFlex` overflow (both surface as a caught
 /// `FlutterError`), and the resolved brightness is what we asked for. Pixel
-/// goldens are deferred — see DEVELOPMENT_PLAN.md §9.
+/// goldens are deferred — see docs/plan/backlog.md.
 void main() {
   final today = DateTime.now();
   DateTime daysAgo(int n) =>

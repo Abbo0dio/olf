@@ -1,6 +1,6 @@
 // Dependency audit — the real gate (p0.3).
 //
-// Enforces these rules from requirements.md §3 / §8 and DEVELOPMENT_PLAN.md §1.4:
+// Enforces these rules from requirements.md §3 / §8 and docs/plan/conventions.md (Definition of Done):
 //
 //   1. No dependency — direct OR transitive — whose package name matches the
 //      committed denylist of advertising / analytics / tracking SDKs.
@@ -24,7 +24,7 @@
 //
 // Exit code 0 = clean, 1 = violation(s), 2 = bad invocation / missing input.
 // Any non-zero exit fails the CI `dependency-audit` job, which is a RELEASE
-// BLOCKER (DEVELOPMENT_PLAN.md p2.9): there is no `--skip`, no environment
+// BLOCKER (docs/plan/phases/phase-02.md p2.9): there is no `--skip`, no environment
 // bypass, and no allowlist. `ci-ok` treats this job being skipped as a failure.
 // A genuinely-needed package that trips a rule is handled by the escalation
 // path in docs/dependency-audit.md — never by weakening this gate.
@@ -144,7 +144,7 @@ void main(List<String> args) {
 /// override.
 const String _failureProcess = '''
 
-This gate is a RELEASE BLOCKER (DEVELOPMENT_PLAN.md p2.9). It cannot be waived,
+This gate is a RELEASE BLOCKER (docs/plan/phases/phase-02.md p2.9). It cannot be waived,
 skipped, or overridden in CI — there is no flag, no environment variable, and no
 allowlist. A red audit blocks the release.
 

@@ -42,7 +42,7 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // p6.3: Health Connect (androidx.health.connect:connect-client) requires
         // API 26+. This raises the actual build floor to match the minimum olf
-        // has always documented — "Android 8+ (API 26+)" in DEVELOPMENT_PLAN.md
+        // has always documented — "Android 8+ (API 26+)" in docs/plan/conventions.md
         // and docs/performance-budget.md.
         minSdk = 26
         targetSdk = flutter.targetSdkVersion

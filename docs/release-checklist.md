@@ -110,7 +110,7 @@ be waived in CI.
 Once the blockers and checks above are green:
 
 1. Bump `app/pubspec.yaml` `version:` and merge that to `main`. **Version number
-   is chosen manually** per the versioning policy in `DEVELOPMENT_PLAN.md` §7
+   is chosen manually** per the versioning policy in `docs/plan/decisions.md`
    (2026-09-04 entry): `1.x.x` = alpha (until every phase is `DONE`), `2.0.0` =
    the beta cut the moment the last phase closes; inside `1.x`, minor = new
    features shipped, patch = bug-fixes-only. `scripts/cut_release.sh` automates

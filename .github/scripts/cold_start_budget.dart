@@ -10,7 +10,7 @@
 //
 // This NEVER exits non-zero. Cold start is measured on a shared-runner
 // emulator, which is too noisy to gate a merge on (see the refinement in
-// DEVELOPMENT_PLAN.md p5.5). It runs in the nightly integration workflow, is
+// docs/plan/phases/phase-05.md p5.5). It runs in the nightly integration workflow, is
 // wrapped in `continue-on-error`, and only emits a `::warning::` when the
 // measured time is over the documented emulator-adjusted ceiling.
 //

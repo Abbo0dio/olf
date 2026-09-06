@@ -7,7 +7,7 @@
 # Why this exists: requirements.md §3 — "Zero third-party advertising or
 # analytics SDKs." Embedding ad/analytics SDKs that can see health data is a
 # direct legal-liability vector (Flo/FTC 2021; Meta/CIPA verdict 2025). This gate
-# is a RELEASE BLOCKER (DEVELOPMENT_PLAN.md p2.9).
+# is a RELEASE BLOCKER (docs/plan/phases/phase-02.md p2.9).
 #
 # Rule syntax (one per line; '#' starts a comment):
 #   package_name     exact pub package-name match
