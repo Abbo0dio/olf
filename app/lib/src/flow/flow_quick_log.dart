@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../health/health_providers.dart';
 import '../period/period_format.dart';
 import 'flow_format.dart';
 import 'flow_providers.dart';
@@ -69,12 +70,16 @@ class _FlowQuickLogSheetState extends ConsumerState<_FlowQuickLogSheet> {
     });
   }
 
-  void _persist() {
+  Future<void> _persist() async {
     final intensity = _intensity;
     if (intensity == null) return;
-    ref
+    await ref
         .read(dailyFlowRepositoryProvider)
         .setFlow(widget.date, intensity: intensity, clotSize: _clot);
+    // p6.4: mirror the entry out to a connected health platform. Fire-and-
+    // forget — never blocks or fails the log.
+    if (!mounted) return;
+    await writeBackFlow(ref, widget.date);
   }
 
   void _pickIntensity(FlowIntensity value) {

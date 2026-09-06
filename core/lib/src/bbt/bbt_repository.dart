@@ -25,6 +25,11 @@ abstract interface class BbtRepository {
   /// normal in-app edit leaves them at the default ([HealthDataSource.manual] /
   /// `null`); a health-platform import (p6.2+) passes the platform source and
   /// the sample's stable id so a later sync matches instead of duplicating.
+  ///
+  /// [externalId] is **sticky on update**: passing `null` over a row that
+  /// already carries an id keeps the existing id, so an edit that flips a
+  /// previously-imported row back to `manual` still lets a p6.4 write-back
+  /// update the platform record in place. Pass a non-null id to replace it.
   Future<void> setTemp(
     DateTime date,
     double celsius, {

@@ -131,7 +131,8 @@ flowchart TD
 
     UI -->|"opt-in: Connect a health app (p6.2 iOS / p6.3 Android)"| HKBridge{{"olf/health MethodChannel<br/>HealthPlatformGateway seam"}}
     HKBridge <-->|"flow + BBT, local IPC"| HealthStore[["OS health store<br/>Apple Health / Health Connect<br/>(OS-governed, per-app grants)"]]
-    HKBridge -->|"reconcile, never clobber manual"| RealVault
+    HKBridge -->|"reconcile, never clobber manual; skip < retention cutoff"| RealVault
+    RealVault -->|"log/edit flow or BBT → write-back; purge-before-sync (p6.4)"| HKBridge
 ```
 
 ASCII fallback (same flow, for viewers without Mermaid):
@@ -162,6 +163,9 @@ ASCII fallback (same flow, for viewers without Mermaid):
      [ Flutter UI ] <--> [ olf/health MethodChannel = HealthPlatformGateway ]
                           <--> [ OS health store: Apple Health / Health Connect ]  (flow + BBT, local IPC)
                      import --> [ ImportReconciler ] --> olf.db  (never clobbers a manual row)
+                     write-back (p6.4): olf.db edit --> [ olf/health ] --> OS health store
+                       (externalId round-tripped so no duplicate; both directions skip
+                        entries older than the p2.3 retention cutoff — purge-before-sync)
 ```
 
 ---
@@ -501,3 +505,34 @@ The CI guard requires an entry naming the current phase.
   `ImportReconciler` (p6.1) — a `source == manual` row is **never**
   auto-overwritten. **No new asset, adversary, or network path.** Watch items
   p6.4 / p6.5 unchanged. No further design changes required by this review.
+- **2026-09-06 — Phase 6 / p6.4 landing — reviewer: worker: 1.** The health
+  bridge is now genuinely two-way. **Data flow** updated: a write-back arrow
+  (`olf.db` edit → `olf/health` → OS health store) plus the retention
+  interaction, on both the Mermaid and ASCII diagrams. **No change** to Assets,
+  Adversaries, Trust boundaries or Mitigations — nothing new crosses boundary
+  #8 that did not already: the same two types (`menstrualFlow`,
+  `basalBodyTemperature`), the same local-IPC channel, the same opt-in /
+  default-off / revocable gate. Write-back only reverses the direction of an
+  already-authorised `readWrite` grant. **What p6.4 adds:** (a) **write-back on
+  log/edit** — a connected platform receives the flow / BBT entry the user
+  makes or edits, through the existing `HealthPlatformGateway.write`; the
+  `externalId` is kept sticky across an edit so the platform record updates in
+  place rather than duplicating, and an edit of a previously-imported row flips
+  its `source` back to `manual` (the p6.1 deferral). (b) **purge-before-sync** —
+  every sync runs the p2.3 retention sweep first, and both import and write-back
+  drop any sample older than the retention cutoff, so nothing the user has aged
+  out is re-imported or pushed back (mirrors purge-before-export). (c) a
+  **conflict-review screen** listing the `ReconciliationPlan.conflicts` the last
+  sync could not auto-apply (keep-mine / use-theirs / dismiss). The conflict
+  list is held **in memory only** (`healthConflictsProvider`), re-derived on the
+  next sync — **no new data class, no new stored asset**: each entry is a
+  `LocalSampleView` + a `HealthSample`, both defined in p6.1, and resolving one
+  is an ordinary `bbt_entries` / `daily_flows` / gateway write. **No new
+  dependency, permission, manifest/plist change, CI gate, or network path.**
+  `core` change: `ImportReconciler` now skips an incoming sample whose value
+  already matches the local row regardless of source (previously a same-value
+  cross-source `externalId` match against a `manual` row was flagged as a
+  conflict) — removes a spurious "your value vs your value" review item on every
+  write-back round-trip; a *differing* value still conflicts, so "never clobber
+  a manual value" is intact. Watch item p6.5 unchanged. No further design
+  changes required by this review.

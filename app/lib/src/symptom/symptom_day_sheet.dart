@@ -6,6 +6,7 @@ import 'package:olf_core/olf_core.dart';
 import '../a11y/spoken_detail.dart';
 import '../bbt/bbt_format.dart';
 import '../bbt/bbt_providers.dart';
+import '../health/health_providers.dart';
 import '../mucus/mucus_providers.dart';
 import '../period/period_format.dart';
 import '../settings/settings_providers.dart';
@@ -121,7 +122,11 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
     }
     final celsius = result.celsius!;
     await repo.setTemp(widget.date, celsius);
-    if (mounted) setState(() => _tempCelsius = celsius);
+    if (!mounted) return;
+    setState(() => _tempCelsius = celsius);
+    // p6.4: mirror the reading out to a connected health platform. Fire-and-
+    // forget — never blocks or fails the log.
+    await writeBackBbt(ref, widget.date);
   }
 
   void _openManage() {
