@@ -22,6 +22,11 @@ class DriftSymptomRepository implements SymptomRepository {
   @override
   Future<List<SymptomType>> activeTypes() => _activeSelect().get();
 
+  @override
+  Future<List<SymptomType>> allTypes() => (_db.select(
+    _db.symptomTypes,
+  )..orderBy([(t) => OrderingTerm(expression: t.sortOrder)])).get();
+
   SimpleSelectStatement<$SymptomTypesTable, SymptomType> _activeSelect() =>
       _db.select(_db.symptomTypes)
         ..where((t) => t.archivedAt.isNull())

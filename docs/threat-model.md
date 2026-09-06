@@ -28,6 +28,7 @@ What an adversary would want, roughly in order of sensitivity.
 | PIN hash and decoy-PIN hash | `flutter_secure_storage` | Brute-forcing these bypasses the gate; the decoy hash also reveals that a decoy exists. |
 | Preferences (theme, pronouns, reminder settings, retention window) | unencrypted `SharedPreferences` / `NSUserDefaults` | Low sensitivity on their own, but pronouns and a tight retention window are weak signals. |
 | `.olfbackup` export files | wherever the user saved them via the OS share sheet — local disk, cloud drive, messaging app | Encrypted (AES-GCM, user passphrase), but now outside app control. |
+| `olf-report-YYYY-MM-DD.pdf` doctor-report files (p6.5) | wherever the user saved them via the OS file picker | **Plaintext** — a human-readable summary of cycles, symptoms, BBT and pregnancy-loss / birth events, meant to be handed to a clinician. Neutral filename, no name/identifier. Retention-trimmed (purge-before-export). Outside app control once saved. |
 | Derived predictions (next period, fertile window) | recomputed in memory from entries; not separately stored | Same sensitivity as the entries they come from. |
 | Menstrual-flow & basal-body-temperature samples in the **OS health store** — Apple Health on iOS (p6.2), Android Health Connect on Android (p6.3) | the platform's own encrypted store, reached over local IPC only when the user has turned on "Connect a health app" | Same sensitivity as the olf entries — but now also readable by any *other* app the user has granted the same health permissions, and governed by the OS's sharing UI rather than olf's. Default off. |
 | Source repository & dependency graph | GitHub, `pubspec.lock` | A malicious dependency could exfiltrate any of the above from a future build. |
@@ -67,9 +68,14 @@ so the boundary is honest, not because they are unimportant.
 3. **Locked app ↔ unlocked app.** The PIN/biometric gate (p1.8, p2.1) runs
    *before* the database is opened; the decoy PIN (p2.2) routes to a physically
    separate database file. Crossing point: the lock screen + vault selection.
-4. **App ↔ OS share sheet / file picker.** Export hands an encrypted blob to
-   the OS; restore reads a user-chosen file. Once exported, the file is outside
-   olf's control. Crossing point: the `BackupFileGateway` seam (p1.10).
+4. **App ↔ OS share sheet / file picker.** Export hands a file to the OS —
+   an encrypted `.olfbackup` blob (p1.10) or a **plaintext** `olf-report-*.pdf`
+   doctor report (p6.5); restore reads a user-chosen file. Once written, the
+   file is outside olf's control. Crossing point: the `BackupFileGateway` seam
+   (`saveFile`), shared by both (p1.10, p6.5). The report is deliberately
+   plaintext — it exists to be read by a clinician — so the mitigation is the
+   user's own deliberate save action, a neutral filename with no identifier, and
+   the retention window applied before the file is built.
 5. **App ↔ screen / recents buffer.** When the app is backgrounded or
    inactive, the OS may snapshot the screen. Crossing point: the lifecycle
    listener + `FLAG_SECURE` / native cover (p2.4).
@@ -188,6 +194,7 @@ cross-reference the phase-gate review walks.
 | Biometric unlock layered on the PIN | p2.1 | faster gate → users actually keep it on |
 | Decoy / duress PIN → separate empty vault | p2.2 | coercing party; border / custody compulsion (§7) |
 | Scheduled auto-deletion (retention window + purge-before-export) | p2.3 | limits what a seized device can reveal; "delete means delete" (§9(11)) |
+| Doctor report: on-device only, neutral filename, purge-before-export, "not a medical device" disclaimer on the page, retention exclusion stated when it applies | p6.5 | user-initiated plaintext egress — same class as the p1.10 backup; keeps the export deliberate, unlinkable by filename, and honest about gaps |
 | Background app-switcher mask + `FLAG_SECURE` + no-PHI recents | p2.4 | another app / `MediaProjection`; recents snapshot |
 | Standalone consumer-health privacy policy + opt-in consent switches (default off) | p2.5 | MHMDA / Nevada SB370 alignment; "we never sell / require legal process" (§3, §6) |
 | TLS-only platform config + `OlfHttpClient` chokepoint + transport gate | p2.6 | future network attacker; prevents a later feature silently using cleartext |
@@ -218,8 +225,11 @@ hardening slice.
   there is no "wipe the decoy space" action (p2.2).
 - **The decoy vault opens with default preferences**, which a heavily
   customised real app might contrast with (p2.2).
-- **Already-saved `.olfbackup` files are not retro-scrubbed** by the retention
-  sweep — the app keeps no registry of where exports were saved (p2.3, §9(11)).
+- **Already-saved `.olfbackup` files and `olf-report-*.pdf` doctor reports are
+  not retro-scrubbed** by the retention sweep — the app keeps no registry of
+  where exports were saved (p2.3, p6.5, §9(11)). The report is plaintext by
+  design; once the user has saved and shared it, its contents are wherever they
+  put it.
 - **No background/periodic retention sweep** — it runs on launch, window
   change, and before export only (p2.3).
 - **Certificate pinning is designed, not enforced** — `OlfHttpClient
@@ -536,3 +546,30 @@ The CI guard requires an entry naming the current phase.
   write-back round-trip; a *differing* value still conflicts, so "never clobber
   a manual value" is intact. Watch item p6.5 unchanged. No further design
   changes required by this review.
+- **2026-09-06 — Phase 6 / p6.5 landing — reviewer: worker: 1.** The doctor
+  report opens the phase's second boundary: a **user-initiated plaintext egress
+  path**, the same class as the p1.10 backup export. **Assets** gains one row —
+  `olf-report-YYYY-MM-DD.pdf` files, human-readable (cycles, symptom frequency,
+  BBT, pregnancy-loss / birth events, the humble next-period estimate),
+  retention-trimmed, with a neutral filename that carries no name or identifier.
+  **Trust boundary #4** (App ↔ OS share sheet / file picker) is widened to
+  cover both file kinds through one shared `BackupFileGateway.saveFile` seam;
+  the report is deliberately *not* encrypted because its whole purpose is to be
+  read by a clinician, so the mitigations are: it never leaves the device on its
+  own (the user picks the destination through the OS file picker — no storage
+  permission), the p2.3 retention window is applied *before* the file is built
+  (purge-before-export, reusing `RetentionController.sweepNow`), the report
+  states on its face when retention excluded part of the requested range, and
+  every page carries the fixed "olf is not a medical device" disclaimer (§6).
+  **Mitigations** gains the matching row; **Residual risks** notes that a
+  saved report, like a saved backup, is not retro-scrubbed. **`core` change:**
+  a new pure `ClinicalReport` value object + `buildClinicalReport` (no Flutter,
+  no `DateTime.now()`, deterministic) and a `SymptomRepository.allTypes()`
+  read — no schema change, no new table. **`app` change:** `pdf` (pure Dart,
+  Apache-2.0, generates bytes) is the one new dependency — dependency-audit
+  green with its full transitive subtree, no native/platform code, no
+  `printing` companion, no iOS/Android SDK-floor bump. **No new network path**
+  (the report is built and shared entirely on-device), **no new permission**,
+  **no manifest / plist change**, **no CI gate change**. The `OlfHttpClient`
+  TLS chokepoint (p2.6) stays N/A for Phase 6. No further design changes
+  required by this review.

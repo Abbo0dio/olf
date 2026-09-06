@@ -102,8 +102,21 @@ be waived in CI.
       (watch the flow level round-trips — light / medium / heavy, and spotting →
       "unspecified"). Deny the sheet (or revoke in Health Connect) and confirm
       olf shows the calm "not granted" message and stays disconnected — no
-      crash. On a device **without** Health Connect, confirm the "Apps & export"
-      section is hidden entirely. `minSdk` in the built APK is `26`.
+      crash. On a device **without** Health Connect, confirm the
+      **Connect a health app** tile is hidden (the "Apps & export" section
+      itself still shows — it also holds the doctor report). `minSdk` in the
+      built APK is `26`.
+- [ ] **Doctor report (p6.5) verified on a device.** Settings → Apps & export →
+      **Export report for a doctor**. Pick a range, check the "what's included"
+      preview matches the logged data, tap **Generate report**, and save through
+      the system file picker (no storage-permission prompt). Open the saved
+      `olf-report-YYYY-MM-DD.pdf` in a standard PDF viewer: it renders, the
+      filename carries no name/identifier, every page carries the "olf is not a
+      medical device" disclaimer, and — with a retention window set that starts
+      after the requested range — the report states that earlier entries were
+      excluded. Confirm nothing left the device (no network prompt) and that an
+      empty history produces a valid PDF (or the "nothing to export" message)
+      rather than a crash.
 
 ## Cutting the release (Android)
 

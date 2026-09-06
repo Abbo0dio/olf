@@ -7,7 +7,7 @@ import 'package:olf_app/src/backup/backup_gateway.dart';
 class FakeBackupGateway implements BackupFileGateway {
   FakeBackupGateway({this.pickName = 'olf-backup.olfbackup'});
 
-  /// The last bytes written by [writeBackup]; also what [pickBackup] returns.
+  /// The last bytes written by [saveFile]; also what [pickBackup] returns.
   Uint8List? file;
 
   /// Set to `null` to simulate the user cancelling the save dialog.
@@ -21,13 +21,20 @@ class FakeBackupGateway implements BackupFileGateway {
   int writeCount = 0;
   int pickCount = 0;
 
+  /// The [suggestedName] / [dialogTitle] passed to the most recent [saveFile].
+  String? lastSuggestedName;
+  String? lastDialogTitle;
+
   @override
-  Future<String?> writeBackup(
+  Future<String?> saveFile(
     Uint8List bytes, {
     required String suggestedName,
+    required String dialogTitle,
   }) async {
     writeCount++;
     file = bytes;
+    lastSuggestedName = suggestedName;
+    lastDialogTitle = dialogTitle;
     return savePath;
   }
 

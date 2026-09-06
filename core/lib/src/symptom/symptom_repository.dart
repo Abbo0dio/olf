@@ -15,6 +15,12 @@ abstract interface class SymptomRepository {
   /// A one-shot read of the active catalogue, ordered by `sortOrder`.
   Future<List<SymptomType>> activeTypes();
 
+  /// A one-shot read of **every** catalogue entry, archived ones included,
+  /// ordered by `sortOrder`. Used where a historical [DailySymptomEntry] must
+  /// still be named even though its symptom was later removed (the p6.5 doctor
+  /// report).
+  Future<List<SymptomType>> allTypes();
+
   /// Add a custom symptom. Trims [name]; throws [SymptomTypeException] if it is
   /// empty, too long, or clashes (case-insensitively) with an active name. The
   /// new row is appended after the current last `sortOrder`.

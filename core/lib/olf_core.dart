@@ -24,6 +24,7 @@ export 'src/cycle/pregnancy_event.dart';
 export 'src/date_math.dart';
 export 'src/db/app_database.dart';
 export 'src/db/database_key_store.dart';
+export 'src/export/clinical_report.dart';
 export 'src/db/tables.dart'
     show
         AppSettings,
