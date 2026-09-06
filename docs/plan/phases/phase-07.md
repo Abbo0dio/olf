@@ -364,23 +364,120 @@ new egress/permission/CI gate).
   start/stop dates — verify that first. Don't add BC-type-specific pharmacology; the note is
   generic ("a hormonal birth-control change").
 
-**Exit gate (Phase 7):** each mode ships independently, opt-in, tested, non-diagnostic, with
-correlation / timeline views where the requirement calls for them.
-- *Postpartum cycle-return + loss/birth support + the mode framework* — p7.1. PR #… .
-- *Pregnancy mode: gestational-age core + week view + enable/start-reference flow* — p7.2a. PR #… .
-- *Pregnancy mode: pregnancy symptom set + prediction-UI suppression + end-pregnancy → postpartum* — p7.2b. PR #… .
-- *TTC mode with an honest daily fertility score* — p7.3. PR #… .
-- *PCOS mode (irregular-cycle-aware UI + symptom correlation) + the reusable correlation core* —
-  p7.4. PR #… .
-- *Endometriosis mode (pain/flare log + cycle-phase correlation)* — p7.5. PR #… .
-- *PMDD mode (daily rating + cycle-overlay chart)* — p7.6. PR #… .
-- *Perimenopause / menopause mode (variability view + symptom timeline)* — p7.7. PR #… .
-- *Birth-control-switching recalibration support* — p7.8. PR #… .
+**Exit gate (Phase 7) — MET (2026-09-06):** each mode ships independently, opt-in, tested,
+non-diagnostic, with correlation / timeline views where the requirement calls for them.
+- *Postpartum cycle-return + loss/birth support + the mode framework* — **MET: p7.1 #73
+  `4e84c30`** (`LifeStageMode` enum + `app_settings` `mode.<name>` keys, `ModesPage`,
+  `mode_offer`, pure `derivePostpartumCycleReturn`, loss-vs-birth support resources).
+- *Pregnancy mode: gestational-age core + week view + enable/start-reference flow* — **MET:
+  p7.2a #74 `b058299`** (`gestational_age.dart` LMP/dueDate/conception → `lmpAnchor` seam,
+  `kPregnancyWeekNotes` wk 0–42, `pregnancy.start_reference` KV — no schema change).
+- *Pregnancy mode: pregnancy symptom set + prediction-UI suppression + end-pregnancy →
+  postpartum* — **MET: p7.2b #76 `5fb2734`** (`kPregnancySymptomNames` logged through the p1.5
+  repo, `_PredictionCard` gated `!pregnancyModeOn`, loss/birth clears the mode then offers
+  postpartum). Enablement criterion altered at negotiation — Modes-section-only (Option A),
+  the start-reference input doubles as the "I'm pregnant" record; `docs/plan/decisions.md`
+  2026-09-06.
+- *TTC mode with an honest daily fertility score* — **MET: p7.3 #77 `0553215`**
+  (`daily_fertility_score.dart` — a day-relative shape curve on the p3 ovulation estimate,
+  re-centred by an observed thermal shift + floored by fertile mucus, `.clamp(1, 99)`, `< 2`
+  cycles → null; `thermal_shift.dart` retrospective 3-over-6 detector; **not** a second
+  engine; explicit "not contraception guidance" disclaimer).
+- *PCOS mode (irregular-cycle-aware UI + symptom correlation) + the reusable correlation core*
+  — **MET: p7.4 #79 `276420d`** (`cycle_phase_correlation.dart` `cyclePhaseCorrelations` —
+  rate-normalised concentration, no p-values; `cyclePhaseTimeline`; `CorrelationChart` shared
+  widget; `pcosMode` copy-softening — presentation only; anti-Flo `pcosNotSymptomCheckerLine`).
+- *Endometriosis mode (pain/flare log + cycle-phase correlation)* — **MET: p7.5 #80
+  `cf11233`** (schema **v7→v8** — new additive `pain_entries` table + pure `enum
+  SymptomSeverity`; `painFlareEvents` → `cyclePhaseCorrelations`; migration + matrix→v8 +
+  `pain_migration_test` + backup round-trip in the PR; `docs/plan/decisions.md` 2026-09-06).
+- *PMDD mode (daily rating + cycle-overlay chart)* — **MET: p7.6 #82 `25afc44`** (schema
+  **v8→v9** — new additive `pmdd_ratings` table, composite `{date, item}` PK, `PmddSymptom`
+  fixed enum, `SymptomSeverity` rating with `none` stored; pure `pmddOverlay` reuses
+  `cyclePhaseCorrelations` unchanged → `PmddLutealRead` enum, **no DRSP/numeric score**;
+  migration + matrix→v9 + `pmdd_migration_test` + backup round-trip in the PR;
+  `docs/plan/decisions.md` 2026-09-06).
+- *Perimenopause / menopause mode (variability view + symptom timeline)* — **MET: p7.7 #81
+  `3d8d788`** (`perimenopause_transition.dart` — `PerimenopauseVariabilityTrend` +
+  `PerimenopauseStageHint` enums over `CycleStats` + gap logic, **NO numeric "Perimenopause
+  Score"** — content test asserts it; "12 months" surfaced factually; forecast withheld past a
+  long gap).
+- *Birth-control-switching recalibration support* — **MET: p7.8 #78 `91df394`**
+  (`birth_control_recalibration.dart` — `isHormonal` on the p1.7 `BirthControlMethod`, no
+  schema change; forecast **withheld** during a 90-day / 3-cycle window, sticky dismissal;
+  predictor untouched — `AdaptivePredictor` has no time-scoped exclusion seam).
 - *Phase-wide:* every mode opt-in + reversible with no data loss on disable; every derivation
   pure `core` / `DateTime.now()`-free; no diagnostic or alarming language (§9(12)); each mode
-  carries the not-a-medical-device line; any schema change shipped with its migration + matrix
-  extension + backup round-trip in the same PR; nothing gated behind payment (§5).
+  carries the not-a-medical-device line; two schema changes (p7.5 v7→v8, p7.6 v8→v9) each
+  shipped with its migration + matrix extension + backup round-trip in the same PR; nothing
+  gated behind payment (§5).
 
-(PR / SHA blanks filled at phase close.)
+**Phase 7 — phase-wide truths (p7.1–p7.8):**
+- **Everything free.** The Phase 7 stub's "insights may later be paid" line is dead — every
+  mode's logging *and* its correlation/insight/overlay views ship free (§5).
+- **`core` stayed Flutter-free / `DateTime.now()`-free.** Every derivation is pure, clock-
+  injected Dart in `core`: `derivePostpartumCycleReturn`, `gestationalAgeAsOf`,
+  `dailyFertilityScore` + `thermalShift`, `cyclePhaseCorrelations` + `cyclePhaseTimeline`,
+  `painFlareEvents`, `pmddOverlay`, `derivePerimenopauseTransition`,
+  `deriveBirthControlRecalibration`. Mode *screens* live in `app`; `DateTime.now()` is read
+  only at the provider edge.
+- **Two schema bumps, both additive, both in their slice's PR.** p7.5 `schemaVersion` **7→8**:
+  `pain_entries` (endometriosis pain/flare log, one row/day, free-text note). p7.6 **8→9**:
+  `pmdd_ratings` (composite `{date, item}` PK, one row per rated item per day, enum-only).
+  Both plain `createTable`, no `to >=` guard (an extra table is tolerated at every
+  intermediate `migration_matrix_test` target — only the v7 *column* add needed the guard).
+  Each shipped with `migration_matrix_test` extended to the new version, a dedicated
+  `*_migration_test.dart`, a real `drift_dev schema dump` (v8, v9 in `_dumpedVersions`), and a
+  backup round-trip carrying real rows across the migration. `BackupService.tableOrder` +
+  `RetentionService.deleteWhere` cover both new tables. §5 negotiated both times
+  (`docs/plan/decisions.md`); the p1.5 presence-only symptom model was shown structurally
+  unable to carry an ordered scale / free text / per-item daily ratings.
+- **The shared framework, built once in p7.1 + p7.4, reused by the rest.** p7.1: the
+  `LifeStageMode` enum, the `app_settings` `mode.<name>` enablement seam, `ModesPage`,
+  `mode_offer`. p7.4: `cyclePhaseCorrelations` (the descriptive correlation core — p7.5, p7.6,
+  p7.7 all parameterise it unchanged), `cyclePhaseTimeline`, and the `CorrelationChart`
+  widget (p7.1-deferred; p7.5–p7.7 reuse it as-is). The `period_calendar_page.dart`
+  prediction-card region became a composed gate across pregnancy / bcRecal / perimenopause
+  modes with `pcosMode` + `perimenopauseMode` wording flags threaded through the cards and
+  `cycle_format.dart` — presentation only, `deriveCycles` / `CycleStats` / predictor never
+  touched.
+- **Reuse, don't fork — held.** No mode forked the cycle engine or the predictor. The
+  predictor stayed behind its unchanged seam; where a mode needed the forecast to back off
+  (pregnancy, BC-switch, perimenopause past a gap) the card is **withheld or annotated**, not
+  rebuilt.
+- **§9(12) — no diagnoses, enforced by tests.** No mode emits a verdict, a directive, or a
+  numeric medical score. p7.4 (anti-Flo "ask your doctor about PCOS"), p7.6 (no DRSP / 0–100),
+  p7.7 (no "Perimenopause Score") each carry a content test that locks the copy and asserts
+  the absence of a score. Every mode screen shows `SupportResources.notMedicalDeviceLine`.
+- **Threat model.** Each slice's review-log entry is in `docs/threat-model.md` (p7.3's added
+  at close — a derived read, no new asset/egress/schema/permission/CI). Two new encrypted
+  local assets (`pain_entries` incl. free-text notes, `pmdd_ratings` enum-only) added to the
+  Assets table; both SQLCipher-encrypted at rest, both covered by backup + retention, never
+  leaving the device. No new adversary, trust boundary, network path, dependency, permission,
+  manifest/plist, or CI gate anywhere in the phase.
+
+**Deferred to backlog (see `backlog.md`):** pregnancy-mode offer from a logged positive-
+pregnancy state (needs a `pregnancyStart` `CycleEventType` — a schema change) · `thermalShift`
+operating on the reading sequence not calendar-spaced days · endometriosis v1 scope cuts (one
+region/day, no retroactive severity on the p1.5 log, plain chips not a body-map, no standalone
+pain time-series widget) · PMDD v1 scope cuts (no user-configurable rating items or scale;
+"checked in, all fine" not distinct from an all-`none` day).
+
+### Notes — per-slice record (frozen at close)
+
+The live per-slice build log lived in `.herdsman/state.md` during the phase; the merged record:
+
+| Slice | PR | SHA | One-line |
+|---|---|---|---|
+| p7.1 | #73 | `4e84c30` | Loss/birth/postpartum flows + the mode framework (`LifeStageMode`, `mode.<name>` KV, `ModesPage`, `mode_offer`, `derivePostpartumCycleReturn`, support resources). No schema change. Correlation-chart widget deferred to p7.4. |
+| p7.2a | #74 | `b058299` | Pregnancy part 1: `gestational_age.dart` (LMP/dueDate/conception → `lmpAnchor` seam, honest null before anchor), `kPregnancyWeekNotes` wk 0–42, `pregnancy.start_reference` KV. No schema change. |
+| p7.2b | #76 | `5fb2734` | Pregnancy part 2 (app-only): `kPregnancySymptomNames` via the p1.5 repo, `_PredictionCard` gated `!pregnancyModeOn`, loss/birth → clear mode → offer postpartum. Enablement criterion altered (Option A) at negotiation. |
+| p7.3 | #77 | `0553215` | TTC mode: `daily_fertility_score.dart` (day-relative curve on the p3 estimate, re-centred by `thermalShift`, floored by fertile mucus, clamp 1–99, `<2` cycles → null) + `thermal_shift.dart`. Not a second engine. `// SHORTCUT`: shift detector walks the reading sequence, not calendar days (backlog). No schema change. Threat-model entry added at close. |
+| p7.4 | #79 | `276420d` | PCOS mode + the reusable correlation core: `cyclePhaseCorrelations` (rate-normalised concentration, no p-values, `today` injected), `cyclePhaseTimeline`, `CorrelationChart` widget, `pcosMode` copy-softening (presentation only). No schema change. |
+| p7.5 | #80 | `cf11233` | Endometriosis mode + **schema v7→v8**: new additive `pain_entries` table (PK `date`, `SymptomSeverity` intensity + `PainRegion` + free-text note + flare flag) + pure `enum SymptomSeverity`. `painFlareEvents` → `cyclePhaseCorrelations`. Migration + matrix→v8 + `pain_migration_test` + backup round-trip + `drift_schema_v8` in the PR. §5 negotiated. |
+| p7.6 | #82 | `25afc44` | PMDD mode + **schema v8→v9**: new additive `pmdd_ratings` table (composite `{date, item}` PK, `PmddSymptom` fixed enum, `SymptomSeverity` rating with `none` stored). Pure `pmddOverlay` reuses `cyclePhaseCorrelations` unchanged → `PmddLutealRead` enum. **No DRSP/numeric score** (content test). Migration + matrix→v9 + `pmdd_migration_test` + backup round-trip + `drift_schema_v9` in the PR. §5 negotiated. `modeHasScreen` made exhaustive. |
+| p7.7 | #81 | `3d8d788` | Perimenopause mode: `perimenopause_transition.dart` — `PerimenopauseVariabilityTrend` + `PerimenopauseStageHint` enums over `CycleStats` + gap logic; **NO numeric score** (content test); "12 months" factual; forecast withheld past a long gap; symptom timeline reuses `cyclePhaseCorrelations`. No schema change. |
+| p7.8 | #78 | `91df394` | Birth-control-switching recalibration: `birth_control_recalibration.dart` — `isHormonal` on the p1.7 `BirthControlMethod` (no schema change — §5 pre-check cleared); forecast **withheld** during a 90-day / 3-cycle window, dismissal sticky until a newer switch; predictor untouched. |
+| close | #… | `…` | Exit gate, `overview.md` row 7 → DONE, `architecture.md` refresh, p7.3 threat-model entry, this frozen record; carries the batched local-`main` bookkeeping stack. |
 
 ---
