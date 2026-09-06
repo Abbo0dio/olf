@@ -46,6 +46,10 @@ class _SymptomDaySheet extends ConsumerStatefulWidget {
 class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
   final Set<int> _selected = {};
   double? _tempCelsius;
+  // p8.1a: what the stored reading measures — `sleepingWrist` for a passive
+  // Apple Watch overnight capture, `basal` (or null when there is no reading)
+  // otherwise. Drives the provenance sub-label under the temperature chip.
+  BbtMeasurementKind? _tempKind;
   CervicalMucusType? _mucus;
   bool _loaded = false;
 
@@ -69,6 +73,7 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
         ..clear()
         ..addAll(present);
       _tempCelsius = bbt?.tempCelsius;
+      _tempKind = bbt?.measurementKind;
       _mucus = mucus?.type;
       _loaded = true;
     });
@@ -112,7 +117,12 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
     final repo = ref.read(bbtRepositoryProvider);
     if (result.cleared) {
       await repo.clearTemp(widget.date);
-      if (mounted) setState(() => _tempCelsius = null);
+      if (mounted) {
+        setState(() {
+          _tempCelsius = null;
+          _tempKind = null;
+        });
+      }
       return;
     }
     if (result.unit != unit) {
@@ -121,9 +131,14 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
           .set(SettingKeys.temperatureUnit, result.unit.storageKey);
     }
     final celsius = result.celsius!;
+    // A typed correction always writes a basal reading — even when it is
+    // replacing a passive Apple Watch value (p8.1a).
     await repo.setTemp(widget.date, celsius);
     if (!mounted) return;
-    setState(() => _tempCelsius = celsius);
+    setState(() {
+      _tempCelsius = celsius;
+      _tempKind = BbtMeasurementKind.basal;
+    });
     // p6.4: mirror the reading out to a connected health platform. Fire-and-
     // forget — never blocks or fails the log.
     await writeBackBbt(ref, widget.date);
@@ -148,6 +163,11 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
     final unit =
         ref.watch(temperatureUnitProvider).value ?? TemperatureUnit.celsius;
     final temp = _tempCelsius;
+    // p8.1a: non-null only when the stored reading is a passive Apple Watch
+    // capture — shown as a sub-label under the temperature chip.
+    final tempSourceLabel = temp == null
+        ? null
+        : bbtSourceLabel(_tempKind ?? BbtMeasurementKind.basal);
     // p5.3: with "Reduce spoken detail" on, chip names are not spoken — the
     // screen reader still announces the selected state, and the visible label
     // is unchanged.
@@ -214,14 +234,36 @@ class _SymptomDaySheetState extends ConsumerState<_SymptomDaySheet> {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
-              child: ActionChip(
-                avatar: const Icon(Icons.thermostat_outlined, size: 18),
-                label: Text(
-                  temp == null
-                      ? 'Add basal temperature'
-                      : 'Basal temp: ${formatTemp(temp, unit)}',
-                ),
-                onPressed: () => _editTemp(unit),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ActionChip(
+                    avatar: const Icon(Icons.thermostat_outlined, size: 18),
+                    label: Text(
+                      temp == null
+                          ? 'Add basal temperature'
+                          : 'Basal temp: ${formatTemp(temp, unit)}',
+                    ),
+                    onPressed: () => _editTemp(unit),
+                  ),
+                  // p8.1a: mark a passively-captured Apple Watch reading as
+                  // distinct from one the user typed. Tapping the chip corrects
+                  // it (which turns it into a typed basal reading).
+                  if (tempSourceLabel != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, left: 4),
+                      child: Text(
+                        tempSourceLabel,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        semanticsLabel: reduceSpoken
+                            ? 'Passive temperature reading'
+                            : tempSourceLabel,
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 12),

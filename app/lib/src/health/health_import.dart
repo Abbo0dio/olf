@@ -117,6 +117,9 @@ class HealthImportService {
   static const Set<HealthSampleType> _types = {
     HealthSampleType.menstrualFlow,
     HealthSampleType.basalBodyTemperature,
+    // p8.1a: passive Apple Watch overnight wrist temperature. Read-only — it is
+    // never in the write-back set (see [_pushOut]).
+    HealthSampleType.wristTemperature,
   };
 
   /// Ask for authorization and run a full sync. Throws
@@ -148,11 +151,40 @@ class HealthImportService {
         ? retentionCutoff
         : windowFrom;
 
-    final incoming = (await _gateway.read(
+    final rawIncoming = (await _gateway.read(
       types: _types,
       from: from,
       to: to,
     )).where((s) => _inWindow(s.startAt, retentionCutoff)).toList();
+
+    // p8.1a: fold passive Apple Watch wrist-temperature readings into the basal
+    // path. They are re-typed to `basalBodyTemperature` *only here*, at the
+    // reconcile boundary, so the UNCHANGED `ImportReconciler` makes them compete
+    // for the one-row-per-day slot — conflicting against a manual BBT day,
+    // updating a prior wrist day. We remember which readings were wrist (by the
+    // platform's stable id, which every real HealthKit sample carries) so the
+    // row written to `bbt_entries` is tagged `sleepingWrist`, keeping it out of
+    // every basal-temperature reader (thermal shift, fertility score, the BBT
+    // chart, the doctor report).
+    final wristExternalIds = <String>{};
+    final wristDaysNoId = <DateTime>{};
+    final incoming = <HealthSample>[];
+    for (final s in rawIncoming) {
+      if (s.type == HealthSampleType.wristTemperature) {
+        if (s.externalId != null) {
+          wristExternalIds.add(s.externalId!);
+        } else {
+          wristDaysNoId.add(s.day);
+        }
+        incoming.add(s.copyWith(type: HealthSampleType.basalBodyTemperature));
+      } else {
+        incoming.add(s);
+      }
+    }
+
+    bool isWristReading(HealthSample s) =>
+        (s.externalId != null && wristExternalIds.contains(s.externalId)) ||
+        (s.externalId == null && wristDaysNoId.contains(s.day));
 
     final bbtRows = (await _bbt.allEntries())
         .where((r) => _inWindow(r.date, retentionCutoff))
@@ -186,13 +218,19 @@ class HealthImportService {
     final plan = _reconciler.reconcile(local: local, incoming: incoming);
 
     for (final sample in plan.inserts) {
-      await _apply(sample);
+      await _apply(sample, asSleepingWrist: isWristReading(sample));
     }
     for (final update in plan.updates) {
-      await _apply(update.incoming);
+      await _apply(
+        update.incoming,
+        asSleepingWrist: isWristReading(update.incoming),
+      );
     }
 
-    await _pushOut(incoming: incoming, bbtRows: bbtRows, flowRows: flowRows);
+    // `_pushOut` sees the *raw* incoming (original types) — a wrist reading
+    // must not make the platform look like it already holds that day's basal
+    // temperature, so a manual BBT on a wrist day still gets seeded outward.
+    await _pushOut(incoming: rawIncoming, bbtRows: bbtRows, flowRows: flowRows);
 
     return HealthSyncResult(
       summary: HealthSyncSummary(
@@ -210,7 +248,10 @@ class HealthImportService {
   static bool _inWindow(DateTime d, DateTime? cutoff) =>
       cutoff == null || !dateOnly(d).isBefore(dateOnly(cutoff));
 
-  Future<void> _apply(HealthSample sample) async {
+  Future<void> _apply(
+    HealthSample sample, {
+    bool asSleepingWrist = false,
+  }) async {
     // Provenance comes from the sample itself — `appleHealth` from the iOS
     // gateway, `healthConnect` from the Android one (p6.3) — so an imported row
     // records which platform it came from.
@@ -221,6 +262,11 @@ class HealthImportService {
           sample.value,
           source: sample.source,
           externalId: sample.externalId,
+          // p8.1a: a re-typed passive wrist reading is stored tagged so it stays
+          // out of the basal-temperature readers.
+          measurementKind: asSleepingWrist
+              ? BbtMeasurementKind.sleepingWrist
+              : BbtMeasurementKind.basal,
         );
       case HealthSampleType.menstrualFlow:
         final idx = sample.value.round().clamp(
@@ -253,7 +299,12 @@ class HealthImportService {
 
     final outgoing = <HealthSample>[
       for (final r in bbtRows)
+        // p8.1a: only the user's own typed basal readings go out. A passive
+        // wrist row is `appleHealth` + `sleepingWrist` — never written back
+        // (the Apple Watch owns it); the `measurementKind` check is belt-and-
+        // braces alongside the `manual` provenance check.
         if (healthDataSourceFromStorage(r.source) == HealthDataSource.manual &&
+            r.measurementKind == BbtMeasurementKind.basal &&
             !have.contains((
               HealthSampleType.basalBodyTemperature,
               dateOnly(r.date),

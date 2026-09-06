@@ -5,6 +5,7 @@ import '../cycle/cycle_derivation.dart';
 import '../cycle/pregnancy_event.dart';
 import '../date_math.dart';
 import '../db/app_database.dart';
+import '../db/tables.dart' show BbtMeasurementKind;
 import '../prediction/date_range.dart';
 import '../prediction/predictor.dart';
 
@@ -297,6 +298,10 @@ ClinicalReport buildClinicalReport({
 
   final temperatureSeries =
       temperatures
+          // p8.1a: the doctor report charts basal body temperatures only. A
+          // passive Apple Watch sleeping-wrist reading is excluded, so a wrist
+          // import never changes the exported temperature series.
+          .where((t) => t.measurementKind == BbtMeasurementKind.basal)
           .where((t) => inRange(t.date))
           .map(
             (t) => TemperaturePoint(

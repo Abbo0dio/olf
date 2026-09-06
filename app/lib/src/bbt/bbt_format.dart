@@ -15,3 +15,14 @@ String formatTempValue(double celsius, TemperatureUnit unit) {
   final digits = unit == TemperatureUnit.celsius ? 1 : 0;
   return value.toStringAsFixed(digits);
 }
+
+/// A short provenance line for a reading of [kind], or `null` for an ordinary
+/// typed basal reading.
+///
+/// p8.1a: a `sleepingWrist` row is a passive Apple Watch overnight capture — the
+/// UI shows it distinctly from a temperature the user typed, and it never feeds
+/// the fertility-awareness views.
+String? bbtSourceLabel(BbtMeasurementKind kind) => switch (kind) {
+  BbtMeasurementKind.sleepingWrist => 'Apple Watch · captured while you slept',
+  BbtMeasurementKind.basal => null,
+};

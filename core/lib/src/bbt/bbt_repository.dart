@@ -1,4 +1,5 @@
 import '../db/app_database.dart';
+import '../db/tables.dart' show BbtMeasurementKind;
 import '../health/health_sample.dart';
 
 /// Reads and writes per-day basal body temperature ([BbtEntry]).
@@ -30,11 +31,19 @@ abstract interface class BbtRepository {
   /// already carries an id keeps the existing id, so an edit that flips a
   /// previously-imported row back to `manual` still lets a p6.4 write-back
   /// update the platform record in place. Pass a non-null id to replace it.
+  ///
+  /// [measurementKind] (schema v10, p8.1a) marks what the reading measures.
+  /// It defaults to [BbtMeasurementKind.basal] and is **not** sticky: an in-app
+  /// edit that passes no kind resets the row to `basal` (correcting a passive
+  /// Apple Watch reading makes it a typed basal temperature), mirroring how
+  /// [source] falls back to `manual`. Only the health-import path passes
+  /// [BbtMeasurementKind.sleepingWrist].
   Future<void> setTemp(
     DateTime date,
     double celsius, {
     HealthDataSource source = HealthDataSource.manual,
     String? externalId,
+    BbtMeasurementKind measurementKind = BbtMeasurementKind.basal,
   });
 
   /// Remove the reading logged for [date]. A no-op if that day has none.

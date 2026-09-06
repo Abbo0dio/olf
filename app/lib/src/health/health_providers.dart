@@ -97,6 +97,16 @@ final healthLastSyncProvider = StreamProvider<HealthSyncSummary?>((ref) {
       .map(HealthSyncSummary.decode);
 });
 
+/// How many passively-captured Apple Watch wrist-temperature readings olf holds
+/// (p8.1a), live from the BBT stream. Drives the per-source status line under
+/// the health tile in Settings. `0` until the stream has data.
+final passiveWristTempCountProvider = Provider<int>((ref) {
+  final entries = ref.watch(bbtEntriesProvider).valueOrNull ?? const [];
+  return entries
+      .where((e) => e.measurementKind == BbtMeasurementKind.sleepingWrist)
+      .length;
+});
+
 /// The import/export orchestrator over the current gateway and the BBT / flow
 /// repositories.
 final healthImportServiceProvider = Provider<HealthImportService>((ref) {
@@ -239,6 +249,13 @@ Future<void> resolveHealthConflict(
       final s = conflict.incoming;
       switch (s.type) {
         case HealthSampleType.basalBodyTemperature:
+          // SHORTCUT: a passive Apple Watch wrist reading is re-typed to
+          // `basalBodyTemperature` before reconciliation (p8.1a), so a
+          // wrist-vs-manual-BBT conflict resolved "take incoming" here stores
+          // it as a basal temperature — the pure `ReconciliationConflict` does
+          // not carry the measurement kind. Rare manual action; the row can be
+          // re-corrected in the day sheet. A cleaner fix (kind on the conflict)
+          // waits for p8.5's richer multi-source model.
           await ref
               .read(bbtRepositoryProvider)
               .setTemp(s.day, s.value, externalId: s.externalId);

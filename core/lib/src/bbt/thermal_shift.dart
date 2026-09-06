@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 
 import '../date_math.dart';
 import '../db/app_database.dart';
+import '../db/tables.dart' show BbtMeasurementKind;
 
 /// How far above the low-phase baseline a reading must sit to count as part of
 /// the post-ovulatory thermal shift. The classic fertility-awareness "3 over 6"
@@ -82,8 +83,13 @@ ThermalShift? thermalShift(
   final start = dateOnly(cycleStart);
   final t = dateOnly(today);
 
+  // p8.1a: only basal body temperatures form a thermal shift. A passive Apple
+  // Watch sleeping-wrist reading shares the `bbt_entries` day slot but measures
+  // something else, so it is excluded here — a mixed-kind history produces the
+  // identical shift to the same history with the wrist rows removed.
   final readings =
       entries
+          .where((e) => e.measurementKind == BbtMeasurementKind.basal)
           .map((e) => (date: dateOnly(e.date), celsius: e.tempCelsius))
           .where((r) => !r.date.isBefore(start) && !r.date.isAfter(t))
           .toList()

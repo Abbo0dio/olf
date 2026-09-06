@@ -19,6 +19,7 @@ void main() {
     date: d,
     tempCelsius: c,
     source: 'manual',
+    measurementKind: BbtMeasurementKind.basal,
     createdAt: epoch,
     updatedAt: epoch,
   );

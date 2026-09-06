@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../date_math.dart';
 import '../db/app_database.dart';
+import '../db/tables.dart' show BbtMeasurementKind;
 import '../health/health_sample.dart';
 import 'bbt_repository.dart';
 import 'temperature.dart';
@@ -44,6 +45,7 @@ class DriftBbtRepository implements BbtRepository {
     double celsius, {
     HealthDataSource source = HealthDataSource.manual,
     String? externalId,
+    BbtMeasurementKind measurementKind = BbtMeasurementKind.basal,
   }) async {
     final error = validateCelsius(celsius);
     if (error != null) throw BbtException(error);
@@ -61,6 +63,7 @@ class DriftBbtRepository implements BbtRepository {
               tempCelsius: celsius,
               source: Value(source.name),
               externalId: Value(externalId),
+              measurementKind: Value(measurementKind),
               createdAt: Value(stamp),
               updatedAt: Value(stamp),
             ),
@@ -71,6 +74,10 @@ class DriftBbtRepository implements BbtRepository {
       // record in place instead of inserting a duplicate. The `source` still
       // moves to whatever the caller passed — `manual` by default, i.e. an
       // edit flips a previously-imported row back to the user's own (p6.1).
+      //
+      // `measurementKind` is NOT sticky (p8.1a): it moves to whatever the
+      // caller passed — `basal` by default — so correcting a passive Apple
+      // Watch wrist reading in-app turns it into a typed basal temperature.
       await (_db.update(
         _db.bbtEntries,
       )..where((t) => t.date.equals(day))).write(
@@ -78,6 +85,7 @@ class DriftBbtRepository implements BbtRepository {
           tempCelsius: Value(celsius),
           source: Value(source.name),
           externalId: Value(externalId ?? existing.externalId),
+          measurementKind: Value(measurementKind),
           updatedAt: Value(stamp),
         ),
       );

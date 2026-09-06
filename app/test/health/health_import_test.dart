@@ -59,6 +59,19 @@ void main() {
     externalId: externalId,
   );
 
+  HealthSample wristSample({
+    required double celsius,
+    String? externalId,
+    DateTime? at,
+  }) => HealthSample.point(
+    type: HealthSampleType.wristTemperature,
+    at: at ?? day,
+    value: celsius,
+    unit: HealthUnit.celsius,
+    source: HealthDataSource.appleHealth,
+    externalId: externalId,
+  );
+
   test('inserts unmatched incoming samples into the local tables', () async {
     final gateway = FakeHealthPlatformGateway(
       seedSamples: [
@@ -187,6 +200,120 @@ void main() {
       expect(gateway.writes, isEmpty);
     },
   );
+
+  group('passive wrist temperature (p8.1a)', () {
+    test(
+      'an unmatched wrist reading is inserted tagged sleepingWrist',
+      () async {
+        final gateway = FakeHealthPlatformGateway(
+          seedSamples: [wristSample(celsius: 36.9, externalId: 'w1')],
+        );
+
+        final summary = await syncSummary(gateway);
+        expect(summary.added, 1);
+        expect(summary.needsReview, 0);
+
+        final row = (await bbt.tempOn(day))!;
+        expect(row.tempCelsius, 36.9);
+        expect(row.measurementKind, BbtMeasurementKind.sleepingWrist);
+        expect(row.source, 'appleHealth');
+        expect(row.externalId, 'w1');
+      },
+    );
+
+    test(
+      'a revised wrist reading updates the prior wrist row in place',
+      () async {
+        await bbt.setTemp(
+          day,
+          36.7,
+          source: HealthDataSource.appleHealth,
+          externalId: 'w1',
+          measurementKind: BbtMeasurementKind.sleepingWrist,
+        );
+
+        final gateway = FakeHealthPlatformGateway(
+          seedSamples: [wristSample(celsius: 37.0, externalId: 'w1')],
+        );
+        final summary = await syncSummary(gateway);
+
+        expect(summary.updated, 1);
+        expect(summary.added, 0);
+        final row = (await bbt.tempOn(day))!;
+        expect(row.tempCelsius, 37.0);
+        expect(row.measurementKind, BbtMeasurementKind.sleepingWrist);
+      },
+    );
+
+    test(
+      'a wrist reading never overwrites a manual BBT — it is a conflict',
+      () async {
+        await bbt.setTemp(day, 36.4); // manual basal
+
+        final gateway = FakeHealthPlatformGateway(
+          seedSamples: [wristSample(celsius: 37.1, externalId: 'w9')],
+        );
+        final result = await serviceWith(gateway).sync();
+
+        expect(result.summary.needsReview, 1);
+        expect(result.summary.added, 0);
+        expect(result.summary.updated, 0);
+        expect(result.conflicts, hasLength(1));
+
+        final row = (await bbt.tempOn(day))!;
+        expect(row.tempCelsius, 36.4); // untouched
+        expect(row.source, 'manual');
+        expect(row.measurementKind, BbtMeasurementKind.basal);
+      },
+    );
+
+    test('a wrist reading wins the day slot over an existing appleHealth basal '
+        'row, stored tagged sleepingWrist', () async {
+      await bbt.setTemp(
+        day,
+        36.5,
+        source: HealthDataSource.appleHealth,
+        externalId: 'basal-1',
+        measurementKind: BbtMeasurementKind.basal,
+      );
+
+      final gateway = FakeHealthPlatformGateway(
+        seedSamples: [wristSample(celsius: 36.95, externalId: 'wrist-1')],
+      );
+      final summary = await syncSummary(gateway);
+
+      expect(summary.updated, 1);
+      final row = (await bbt.tempOn(day))!;
+      expect(row.tempCelsius, 36.95);
+      expect(row.measurementKind, BbtMeasurementKind.sleepingWrist);
+    });
+
+    test('a wrist reading is never written back out', () async {
+      final gateway = FakeHealthPlatformGateway(
+        seedSamples: [wristSample(celsius: 36.9, externalId: 'w1')],
+      );
+      await syncSummary(gateway);
+      expect(gateway.writes, isEmpty);
+    });
+
+    test(
+      'a wrist import leaves a manual basal day on another date untouched',
+      () async {
+        final otherDay = DateTime(2026, 5, 12);
+        await bbt.setTemp(otherDay, 36.42); // manual basal, unrelated day
+
+        final gateway = FakeHealthPlatformGateway(
+          seedSamples: [wristSample(celsius: 37.0, externalId: 'w1')],
+        );
+        await syncSummary(gateway);
+
+        final untouched = (await bbt.tempOn(otherDay))!;
+        expect(untouched.tempCelsius, 36.42);
+        expect(untouched.measurementKind, BbtMeasurementKind.basal);
+        expect(untouched.source, 'manual');
+      },
+    );
+  });
 
   group('connect', () {
     test(

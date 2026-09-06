@@ -29,6 +29,12 @@ class HealthConnectGateway extends MethodChannelHealthGateway {
   @override
   bool get isAvailable => true;
 
+  /// p8.1a: the passive `wristTemperature` path is Apple-Watch-only this slice,
+  /// so the Android peer bridges just the two shared read/write types. A Health
+  /// Connect wrist-temperature mapping (`SkinTemperatureRecord`) is future work.
+  @override
+  Set<HealthSampleType> get bridgedReadTypes => kIosWritableHealthTypes;
+
   /// Whether the Health Connect SDK is actually reachable on this device
   /// (`HealthConnectClient.getSdkStatus == SDK_AVAILABLE` on the Kotlin side).
   /// `false` when Health Connect is not installed / needs a provider update, or

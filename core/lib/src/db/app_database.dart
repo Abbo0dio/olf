@@ -58,8 +58,16 @@ class AppDatabase extends _$AppDatabase {
   ///            `(date, item)`: fixed `PmddSymptom` item, `SymptomSeverity`
   ///            rating, `none` included). Purely additive — a new table,
   ///            nothing backfilled. Dumped as its own real snapshot.
+  /// v10 (p8.1a): added `measurement_kind` (`BbtMeasurementKind` enum name,
+  ///            NOT NULL DEFAULT `'basal'`) to `bbt_entries`, so a passive Apple
+  ///            Watch wrist-temperature import (`'sleepingWrist'`) can share the
+  ///            one-row-per-day slot without being mistaken for a basal body
+  ///            temperature. An ALTER of an existing table — the second such
+  ///            migration after v7 — so it carries the same `to >= N` guard.
+  ///            Every pre-existing row is `'basal'`. Dumped as its own real
+  ///            snapshot.
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -146,6 +154,22 @@ class AppDatabase extends _$AppDatabase {
         // nothing to backfill. No `to >=` guard needed (same reasoning as the
         // v8 block: an extra *table* is tolerated at every intermediate target).
         await m.createTable(pmddRatings);
+      }
+      if (from < 10 && to >= 10) {
+        // p8.1a: `measurement_kind` on `bbt_entries` — the discriminator that
+        // keeps a passive Apple Watch wrist-temperature import (`'sleepingWrist'`)
+        // out of the basal-body-temperature readers while still letting it
+        // reconcile for the day slot. `withDefault('basal')` marks every row
+        // already in the database as a basal reading.
+        //
+        // Same `to >= 10` dance as the v7 column add: a *column* on a checked
+        // table would fail the schema verifier at pre-v10 single-step targets,
+        // and the inner `from >= 5` skips the ALTER when `bbt_entries` predates
+        // this `from` (the `createTable` above then already includes the column).
+        // `bbt_entries` arrived in v5.
+        if (from >= 5) {
+          await m.addColumn(bbtEntries, bbtEntries.measurementKind);
+        }
       }
     },
     beforeOpen: (details) async {

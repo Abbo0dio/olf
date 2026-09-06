@@ -4,14 +4,28 @@ import 'package:olf_core/olf_core.dart';
 
 import 'flow_mapping.dart';
 
-/// The two [HealthSampleType]s the iOS bridge actually maps this slice (p6.2):
-/// `menstrualFlow` ↔ `HKCategoryTypeIdentifier.menstrualFlow` and
-/// `basalBodyTemperature` ↔ `HKQuantityTypeIdentifier.basalBodyTemperature`.
+/// The [HealthSampleType]s the iOS bridge maps:
+/// * `menstrualFlow` ↔ `HKCategoryTypeIdentifier.menstrualFlow` — read + write
+/// * `basalBodyTemperature` ↔ `HKQuantityTypeIdentifier.basalBodyTemperature` —
+///   read + write
+/// * `wristTemperature` ↔ `HKQuantityTypeIdentifier.appleSleepingWristTemperature`
+///   (iOS 16+) — **read only** (p8.1a: passive Apple Watch overnight capture;
+///   olf never writes it back, so it is absent from [kIosWritableHealthTypes]
+///   and [rawFromHealthSample] returns `null` for it).
 ///
-/// The other three model types stay declared on the `core` interface but the
+/// `bodyTemperature` and `sleep` stay declared on the `core` interface but the
 /// bridge has no olf table for them yet — reads come back empty and writes are a
-/// no-op, with a logged note.
+/// no-op, with a logged note. (HRV + sleep mapping is p8.5.)
 const Set<HealthSampleType> kIosSupportedHealthTypes = {
+  HealthSampleType.menstrualFlow,
+  HealthSampleType.basalBodyTemperature,
+  HealthSampleType.wristTemperature,
+};
+
+/// The subset of [kIosSupportedHealthTypes] olf both reads and writes. A
+/// read-only type (p8.1a `wristTemperature`) is imported but never pushed back
+/// out — [rawFromHealthSample] drops it.
+const Set<HealthSampleType> kIosWritableHealthTypes = {
   HealthSampleType.menstrualFlow,
   HealthSampleType.basalBodyTemperature,
 };
@@ -117,8 +131,22 @@ HealthSample? healthSampleFromRaw(
         source: source,
         externalId: raw.externalId,
       );
-    case HealthSampleType.bodyTemperature:
     case HealthSampleType.wristTemperature:
+      // p8.1a: passive Apple Watch overnight wrist temperature, °C on the wire
+      // exactly like basalBodyTemperature. It stays typed `wristTemperature`
+      // through the model; `HealthImportService` re-types it to
+      // `basalBodyTemperature` only at the reconcile boundary and tags the
+      // stored row `sleepingWrist`.
+      return HealthSample(
+        type: HealthSampleType.wristTemperature,
+        startAt: start,
+        endAt: end,
+        value: raw.value,
+        unit: HealthUnit.celsius,
+        source: source,
+        externalId: raw.externalId,
+      );
+    case HealthSampleType.bodyTemperature:
     case HealthSampleType.sleep:
       return null;
   }
@@ -128,7 +156,9 @@ HealthSample? healthSampleFromRaw(
 /// [RawHealthSample]. Returns `null` for a type this build does not map (the
 /// caller drops it — a silent no-op, per the `core` write contract).
 RawHealthSample? rawFromHealthSample(HealthSample sample) {
-  if (!kIosSupportedHealthTypes.contains(sample.type)) return null;
+  // p8.1a: only writable types are ever pushed out. `wristTemperature` is
+  // read-only (the Apple Watch owns it), so it is dropped here.
+  if (!kIosWritableHealthTypes.contains(sample.type)) return null;
   final double wireValue;
   switch (sample.type) {
     case HealthSampleType.basalBodyTemperature:

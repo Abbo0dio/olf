@@ -269,6 +269,31 @@ the derived cycles on every read — **never stored**.
 
 `schemaVersion = 9`.
 
+## Schema v10 (p8.1a)
+
+Adds **`measurement_kind`** to `bbt_entries` — the discriminator that lets a passive Apple
+Watch overnight wrist-temperature reading (`appleSleepingWristTemperature`, imported read-only
+over the p6.2 health bridge on iOS 16+) share the one-row-per-day slot without being mistaken
+for a basal body temperature.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `measurement_kind` | TEXT, **NOT NULL**, default `'basal'` | `BbtMeasurementKind` name — `basal` or `sleepingWrist`. Every row written before p8.1a, every typed reading, and every `basalBodyTemperature` health-platform import is `basal`. Only the wrist-temperature import writes `sleepingWrist`; an in-app edit of such a row resets it to `basal`. |
+
+The second ALTER of an existing table (after v7's `source` / `external_id`), so the migration
+carries the same `to >= N` guard. A `sleepingWrist` row is deliberately **invisible to every
+existing basal-temperature reader** — `thermalShift`, `dailyFertilityScore`, `bbtChartForCycle`,
+`buildClinicalReport`'s temperature series, and the preferred-hour logging-activity query all
+filter `measurement_kind = 'basal'` — so p8.1a is a zero-behaviour change to those features.
+The health import re-types a wrist sample to `basalBodyTemperature` only at the reconcile
+boundary, so the unchanged `ImportReconciler` still conflicts it against a manual BBT day and
+updates it against a prior wrist day; the stored row is then tagged `sleepingWrist`.
+`bbt_entries` is already in `BackupService.tableOrder` and aged by
+`RetentionService.deleteWhere` (a column change, not a new table), so wrist rows round-trip
+through encrypted export/restore and age out on the retention window unchanged.
+
+`schemaVersion = 10`.
+
 ## Migrations
 
 `MigrationStrategy.onUpgrade` runs the steps below in order. Every schema change:
@@ -288,13 +313,14 @@ the derived cycles on every read — **never stored**.
 | `from < 7 && to >= 7` (p6.1) | `m.addColumn` × 4: `source` (default `'manual'`) + `external_id` (nullable) on `daily_flows` and `bbt_entries`. First ALTER migration — the `addColumn` is guarded so it only touches a table an earlier step created in its *pre-v7* shape (`daily_flows` from v3, `bbt_entries` from v5); when `from` predates the table, the `createTable` above already builds it with the columns. The `to >= 7` guard keeps the single-step `migration_matrix_test` targets honest. Verified by `core/test/db/migration_matrix_test.dart` (v1..v6 → v7: schema matches the committed v7 snapshot, every pre-v7 row comes out `source = 'manual'` / `external_id` NULL, backup/restore round-trips at v7). |
 | `from < 8` (p7.5) | Creates `pain_entries`. Purely additive — nothing backfilled, existing rows untouched; no `to >=` guard (an extra *table* is tolerated at every intermediate target, unlike the v7 column add). Verified by `core/test/db/pain_migration_test.dart` (real on-disk v7 file → upgrade → assert `pain_entries` shape, old rows intact, table usable through `DriftPainRepository` incl. the ordered scale / region enum / note / flare flag) and `migration_matrix_test.dart` (v1..v7 → v8: schema matches the committed v8 snapshot, `pain_entries` present-and-empty, backup/restore round-trips a real pain row at v8). |
 | `from < 9` (p7.6) | Creates `pmdd_ratings`. Purely additive — nothing backfilled, existing rows untouched; no `to >=` guard (same reasoning as `from < 8`). Verified by `core/test/db/pmdd_migration_test.dart` (real on-disk v8 file → upgrade → assert the composite-PK `pmdd_ratings` shape, old period + pain rows intact, table usable through `DriftPmddRatingRepository` incl. an explicit `none` rating) and `migration_matrix_test.dart` (v1..v8 → v9: schema matches the committed v9 snapshot, `pmdd_ratings` present-and-empty, backup/restore round-trips real rated rows — one a `none` — at v9). |
+| `from < 10 && to >= 10` (p8.1a) | `m.addColumn`: `measurement_kind` (TEXT, NOT NULL, default `'basal'`) on `bbt_entries`. Second ALTER migration — same shape as the v7 column add: the inner `from >= 5` guard skips it when `from` predates `bbt_entries` (v5), and the `to >= 10` guard keeps the single-step `migration_matrix_test` targets honest. Every pre-existing row comes out `'basal'`. Verified by `core/test/db/wrist_temp_migration_test.dart` (real on-disk v9 file → upgrade → `PRAGMA table_info` shape check, old rows come out `'basal'`, table usable through `DriftBbtRepository` incl. a `sleepingWrist` round-trip and edit-resets-to-`basal`) and `migration_matrix_test.dart` (v1..v9 → v10: schema matches the committed v10 snapshot, `measurement_kind = 'basal'` on every pre-existing bbt row, backup/restore round-trips a real `sleepingWrist` row at v10). |
 
 Since p5.6, drift's schema-snapshot tooling (`drift_dev schema dump` / `generate`) **is** wired
 up: `core/drift_schemas/` holds a JSON snapshot per version and `core/test/db/generated/` the
 verifier helpers. History v1..v5 is reconstructed from the v6 anchor by
-`tool/dump_historical_schemas.dart`; v6 and every version after it (v7 ALTER, v8 + v9 additive)
-is its own real `schema dump`, listed in that script's `_dumpedVersions`. The per-feature
-`*_migration_test.dart` files still hand-build one old schema each, kept for context.
+`tool/dump_historical_schemas.dart`; v6 and every version after it (v7 + v10 ALTER, v8 + v9
+additive) is its own real `schema dump`, listed in that script's `_dumpedVersions`. The
+per-feature `*_migration_test.dart` files still hand-build one old schema each, kept for context.
 
 ## Derived data — not stored (p1.3, p1.4)
 

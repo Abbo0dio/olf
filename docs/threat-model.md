@@ -23,14 +23,14 @@ What an adversary would want, roughly in order of sensitivity.
 
 | Asset | Where it lives | Why it matters |
 |---|---|---|
-| Cycle & health entries (periods, flow, symptoms, BBT, mucus, meds, pregnancy-loss / birth events, endometriosis pain / flare log incl. free-text pain notes, PMDD daily mood/physical ratings — fixed enum item + enum severity, no free text) | `olf.db`, an SQLCipher-encrypted drift database in app-private storage | The core secret. Can imply pregnancy, pregnancy loss, contraception use, sexual activity, transition-related care, a chronic pain / endometriosis condition, a premenstrual mood condition. |
+| Cycle & health entries (periods, flow, symptoms, BBT — typed or a passive Apple Watch overnight wrist-temperature reading tagged `measurement_kind`, mucus, meds, pregnancy-loss / birth events, endometriosis pain / flare log incl. free-text pain notes, PMDD daily mood/physical ratings — fixed enum item + enum severity, no free text) | `olf.db`, an SQLCipher-encrypted drift database in app-private storage | The core secret. Can imply pregnancy, pregnancy loss, contraception use, sexual activity, transition-related care, a chronic pain / endometriosis condition, a premenstrual mood condition, and — from overnight wrist temperature — sleep timing and presence of an Apple Watch. |
 | The database encryption key | OS keystore via `flutter_secure_storage` (Android Keystore / iOS Keychain), never in the DB or prefs | Whoever has this can read `olf.db` directly, no PIN needed. |
 | PIN hash and decoy-PIN hash | `flutter_secure_storage` | Brute-forcing these bypasses the gate; the decoy hash also reveals that a decoy exists. |
 | Preferences (theme, pronouns, reminder settings, retention window) | unencrypted `SharedPreferences` / `NSUserDefaults` | Low sensitivity on their own, but pronouns and a tight retention window are weak signals. |
 | `.olfbackup` export files | wherever the user saved them via the OS share sheet — local disk, cloud drive, messaging app | Encrypted (AES-GCM, user passphrase), but now outside app control. |
 | `olf-report-YYYY-MM-DD.pdf` doctor-report files (p6.5) | wherever the user saved them via the OS file picker | **Plaintext** — a human-readable summary of cycles, symptoms, BBT and pregnancy-loss / birth events, meant to be handed to a clinician. Neutral filename, no name/identifier. Retention-trimmed (purge-before-export). Outside app control once saved. |
 | Derived predictions (next period, fertile window) | recomputed in memory from entries; not separately stored | Same sensitivity as the entries they come from. |
-| Menstrual-flow & basal-body-temperature samples in the **OS health store** — Apple Health on iOS (p6.2), Android Health Connect on Android (p6.3) | the platform's own encrypted store, reached over local IPC only when the user has turned on "Connect a health app" | Same sensitivity as the olf entries — but now also readable by any *other* app the user has granted the same health permissions, and governed by the OS's sharing UI rather than olf's. Default off. |
+| Menstrual-flow & basal-body-temperature samples in the **OS health store** — Apple Health on iOS (p6.2), Android Health Connect on Android (p6.3); plus, read-only on iOS 16+, Apple Watch `appleSleepingWristTemperature` (p8.1a) | the platform's own encrypted store, reached over local IPC only when the user has turned on "Connect a health app" | Same sensitivity as the olf entries — but now also readable by any *other* app the user has granted the same health permissions, and governed by the OS's sharing UI rather than olf's. Default off. olf never *writes* wrist temperature — it is imported only. |
 | Source repository & dependency graph | GitHub, `pubspec.lock` | A malicious dependency could exfiltrate any of the above from a future build. |
 
 ---
@@ -796,4 +796,51 @@ The CI guard requires an entry naming the current phase.
   - Copy carries the standard not-a-medical-device line **plus** an explicit
     "not contraception guidance — do not use these scores to try to avoid
     pregnancy" line (§6, §9(12)).
+  No design changes required by this review.
+- **2026-09-07 — Phase 8 opening / p8.1a landing — reviewer: worker: 1.**
+  Apple Watch passive wrist-temperature data path (no companion app). **One
+  additive schema change; no new adversary, trust boundary, network path,
+  dependency, permission / entitlement, usage string, or CI gate change.**
+  - **New asset — passive Apple Watch overnight wrist-temperature readings.**
+    They land in the **existing** `bbt_entries` table (one temperature row per
+    day, PK `date`), inside the same SQLCipher-encrypted `olf.db` and the same
+    app ↔ DB trust boundary, encrypted at rest like every other column. Schema
+    **v9 → v10** adds one column — `measurement_kind TEXT NOT NULL DEFAULT
+    'basal'` (`BbtMeasurementKind { basal, sleepingWrist }`) — the discriminator
+    that marks a row as a passive wrist capture. Every pre-existing row, and
+    every future typed / `basalBodyTemperature`-import row, is `'basal'`. The
+    Assets table's top row and the OS-health-store row both name it.
+  - **New sensitivity nuance:** an overnight wrist-temperature series is a weak
+    signal of *sleep timing* and of *owning an Apple Watch*, on top of the
+    cycle-inference value it shares with basal temperature. It is **excluded
+    from every existing basal-temperature reader** — `thermalShift`,
+    `dailyFertilityScore`, the p1.6 BBT chart, the p6.5 doctor-report
+    temperature series, and the preferred-hour logging-activity query all filter
+    `measurement_kind = 'basal'` — so p8.1a is a **zero-behaviour change** to
+    the fertility-awareness and clinician-export surfaces (a `core` test asserts
+    a mixed-kind history yields byte-identical results to the same history with
+    the wrist rows removed).
+  - **No new egress, no new permission.** The reading crosses the *existing*
+    App ↔ OS health platform boundary (#8) over the same hand-rolled `olf/health`
+    local IPC, gated by the same opt-in "Connect a health app" flow and the same
+    `NSHealthShareUsageDescription` — `appleSleepingWristTemperature` is covered
+    by the existing read-usage string, so **no new plist key**. It is added to
+    the HealthKit bridge **read-only** (iOS 16+ `#available` guards): no
+    write/share authorization is requested for it, `rawFromHealthSample` drops
+    it, and the Android peer does not bridge it this slice. HRV and sleep stay
+    declared-but-unmapped (p8.5).
+  - The import reuses the **unchanged** pure `ImportReconciler`: a wrist sample
+    is re-typed to `basalBodyTemperature` only at the reconcile boundary so it
+    competes for the one-row-per-day slot — a wrist reading vs a **manual** BBT
+    day becomes a reviewable `manualDisagreement` conflict (never an
+    overwrite); vs a prior wrist day (same `external_id`) an in-place update.
+    An in-app edit of a passive reading resets it to `basal` + `manual`.
+  - The migration is additive, bundled with its `migration_matrix_test`
+    extension (every historical version → v10, asserting `measurement_kind =
+    'basal'` on every pre-existing row), a dedicated `wrist_temp_migration_test`,
+    and a backup round-trip carrying a real `sleepingWrist` row across the
+    migration. `BackupService.tableOrder` and `RetentionService.deleteWhere`
+    already cover `bbt_entries` (a column change, not a new table), so wrist
+    rows are covered by encrypted export/restore **and** age out on the user's
+    configured retention window exactly like every other dated row.
   No design changes required by this review.

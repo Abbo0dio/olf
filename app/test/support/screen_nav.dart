@@ -24,7 +24,7 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 40 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 41 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -36,7 +36,8 @@ import 'harness.dart';
 /// the perimenopause screen in its transition-read + symptom-timeline and its
 /// thin-history states; p7.5 the endometriosis screen in its correlation-view
 /// and empty states and the pain-logging sheet; p7.6 the PMDD screen in its
-/// overlay-view and empty states and the daily rating sheet).
+/// overlay-view and empty states and the daily rating sheet; p8.1a the day sheet
+/// with a passive Apple Watch wrist-temperature reading).
 /// The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -98,6 +99,18 @@ Future<void> _seedHealthAppConnected(AppDatabase db) async {
   final settings = DriftSettingsRepository(db);
   await settings.set(SettingKeys.appleHealthConnected, 'true');
   await settings.set(SettingKeys.appleHealthLastSync, '2,1,0');
+  // p8.1a: two passive Apple Watch wrist-temperature readings so the per-source
+  // status line under the health tile renders.
+  final bbt = DriftBbtRepository(db);
+  for (final ago in const [1, 2]) {
+    await bbt.setTemp(
+      _daysAgo(ago),
+      36.8,
+      source: HealthDataSource.appleHealth,
+      externalId: 'hk-wrist-$ago',
+      measurementKind: BbtMeasurementKind.sleepingWrist,
+    );
+  }
 }
 
 /// Seed postpartum mode on, a recorded birth, and three post-event periods so
@@ -876,6 +889,38 @@ final List<Surface> screenSurfaces = <Surface>[
           find.bySemanticsLabel(_todayCellLabel(periodDay: false)),
         );
         await tester.pumpAndSettle();
+        await check(tester);
+      },
+    );
+  }),
+
+  // p8.1a: the day sheet with a passively-captured Apple Watch reading for
+  // today — the temperature chip carries the "captured while you slept"
+  // sub-label, and tapping it corrects the value into a typed basal reading.
+  Surface('symptom_day_sheet — passive Apple Watch temperature', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await DriftBbtRepository(db).setTemp(
+      _daysAgo(0),
+      36.9,
+      source: HealthDataSource.appleHealth,
+      externalId: 'hk-wrist-today',
+      measurementKind: BbtMeasurementKind.sleepingWrist,
+    );
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await tester.tap(
+          find.bySemanticsLabel(_todayCellLabel(periodDay: false)),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Apple Watch · captured while you slept'),
+          findsOneWidget,
+        );
         await check(tester);
       },
     );

@@ -30,6 +30,7 @@ export 'src/db/tables.dart'
     show
         AppSettings,
         BbtEntries,
+        BbtMeasurementKind,
         BirthControlEntries,
         BirthControlMethod,
         CervicalMucusEntries,
