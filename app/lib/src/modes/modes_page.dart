@@ -6,6 +6,7 @@ import 'mode_catalog.dart';
 import 'modes_providers.dart';
 import 'postpartum_screen.dart';
 import 'pregnancy_week_screen.dart';
+import 'ttc_screen.dart';
 
 /// The "Modes" screen, reached from Settings → "Life-stage & condition modes"
 /// (p7.1): every Phase 7 mode with a one-line description and an on/off control.
@@ -41,6 +42,7 @@ class ModesPage extends StatelessWidget {
 /// [modeHasScreen] is true.
 Widget _modeScreen(LifeStageMode mode) => switch (mode) {
   LifeStageMode.pregnancy => const PregnancyWeekScreen(),
+  LifeStageMode.ttc => const TtcScreen(),
   _ => const PostpartumScreen(),
 };
 

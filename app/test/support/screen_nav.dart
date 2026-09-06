@@ -24,13 +24,14 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 26 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 28 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
 /// cycle-return screen and the loss/birth support-resources screen; p7.2a the
 /// pregnancy week view in its needs-a-start-date and populated states; p7.2b the
-/// pregnancy symptom-logging screen). The
+/// pregnancy symptom-logging screen; p7.3 the TTC fertility-score screen and its
+/// not-enough-history state). The
 /// dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -145,6 +146,30 @@ Future<void> _seedPregnancyModeNoReference(AppDatabase db) async {
   ).set(LifeStageMode.pregnancy.settingKey, 'true');
 }
 
+/// TTC mode on with a regular history whose most recent period started 10 days
+/// ago, so today's outlook sits in the run-up to the estimated fertile window
+/// and the score screen renders its fullest state.
+Future<void> _seedTtcMode(AppDatabase db) async {
+  await DriftSettingsRepository(db).set(LifeStageMode.ttc.settingKey, 'true');
+  final repo = DriftPeriodRepository(db);
+  var start = _daysAgo(10 + 28 * 7);
+  for (var i = 0; i < 8; i++) {
+    await repo.addPeriod(
+      PeriodDraft(start: start, end: start.add(const Duration(days: 3))),
+    );
+    start = start.add(const Duration(days: 28));
+  }
+}
+
+/// TTC mode on with only one logged period — not enough history, so the score
+/// screen shows its "keep logging" empty state.
+Future<void> _seedTtcModeThinHistory(AppDatabase db) async {
+  await DriftSettingsRepository(db).set(LifeStageMode.ttc.settingKey, 'true');
+  await DriftPeriodRepository(
+    db,
+  ).addPeriod(PeriodDraft(start: _daysAgo(12), end: _daysAgo(9)));
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
@@ -160,6 +185,10 @@ Future<void> _openPostpartumScreen(WidgetTester tester) async {
 
 Future<void> _openPregnancyScreen(WidgetTester tester) async {
   await _openModeScreen(tester, 'Open Pregnancy');
+}
+
+Future<void> _openTtcScreen(WidgetTester tester) async {
+  await _openModeScreen(tester, 'Open Trying to conceive');
 }
 
 Future<void> _openPregnancySymptomsScreen(WidgetTester tester) async {
@@ -517,6 +546,38 @@ final List<Surface> screenSurfaces = <Surface>[
           find.widgetWithText(AppBar, 'Pregnancy symptoms'),
           findsOneWidget,
         );
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('ttc_screen — daily fertility score', (tester, check) async {
+    final db = memoryDb();
+    await _seedTtcMode(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openTtcScreen(tester);
+        expect(
+          find.widgetWithText(AppBar, 'Trying to conceive'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Fertile window:'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('ttc_screen — not enough history', (tester, check) async {
+    final db = memoryDb();
+    await _seedTtcModeThinHistory(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openTtcScreen(tester);
+        expect(find.text('Not enough history yet'), findsOneWidget);
         await check(tester);
       },
     );
