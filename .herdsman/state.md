@@ -6,18 +6,18 @@ plan layout and `.claude/skills/herdsman/` for the workflow.
 
 ## Now
 
-Phase 6 — Health-platform interop & doctor export — **DONE (2026-09-06)** · main @ `ea585b1` (origin) / local `main` ahead with the Phase 6 bookkeeping + close, going up as the `docs/phase-6-close` PR. **Phase 7 — Life-stage & condition modes — NOT YET PLANNED** (next: expand its one-liners into task rows on `main`, then dispatch p7.1).
+Phase 7 — Life-stage & condition modes — IN PROGRESS · main @ `a99170f` · current slice **p7.1** (dispatched to Worker 1). Phase 7 rows expanded in `docs/plan/phases/phase-07.md` (PR #72 `a99170f`).
 
 ## Workers
 
-| W | agent    | tab   | status | slice | worktree |
-| 1 | worker-1 | w6:t2 | idle   | —     | —        |
+| W | agent    | tab   | status   | slice | worktree        |
+| 1 | worker-1 | w6:t2 | building | p7.1  | ../olf-wt/p7.1  |
 
 ## Tasks
 
-Just-closed phase (6). Phase 5 detail is frozen in `docs/plan/phases/phase-05.md`;
-its rows were dropped here at the Phase 6 close. Phase 6 rows stay until Phase 7
-is planned. Closed-phase task detail is frozen into `docs/plan/phases/phase-06.md`.
+Current phase (7) + previous phase (6). Phase 6 rows are the frozen record
+(detail in `docs/plan/phases/phase-06.md`); they drop at the Phase 7 close.
+Phase 5 detail is frozen in `phase-05.md`.
 
 | ID | status | PR | SHA | log |
 | p6.1 | DONE | #65 | `ed81ac5` | 2026-09-05 — interop foundation: `HealthPlatformGateway` + `FakeHealthPlatformGateway` + pure `ImportReconciler` + schema v6→v7 provenance cols (`source`/`externalId` on bbt_entries + daily_flows). `core`-only, no dep. Doc fixes folded in `e7b308d`. |
@@ -25,11 +25,19 @@ is planned. Closed-phase task detail is frozen into `docs/plan/phases/phase-06.m
 | p6.3 | DONE | #67 | `de46108` | 2026-09-05 — Android Health Connect gateway: hand-rolled Kotlin bridge on `MainActivity`, same wire contract. `androidx.health.connect:connect-client:1.1.0` as a Gradle dep (not a pub package — `pubspec.lock` clean); `minSdk` 24→26; 4 `android.permission.health.*`. Shared `MethodChannelHealthGateway` base + `sourceTag`. New `docs/health-platform-interop.md`. (Plan had said IN REVIEW; it merged.) |
 | p6.4 | DONE | #69 | `2db45db` | 2026-09-06 — Two-way sync: write-back after every flow/BBT log/edit (`externalId` sticky across an edit so a previously-imported day updates its platform record in place, no dupe; edit still flips `source`→`manual` — the p6.1 deferral), per-source status surface (connected · last-sync "N min ago" · counts · "N differences to review"; `reduceSpokenDetail`-redacted), new `conflict_review_screen.dart` (list + keep-mine / use-theirs / dismiss, no bulk ops). **v1 = manual "Sync now" only** — on-open/resume sync deferred (backlog). Retention respected both directions (purge-before-sync via `retentionController.sweepNow()`; cutoff clamps import window + filters push-out). Reconciler: value-already-agrees is now a skip regardless of source (absorbs the write-back echo); manual-value protection unchanged. In-memory conflict store (`// SHORTCUT`, backlog). No dep / no schema / no permission / no manifest / no CI change. CI Format bounced once (worker's local `dart format` under-reported — `analysis_options.yaml` env bug); fixed in `9d3d403`, squashed into `2db45db`. core 573 / app 426. |
 | p6.5 | DONE | #70 | `ea585b1` | 2026-09-06 — Doctor-ready offline PDF report. `pdf ^3.12.0` added (Apache-2.0, direct main) — all §5 conditions met: dependency-audit green with the 7-pkg transitive subtree, pure Dart, no plugin, no SDK-floor bump, no `printing`; APK-size budget green. Pure `core/lib/src/export/clinical_report.dart` (`ClinicalReport` + `buildClinicalReport`, `generatedOn` injected, no `DateTime.now()`); `SymptomRepository.allTypes()` (archived included). `app`: `report_pdf.dart` (single A4, Helvetica core font, hand-drawn temp chart, `// SHORTCUT _ascii()` non-Latin glyph drop → backlog), `report_providers.dart` (purge-before-export via `sweepNow()`, neutral `olf-report-YYYY-MM-DD.pdf`), `export_report_screen.dart` (range picker + preview, new `screen_nav.dart` surface #20). `BackupFileGateway.writeBackup`→ generic `saveFile()` — backup + report share the SAF seam. "Apps & export" section now always shown. threat-model + release-checklist updated. No schema/permission/manifest/CI change. core 586 / app 436. |
-| Phase 6 close | DONE | (this PR) | — | 2026-09-06 — Phase 6 CLOSED; exit gate MET (all 5 clauses → slice + PR# + SHA in `docs/plan/phases/phase-06.md`); `overview.md` row 6 → DONE. Phase-wide: one schema bump (p6.1 v6→v7), `health` pkg evaluated+rejected (both gateways hand-rolled), `pdf` added for p6.5, `core` stayed Flutter-free / `DateTime.now()`-free. 4 backlog deferrals (on-open sync, delete propagation, persisted conflict store, bundled Unicode PDF font). |
+| Phase 6 close | DONE | #71 | `6f8c40c` | 2026-09-06 — Phase 6 CLOSED; exit gate MET (all 5 clauses → slice + PR# + SHA in `docs/plan/phases/phase-06.md`); `overview.md` row 6 → DONE. Phase-wide: one schema bump (p6.1 v6→v7), `health` pkg evaluated+rejected (both gateways hand-rolled), `pdf` added for p6.5, `core` stayed Flutter-free / `DateTime.now()`-free. 4 backlog deferrals (on-open sync, delete propagation, persisted conflict store, bundled Unicode PDF font). |
+| p7.1 | IN PROGRESS | — | — | worker-1 · `../olf-wt/p7.1` · `feat/p7.1-postpartum-mode` off `origin/main` @ `a99170f`. Pregnancy-loss/birth/postpartum flows + the **mode framework** the rest of Phase 7 reuses. Mode-enablement seam (typed `app_settings` keys, NO schema) + "Modes" Settings section (toggle keeps data); p1.11 loss/birth event → calm dismissible postpartum-mode offer (opt-in, never auto); postpartum cycle-return view (pure `core` over period + pregnancy-event history, honest `null` before ≥2 post-event cycles, reuses p1.3 variability classifier); support-resources screen (loss vs birth, bundled text, no tracked links, disclaimer); shared correlation-chart widget stub (or defer to p7.4 — Worker's call); new `screen_nav.dart` surface(s); 5 a11y sweeps; dark mode; `reduceSpokenDetail`; threat-model note (derived view, no new asset/egress). |
+| p7.2 | TODO | — | — | Pregnancy mode — week-by-week gestational view + pregnancy symptom logging (reuse p1.5 model); cycle-prediction UI hidden while active. Depends p7.1, p1.11. Likely split p7.2a (gestational-age core + week view) / p7.2b (symptom set + prediction-UI suppression) at negotiation. Bundled week text, copy-reviewed, no third-party content pack. |
+| p7.3 | TODO | — | — | TTC mode — pure `core` `dailyFertilityScore` (bounded, confidence-banded, history-aware, clock-injected) layered on p3 fertile window + p1.6 signals; NO second engine. Screen: today + next N days, window as a range, "not contraception guidance" note. Depends p7.1, p1.4/p3, p1.6. |
+| p7.4 | TODO | — | — | PCOS mode — reusable pure `core` cycle-phase **correlation core** (descriptive per-symptom frequency + phase distribution via p1.12 `cyclePhase`, honest "not enough data", no p-values/causal language) + irregular-cycle-aware UI reframing (presentation only, no `deriveCycles`/predictor change). Lands the p7.1 chart widget if deferred. Depends p7.1, p1.5, p1.3. |
+| p7.5 | TODO | — | — | Endometriosis mode — pain/flare log (intensity scale + optional region tag + note; Worker decides p1.5 symptom model vs small dedicated table — table = §5 stop + migration in same PR) + flare↔cycle-phase correlation via p7.4 core + pain-over-time chart. First ordered severity scale — shape for PMDD reuse. Depends p7.1, p7.4, p1.5. |
+| p7.6 | TODO | — | — | PMDD mode — daily multi-symptom rating (ordered scale from p7.5 or shared `core`; reuse p7.5 storage choice) + cycle-overlay chart (ratings aligned by cycle day/phase across N cycles) + descriptive luteal-vs-follicular summary via p7.4 core. NO DRSP score / diagnostic threshold. Small fixed rating set for v1. Depends p7.1, p7.4, p7.5, p1.12. |
+| p7.7 | TODO | — | — | Perimenopause / menopause mode — pure `core` variability-trend + descriptive transition read over `CycleStats` + gap logic (coarse hedged stage label at most, NOT a numeric score); symptom timeline (p7.1 chart / p7.4 correlation); reframes long/absent cycles as expected; "12 months without a period" surfaced factually. Depends p7.1, p7.4, p1.3. |
+| p7.8 | TODO | — | — | Birth-control switching support — start/stop hormonal-BC event (from p1.7 method history — verify it records enough; extra field = §5 stop + migration) → recalibration state: prediction card widens/withholds forward estimate for a window + plain explainer note. Predictor NOT rewritten — presentation/weighting layer. Auto-clears after window / enough post-switch cycles / manual dismiss. Depends p7.1, p1.7, p3. |
 
 ## In-flight PRs
 
-_(none — `docs/phase-6-close` PR opens after this commit)_
+_(none)_
 
 ## Notes
 
