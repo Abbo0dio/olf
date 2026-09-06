@@ -5,6 +5,7 @@ import 'package:olf_core/olf_core.dart';
 import 'mode_catalog.dart';
 import 'modes_providers.dart';
 import 'postpartum_screen.dart';
+import 'pregnancy_week_screen.dart';
 
 /// The "Modes" screen, reached from Settings → "Life-stage & condition modes"
 /// (p7.1): every Phase 7 mode with a one-line description and an on/off control.
@@ -36,6 +37,13 @@ class ModesPage extends StatelessWidget {
   }
 }
 
+/// The screen behind a mode's "Open" row. Only called for modes where
+/// [modeHasScreen] is true.
+Widget _modeScreen(LifeStageMode mode) => switch (mode) {
+  LifeStageMode.pregnancy => const PregnancyWeekScreen(),
+  _ => const PostpartumScreen(),
+};
+
 class _ModeTile extends ConsumerWidget {
   const _ModeTile({required this.mode});
 
@@ -59,16 +67,16 @@ class _ModeTile extends ConsumerWidget {
           onChanged: (want) =>
               setLifeStageModeEnabled(ref, mode, enabled: want),
         ),
-        // Postpartum is the only mode with a screen in p7.1 (modeHasScreen);
-        // later slices add a case here as each mode's screen lands.
+        // Modes with a screen (modeHasScreen): postpartum (p7.1), pregnancy
+        // (p7.2a). Later slices add their screen to `_modeScreen` as it lands.
         if (canOpen)
           ListTile(
             leading: const SizedBox(width: 24),
             title: Text('Open ${entry.title}'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const PostpartumScreen()),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => _modeScreen(mode))),
           ),
       ],
     );

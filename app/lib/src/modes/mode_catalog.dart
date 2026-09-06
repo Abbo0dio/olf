@@ -18,8 +18,8 @@ import 'package:olf_core/olf_core.dart';
       LifeStageMode.pregnancy => (
         title: 'Pregnancy',
         description:
-            'A week-by-week view and pregnancy-appropriate things to log. '
-            'Coming soon.',
+            'A week-by-week view from a start date you enter — last period, '
+            'due date, or conception date.',
       ),
       LifeStageMode.ttc => (
         title: 'Trying to conceive',
@@ -59,7 +59,10 @@ import 'package:olf_core/olf_core.dart';
       ),
     };
 
-/// Whether this mode has an interactive screen in the current build. Only
-/// [LifeStageMode.postpartum] does as of p7.1; the others can still be toggled
-/// so their state is ready when their slice lands.
-bool modeHasScreen(LifeStageMode mode) => mode == LifeStageMode.postpartum;
+/// Whether this mode has an interactive screen in the current build. Postpartum
+/// (p7.1) and pregnancy (p7.2a) do; the others can still be toggled so their
+/// state is ready when their slice lands.
+bool modeHasScreen(LifeStageMode mode) => switch (mode) {
+  LifeStageMode.postpartum || LifeStageMode.pregnancy => true,
+  _ => false,
+};

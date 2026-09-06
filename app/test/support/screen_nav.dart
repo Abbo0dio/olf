@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olf_app/src/health/health_providers.dart';
+import 'package:olf_app/src/modes/pregnancy_mode_providers.dart';
 import 'package:olf_app/src/period/period_format.dart';
 import 'package:olf_app/src/prediction/accuracy_format.dart';
 import 'package:olf_app/src/privacy/privacy_education_content.dart';
@@ -23,11 +24,12 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 23 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 25 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
-/// cycle-return screen and the loss/birth support-resources screen). The
+/// cycle-return screen and the loss/birth support-resources screen; p7.2a the
+/// pregnancy week view in its needs-a-start-date and populated states). The
 /// dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -118,6 +120,30 @@ Future<void> _seedPostpartumAfterLoss(AppDatabase db) async {
   ).logPregnancyEnd(PregnancyEndKind.loss, _daysAgo(40));
 }
 
+/// Pregnancy mode on, with a last-period start reference ~24 weeks back so the
+/// week view renders its populated state (week 24, day 3 — second trimester).
+Future<void> _seedPregnancyMode(AppDatabase db) async {
+  final settings = DriftSettingsRepository(db);
+  await settings.set(LifeStageMode.pregnancy.settingKey, 'true');
+  await settings.set(
+    pregnancyStartReferenceKey,
+    encodePregnancyStartReference(
+      PregnancyStartReference(
+        kind: PregnancyReferenceKind.lastMenstrualPeriod,
+        date: _daysAgo(24 * 7 + 3),
+      ),
+    ),
+  );
+}
+
+/// Pregnancy mode on but no start reference entered — the week view's
+/// "set your start date" state.
+Future<void> _seedPregnancyModeNoReference(AppDatabase db) async {
+  await DriftSettingsRepository(
+    db,
+  ).set(LifeStageMode.pregnancy.settingKey, 'true');
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
@@ -128,8 +154,16 @@ Future<void> _openModesPage(WidgetTester tester) async {
 }
 
 Future<void> _openPostpartumScreen(WidgetTester tester) async {
+  await _openModeScreen(tester, 'Open Postpartum');
+}
+
+Future<void> _openPregnancyScreen(WidgetTester tester) async {
+  await _openModeScreen(tester, 'Open Pregnancy');
+}
+
+Future<void> _openModeScreen(WidgetTester tester, String rowLabel) async {
   await _openModesPage(tester);
-  final row = find.text('Open Postpartum');
+  final row = find.text(rowLabel);
   await tester.scrollUntilVisible(
     row,
     120,
@@ -421,6 +455,35 @@ final List<Surface> screenSurfaces = <Surface>[
         await tester.tap(find.text('Support & resources'));
         await tester.pumpAndSettle();
         expect(find.widgetWithText(AppBar, 'After a loss'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('pregnancy_week_screen — set your start date', (tester, check) async {
+    final db = memoryDb();
+    await _seedPregnancyModeNoReference(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPregnancyScreen(tester);
+        expect(find.widgetWithText(AppBar, 'Pregnancy'), findsOneWidget);
+        expect(find.text('Add start date'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('pregnancy_week_screen — week view', (tester, check) async {
+    final db = memoryDb();
+    await _seedPregnancyMode(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPregnancyScreen(tester);
+        expect(find.textContaining('Week 24'), findsOneWidget);
         await check(tester);
       },
     );

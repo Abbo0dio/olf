@@ -85,6 +85,30 @@ void main() {
     );
   });
 
+  testWidgets('enabling pregnancy reveals a way into its screen', (
+    tester,
+  ) async {
+    final db = memoryDb();
+    await pumpOlf(
+      tester,
+      overrides: [dbOverride(db)],
+      body: () async {
+        await openModesPage(tester);
+        await tester.tap(find.widgetWithText(SwitchListTile, 'Pregnancy'));
+        await tester.pumpAndSettle();
+
+        await tester.scrollUntilVisible(
+          find.text('Open Pregnancy'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.text('Open Pregnancy'));
+        await tester.pumpAndSettle();
+        expect(find.widgetWithText(AppBar, 'Pregnancy'), findsOneWidget);
+      },
+    );
+  });
+
   testWidgets('enabling postpartum reveals a way into its screen', (
     tester,
   ) async {

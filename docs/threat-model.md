@@ -601,3 +601,24 @@ The CI guard requires an entry naming the current phase.
   So postpartum / loss context is now a **derived view over existing data
   classes** — no new asset to protect and no new egress. No design changes
   required by this review.
+- **2026-09-06 — Phase 7 / p7.2a landing — reviewer: worker: 1.** Pregnancy mode
+  (gestational-age core + week view). **No new asset, adversary, trust boundary,
+  data flow, network path, dependency, permission, manifest / plist change, or CI
+  gate change.**
+  - The **start reference** (LMP / due date / conception date + which kind) is
+    one more row in the existing `app_settings` KV store
+    (`pregnancy.start_reference` = `"<kind>|<yyyy-mm-dd>"`), the same sensitivity
+    class as `mode.<name>` and the other preference keys under Assets. **No
+    schema change** — no new table, column, or migration. Turning the mode off
+    keeps the row (no data loss on disable); it is only removed on an explicit
+    clear.
+  - **Gestational age** is a pure `core` derivation (`gestationalAgeAsOf`,
+    `DateTime.now()`-free, deterministic) from that one reference — recomputed on
+    read, never stored, like the p3 predictions and the p7.1 cycle-return view.
+    A reference in the future yields an honest `null` ("check your dates"), never
+    a negative week.
+  - The **week-by-week notes** are bundled, non-clinical static text (weeks
+    0–42), carry the fixed "not a medical device" line on the screen, contain
+    **no links**, and are tone-locked by a content test plus the p1.9
+    inclusive-language lint. Nothing here phones home.
+  No design changes required by this review.
