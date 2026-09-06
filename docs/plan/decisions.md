@@ -2,6 +2,41 @@
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-07 — **p8.2 device provenance: one minimal additive `ImportReconciler` clause is
+  approved so cross-device disagreement is detected, not silently merged.** The p8.2 dispatch
+  said "cross-device reconciliation stays deterministic through the **unchanged**
+  `ImportReconciler`" **and** "a material disagreement is a reviewable conflict, never silently
+  overwrite data". Worker 1 showed these can't both hold as written: two devices that both sync
+  to one platform (Oura + Garmin → Apple Health) arrive with the same `source` enum
+  (`appleHealth`), so the existing `crossSourceDisagreement` path (gated on `match.source !=
+  sample.source`) never fires; and two incoming rows for a not-yet-stored `(type, day)` are
+  never compared at all (`byTypeDay` is built from local rows only) → both hit `inserts`, the
+  day-keyed upsert in `HealthImportService` keeps the last writer, the other reading is lost
+  with no conflict and no trace. The plan's own floor for p8.2 is "must at least not dupe or
+  **clobber**" and the phase §9 ref is "no data loss on sync" — so **option B (ship labelling
+  only, reword the criterion away, let last-writer-wins stand) was rejected**: it ships a
+  silent-data-loss bug. **Option C (synthesise the conflict inside `HealthImportService`) was
+  rejected**: it scatters conflict semantics out of the one pure component whose contract is
+  "never dupe, never clobber", and needs a fake `LocalSampleView` for the no-local-row case.
+  **Approved option A** — additive, not a fork: thread the nullable `sourceDevice` (the column
+  p8.2 adds anyway) through `HealthSample` + `LocalSampleView`; register `inserts` into
+  `byTypeDay` as they accumulate so a second incoming for the same fresh `(type, day)` is
+  matched; add `ConflictReason.crossDeviceDisagreement` for a `(type, day)` match that is
+  **same `source`, different non-null `sourceDevice`, values beyond `tolerance`**. `externalId`
+  match still pre-empts; within-`tolerance` agreement still skips regardless of device;
+  same-`sourceDevice` or both-null intra-batch disagreement stays a deterministic
+  last-by-`_stableOrder` update (a device revising itself / unattributable legacy rows — not a
+  conflict a user could resolve). **No precedence or arbitration in p8.2** — the user resolves
+  on the existing `conflict_review_screen`; **p8.6 owns the precedence policy** and now sits on
+  a reconciler that *detects* cross-device disagreement rather than one that silently merged it.
+  Single-source behaviour is byte-for-byte unchanged, regression-locked by the existing
+  reconciler suite plus an explicit "single source, any input order → identical plan" test
+  (~15 lines in the reconciler + model threading). Licensed by the Phase 8 phase-wide
+  constraint "a source that needs a genuinely new ingestion shape flags it at negotiation".
+  Also corrected in the plan: `daily_flows` was created at **v3** (not v5), so the v11
+  migration inner guards are `from >= 3` / `from >= 5` (v7 per-table precedent).
+  — orchestrator, §5 ruling during p8.2 negotiation.
+
 - 2026-09-06 — **p8.1a Apple Watch sleeping-wrist temperature stores in `bbt_entries` behind a
   `measurement_kind` column; `schemaVersion` 9→10.** `HKQuantityTypeIdentifier.appleSleepingWristTemperature`
   is a *sleeping wrist* measurement, not a *basal body* temperature. **Rejected** a dedicated

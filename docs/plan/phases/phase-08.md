@@ -51,7 +51,8 @@ Phase 3 backtester.
   migration + `migration_matrix_test` extension + a dedicated `*_migration_test.dart` + a
   backup round-trip in the same PR (the p6.1 / p7.5 / p7.6 precedent;
   `docs/release-checklist.md` "Schema change" block). `schemaVersion` is **9** after Phase 7 —
-  p8.1a takes it to **10** (`measurement_kind` on `bbt_entries`).
+  p8.1a takes it to **10** (`measurement_kind` on `bbt_entries`), p8.2 to **11**
+  (`source_device` on `daily_flows` + `bbt_entries`).
 - **A direct cloud API is a §5 conversation, per wearable.** The default path is *via the
   health platform* (Apple Health / Health Connect) — no new dependency, no network. A
   vendor's own cloud API (Oura Cloud, WHOOP, Garmin Health) brings an **OAuth
@@ -208,26 +209,60 @@ Phase 3 backtester.
 - **Acceptance criteria:**
   - The import path reads the same `HealthSampleType`s regardless of which device wrote them;
     **this slice adds the nullable `source_device` text column** to `daily_flows` +
-    `bbt_entries` (§5 stop — schema change, full migration deliverable in the PR; the p8.1a
-    v9→v10 `measurement_kind` precedent), populated from the platform sample's
-    `HKSource` / `HKDevice` (iOS) or the Health Connect origin (Android) so olf can attribute
-    a reading to Oura / Garmin / Apple Watch / another app.
+    `bbt_entries` (schema change — **pre-authorised at Phase 8 planning**, see the
+    "Device-level provenance is additive" phase-wide constraint; not a fresh §5 stop.
+    `schemaVersion` **10 → 11**; full migration deliverable in the PR per the p8.1a v9→v10
+    `measurement_kind` precedent). Migration:
+    `if (from < 11 && to >= 11) { if (from >= 3) m.addColumn(dailyFlows, dailyFlows.sourceDevice); if (from >= 5) m.addColumn(bbtEntries, bbtEntries.sourceDevice); }`
+    — `daily_flows` was created at **v3**, `bbt_entries` at **v5** (the v7 per-table inner-guard
+    precedent). Populated from the platform sample's `HKSource` / `HKDevice` (iOS) or the Health
+    Connect origin / data-origin package (Android) so olf can attribute a reading to Oura /
+    Garmin / Apple Watch / another app.
   - A per-device status surface in "Apps & export": which devices have contributed data, last
     sync, counts — `reduceSpokenDetail`-redacted. Disconnecting olf from the platform keeps
     the readings; there is no per-device "connect" beyond the platform grant.
-  - Reconciliation across devices is deterministic (p8.6 defines the precedence order; this
-    slice must at least not dupe or clobber — two devices reporting the same day is a
-    single reconciled reading + a reviewable conflict if they disagree materially).
+  - Reconciliation across devices is deterministic and **loses no reading**. p8.6 defines the
+    precedence order; this slice must not dupe and must not clobber — two devices reporting the
+    same day is one reconciled reading when they agree (within `tolerance`) and a **reviewable
+    conflict** (existing `conflict_review_screen`) when they disagree materially.
+    - **§5 ruling (2026-09-07, p8.2 negotiation, worker: 1):** the p6.1 `ImportReconciler`
+      as-shipped cannot meet this — two devices on one platform both arrive `source =
+      appleHealth`, so `crossSourceDisagreement` (gated on `match.source != sample.source`)
+      never fires, and a not-yet-inserted `(type, day)` collision isn't detected at all
+      (`byTypeDay` is built from local rows only) → the second reading is silently lost via
+      last-writer upsert. **Approved: one minimal additive reconciler clause**, not a fork:
+      (1) thread the nullable `sourceDevice` through `HealthSample` + `LocalSampleView`
+      (the column this slice adds anyway); (2) register `inserts` into `byTypeDay` as they
+      accumulate so a second incoming for the same fresh `(type, day)` is matched;
+      (3) new `ConflictReason.crossDeviceDisagreement` when the `(type, day)` match is
+      **same `source`, different non-null `sourceDevice`, values disagree beyond `tolerance`**.
+      `externalId` match still wins first; agreement within `tolerance` still skips regardless
+      of device; same-`sourceDevice` (or both-null) intra-batch disagreement stays a
+      deterministic last-by-`_stableOrder` update, **not** a conflict (a device revising
+      itself, or unattributable legacy rows — no conflict the user could resolve).
+      **No precedence / arbitration here** — the user resolves; p8.6 owns the precedence
+      policy and sits on top of a reconciler that now *detects* cross-device disagreement.
+      **Single-source behaviour is byte-for-byte unchanged and regression-locked** by the
+      existing reconciler suite plus an explicit "single source, any input order → identical
+      plan" test.
   - No new dependency, no new permission beyond the existing HealthKit / `health.*` grants,
     no network. `docs/threat-model.md` review-log entry — provenance is now finer-grained,
     still the same asset class + same local IPC, no new egress.
   - `docs/health-platform-interop.md` updated with the device-attribution behaviour and the
     iOS-vs-Android capability asymmetry for third-party device metadata.
 - **Tests required:** `core` — device tag flows from a raw sample through
-  `healthSampleFromRaw` into storage; a two-device same-day disagreement is a conflict, a
-  two-device agreement is one reading. `app` — status surface lists contributing devices
-  from mocked platform payloads; Oura-style and Garmin-style payloads both decode. Sweeps if
-  a screen changes.
+  `healthSampleFromRaw` into storage and back; a two-device same-day **disagreement** is a
+  `crossDeviceDisagreement` conflict (both as a fresh-day intra-batch collision and against an
+  existing local row), a two-device **agreement** is one reading; a device **revising itself**
+  in one batch (same `sourceDevice`) is a deterministic update, not a conflict; **single
+  source, any input order → identical `ReconciliationPlan`** (regression lock); `externalId`
+  match still pre-empts `(type, day)`. Schema: `migration_matrix_test` → v11 (all three loops;
+  `source_device` NULL on every pre-existing row) + `source_device_migration_test.dart`
+  (hand-rolled v10 on disk → v11, `PRAGMA table_info` on both tables) + a backup round-trip
+  carrying a non-null `source_device`. `app` — status surface lists contributing devices from
+  mocked platform payloads; Oura-style and Garmin-style payloads both decode with their device
+  tags; the channel wrapper decodes `HKSource`/`HKDevice` metadata. Sweeps for the changed
+  screen.
 - **Notes / detail:** Garmin's direct **Garmin Health API** is a server-to-server partnership
   program, not a simple OAuth app — explicitly **out of scope** here; the platform path is
   the supported route. Oura *also* has a cloud API (p8.3) — this slice is the zero-dependency
@@ -342,7 +377,10 @@ Phase 3 backtester.
   renders N sources and each resolution action; retention/backup carry all raw rows. Sweeps.
 - **Notes / detail:** this is reconciler hardening, not a new engine. The p6.1
   `ImportReconciler` hard rules (never dupe, never clobber a manual value) are the invariants
-  to preserve and extend.
+  to preserve and extend. p8.2 already added cross-device **detection**
+  (`ConflictReason.crossDeviceDisagreement`, intra-batch `(type, day)` matching) — p8.6 layers
+  the deterministic **precedence** on top: pick a winner among the automatic sources instead
+  of always routing a disagreement to the user.
 
 ---
 
