@@ -8,6 +8,7 @@ the product must do.
 | File | Holds |
 |---|---|
 | `conventions.md` | How the plan is used, guiding principles, foundational technical decisions. Stable — read once. |
+| `architecture.md` | Terse codebase map — module layout, load-bearing seams + their files, cross-cutting infra, CI gates. What a cleared/compacted Worker re-orients from. Refreshed at each phase close. |
 | `overview.md` | The phase table: theme, status, gate to move on. The phase-history ledger. |
 | `phases/phase-00.md` … `phase-13.md` | One file per phase: the phase frame (goal, requirement refs, exit gate, phase-wide constraints) and every task spec for that phase — goal, acceptance criteria, tests, notes, build detail. |
 | `decisions.md` | Append-only decisions log (newest first). |
