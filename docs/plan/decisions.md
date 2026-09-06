@@ -2,6 +2,27 @@
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-06 — **p7.6 PMDD daily rating gets a dedicated `pmdd_ratings` table; `schemaVersion` 8→9.**
+  A daily multi-symptom rating is a `(date, item, rating)` series — it fits neither p7.5's
+  `pain_entries` (one row/day, single intensity) nor the p1.5 presence-only
+  `(date, symptomTypeId)` model. **Rejected** ALTER-ing `daily_symptom_entries` with a nullable
+  `severity` column: a "rated none today" row breaks the "a row means the symptom happened"
+  invariant that the calendar dots, recent-symptoms list and doctor report rely on, and folds
+  PMDD's every-day ratings into a table many surfaces read. **Approved** a new additive
+  `pmdd_ratings` table (PK `{date, item}`: `item` `textEnum<PmddSymptom>` — a fixed `core` enum,
+  no user-configurable rating set in v1 · `rating` `textEnum<SymptomSeverity>` reusing the p7.5
+  scale verbatim, with `SymptomSeverity.none` a valid stored value here meaning "rated, nothing
+  today" · `createdAt`/`updatedAt`), `if (from < 9) m.createTable(pmddRatings)` — plain additive,
+  no `to >=` guard (the v7 column-add precedent doesn't apply to a new table). Shipped **in
+  PR #82** on the p6.1 + p7.5 precedent: `.g.dart` regen + real `schema dump` → `drift_schemas/v9`
+  + `test/db/generated/schema_v9` + `dump_historical_schemas.dart` `_dumpedVersions` += 9,
+  `migration_matrix_test` → v9, new `pmdd_migration_test.dart`, backup round-trip,
+  `backup_service` `tableOrder` + `retention_service` `deleteWhere` both += `pmdd_ratings`,
+  `docs/local-database.md` "Schema v9" section, threat-model p7.6 entry (new local encrypted
+  asset, recomputed overlay never stored, no new egress/permission/CI). The cycle-overlay and
+  the luteal-vs-follicular summary reuse `cyclePhaseTimeline` + `cyclePhaseCorrelations`
+  unchanged — no DRSP score, no diagnostic threshold (§9(12)). — orchestrator, §5 ruling during
+  p7.6 negotiation.
 - 2026-09-06 — **p7.5 endometriosis pain/flare log gets a dedicated table; `schemaVersion` 7→8.**
   The p1.5 symptom model is presence-only `(date, symptomTypeId)` and structurally can't hold
   the p7.5 acceptance criteria: an *ordered* intensity scale (synthetic catalogue names like

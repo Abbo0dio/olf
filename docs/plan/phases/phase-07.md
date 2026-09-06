@@ -255,11 +255,39 @@ no new egress/permission/CI gate); `docs/release-checklist.md` "Schema change" b
 - **Goal:** a user tracking PMDD can do a quick **daily rating** of a small set of
   mood/physical symptoms and see those ratings overlaid on cycle phase across several cycles —
   the pattern PMDD is defined by (luteal-phase symptom rise, follicular relief).
+
+**Storage model — decided at negotiation (2026-09-06, worker: 2, PR #82). Orchestrator
+approved a dedicated table (schema v8→v9).** A daily multi-symptom rating is a
+`(date, item, rating)` series — it fits neither p7.5's `pain_entries` (one row per day, a
+single intensity) nor the p1.5 presence-only `(date, symptomTypeId)` model. **Rejected**
+ALTER-ing `daily_symptom_entries` to add a nullable `severity`: a "rated none today" row would
+break the "a row means the symptom happened" invariant that the calendar dots, the
+recent-symptoms list and the doctor report all rely on, and would fold PMDD's every-day
+ratings into a table many surfaces read. **Approved** option (b) — a new additive
+`pmdd_ratings` table (PK `{date, item}`, one row per rated item per day: `item`
+`textEnum<PmddSymptom>` — a fixed `core` enum, v1 has no user-configurable rating set ·
+`rating` `textEnum<SymptomSeverity>` reusing the p7.5 scale verbatim, and here
+`SymptomSeverity.none` **is** a stored value, meaning "rated, nothing today" · `createdAt` /
+`updatedAt`). `schemaVersion` 8→9 with `if (from < 9) m.createTable(pmddRatings)` — plain
+additive `createTable`, no `to >=` guard (an extra *table* is tolerated at every intermediate
+matrix target; only the v7 *column* add needed the guard). Shipped **in PR #82** on the
+p6.1 + p7.5 precedent: regen `app_database.g.dart` + real `drift_dev schema dump`
+→ `drift_schemas/drift_schema_v9.json` + `test/db/generated/schema_v9.dart`,
+`dump_historical_schemas.dart` `_dumpedVersions` += 9, `migration_matrix_test` extended to v9
+(from-loops + single-step loop reach 8; `pmdd_ratings` asserted present-and-empty from every
+earlier version + usable through its repository), new `pmdd_migration_test.dart`, backup
+round-trip carrying a real rated row across the migration, `backup_service` `tableOrder` +=
+`pmdd_ratings` (appended last, no FK), `retention_service` `deleteWhere` += `pmdd_ratings`
+(ages out on the retention window like every dated table), `docs/local-database.md` "Schema v9"
+section. Threat-model p7.6 entry names the new asset (structured PMDD rating rows in a new
+local `pmdd_ratings` table, SQLCipher-encrypted at rest, recomputed overlay never stored, no
+new egress/permission/CI gate).
 - **Acceptance criteria:**
-  - A daily **multi-symptom rating** entry (a handful of items, each on the ordered scale from
-    p7.5 or a shared `core` scale) — quick to complete (≤ the p5.5 tap discipline where it can).
-    Same table-vs-symptom-model decision as p7.5, same §5-stop rule if a table is needed;
-    reuse p7.5's storage choice if possible.
+  - A daily **multi-symptom rating** entry — a handful of fixed items (a small hard-coded
+    `core` list; v1 has no user-configurable rating scales — noted as a follow-up), each on
+    p7.5's `SymptomSeverity` scale, stored in the new `pmdd_ratings` table (see the
+    storage-model block above), **not** the p1.5 symptom model. Quick to complete (≤ the p5.5
+    tap discipline where the shape allows).
   - A **cycle-overlay chart**: ratings for the current + recent cycles aligned by cycle day /
     phase, so a luteal rise is visible. Uses the p7.1 chart widget.
   - A descriptive luteal-vs-follicular summary via the p7.4 correlation core ("your ratings run
