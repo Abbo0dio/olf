@@ -153,35 +153,36 @@ void main() {
     );
   });
 
-  testWidgets('dismiss: nothing is written on either side, the conflict clears', (
-    tester,
-  ) async {
-    final db = memoryDb();
-    final bbt = DriftBbtRepository(db);
-    await bbt.setTemp(day, 36.4);
-    final gateway = FakeHealthPlatformGateway();
+  testWidgets(
+    'dismiss: nothing is written on either side, the conflict clears',
+    (tester) async {
+      final db = memoryDb();
+      final bbt = DriftBbtRepository(db);
+      await bbt.setTemp(day, 36.4);
+      final gateway = FakeHealthPlatformGateway();
 
-    await pumpOlf(
-      tester,
-      overrides: [
-        dbOverride(db),
-        healthPlatformGatewayProvider.overrideWithValue(gateway),
-        healthConnectedProvider.overrideWith((ref) => Stream.value(true)),
-        healthConflictsProvider.overrideWith(
-          seededConflicts([bbtConflict(day, local: 36.4, incoming: 36.9)]),
-        ),
-      ],
-      body: () async {
-        await openReview(tester);
-        await tester.tap(find.text('Dismiss'));
-        await flush(tester, 20);
+      await pumpOlf(
+        tester,
+        overrides: [
+          dbOverride(db),
+          healthPlatformGatewayProvider.overrideWithValue(gateway),
+          healthConnectedProvider.overrideWith((ref) => Stream.value(true)),
+          healthConflictsProvider.overrideWith(
+            seededConflicts([bbtConflict(day, local: 36.4, incoming: 36.9)]),
+          ),
+        ],
+        body: () async {
+          await openReview(tester);
+          await tester.tap(find.text('Dismiss'));
+          await flush(tester, 20);
 
-        expect((await bbt.tempOn(day))!.tempCelsius, 36.4);
-        expect(gateway.writes, isEmpty);
-        expect(find.text('Nothing to review.'), findsOneWidget);
-      },
-    );
-  });
+          expect((await bbt.tempOn(day))!.tempCelsius, 36.4);
+          expect(gateway.writes, isEmpty);
+          expect(find.text('Nothing to review.'), findsOneWidget);
+        },
+      );
+    },
+  );
 
   testWidgets('resolving one of several leaves the rest', (tester) async {
     final db = memoryDb();

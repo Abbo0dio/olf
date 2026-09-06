@@ -243,10 +243,7 @@ Future<void> resolveHealthConflict(
               .read(bbtRepositoryProvider)
               .setTemp(s.day, s.value, externalId: s.externalId);
         case HealthSampleType.menstrualFlow:
-          final idx = s.value.round().clamp(
-            0,
-            FlowIntensity.values.length - 1,
-          );
+          final idx = s.value.round().clamp(0, FlowIntensity.values.length - 1);
           await ref
               .read(dailyFlowRepositoryProvider)
               .setFlow(

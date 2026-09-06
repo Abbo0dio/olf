@@ -26,7 +26,9 @@ void main() {
     tester,
   ) async {
     final db = memoryDb();
-    await DriftSettingsRepository(db).set(SettingKeys.appleHealthConnected, 'true');
+    await DriftSettingsRepository(
+      db,
+    ).set(SettingKeys.appleHealthConnected, 'true');
 
     await pumpOlf(
       tester,
@@ -40,8 +42,10 @@ void main() {
         await openSettings(tester);
         await scrollToApps(tester);
         expect(
-          find.textContaining('Sharing menstrual flow and basal body '
-              'temperature'),
+          find.textContaining(
+            'Sharing menstrual flow and basal body '
+            'temperature',
+          ),
           findsOneWidget,
         );
         expect(find.text('Sync now'), findsOneWidget);
@@ -87,7 +91,9 @@ void main() {
   testWidgets('the review row appears with the conflict count and opens the '
       'review screen', (tester) async {
     final db = memoryDb();
-    await DriftSettingsRepository(db).set(SettingKeys.appleHealthConnected, 'true');
+    await DriftSettingsRepository(
+      db,
+    ).set(SettingKeys.appleHealthConnected, 'true');
 
     await pumpOlf(
       tester,
@@ -116,8 +122,10 @@ void main() {
         await tester.tap(row);
         await tester.pumpAndSettle();
 
-        expect(find.widgetWithText(AppBar, ConflictReviewScreen.title),
-            findsOneWidget);
+        expect(
+          find.widgetWithText(AppBar, ConflictReviewScreen.title),
+          findsOneWidget,
+        );
       },
     );
   });
@@ -159,7 +167,9 @@ void main() {
 
   testWidgets('the counts update after a manual sync', (tester) async {
     final db = memoryDb();
-    await DriftSettingsRepository(db).set(SettingKeys.appleHealthConnected, 'true');
+    await DriftSettingsRepository(
+      db,
+    ).set(SettingKeys.appleHealthConnected, 'true');
     final day = DateTime.now().subtract(const Duration(days: 3));
     final gateway = FakeHealthPlatformGateway(
       seedSamples: [

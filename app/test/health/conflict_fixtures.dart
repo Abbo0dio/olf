@@ -5,7 +5,8 @@ import 'package:olf_core/olf_core.dart';
 /// `healthConflictsProvider.overrideWith(seededConflicts([...]))` in tests.
 HealthConflictsNotifier Function() seededConflicts(
   List<ReconciliationConflict> seed,
-) => () => _SeededConflicts(seed);
+) =>
+    () => _SeededConflicts(seed);
 
 class _SeededConflicts extends HealthConflictsNotifier {
   _SeededConflicts(this._seed);

@@ -111,30 +111,32 @@ void main() {
       },
     );
 
-    test('round-trips a fresh manual log with no duplicate on the next read', () async {
-      await flow.setFlow(day, intensity: FlowIntensity.heavy);
-      final gateway = FakeHealthPlatformGateway();
+    test(
+      'round-trips a fresh manual log with no duplicate on the next read',
+      () async {
+        await flow.setFlow(day, intensity: FlowIntensity.heavy);
+        final gateway = FakeHealthPlatformGateway();
 
-      await writeBackWith(gateway).flow(day);
-      final result = await importWith(gateway).sync();
+        await writeBackWith(gateway).flow(day);
+        final result = await importWith(gateway).sync();
 
-      expect(
-        result.summary,
-        HealthSyncSummary(added: 0, updated: 0, needsReview: 0, at: clock),
-      );
-      expect(result.conflicts, isEmpty);
-      expect(await flow.allFlows(), hasLength(1));
-    });
+        expect(
+          result.summary,
+          HealthSyncSummary(added: 0, updated: 0, needsReview: 0, at: clock),
+        );
+        expect(result.conflicts, isEmpty);
+        expect(await flow.allFlows(), hasLength(1));
+      },
+    );
 
     test('does not write back a day older than the retention cutoff', () async {
       final oldDay = DateTime(2026, 1, 10);
       await bbt.setTemp(oldDay, 36.5);
       final gateway = FakeHealthPlatformGateway();
 
-      await writeBackWith(gateway).bbt(
-        oldDay,
-        retentionCutoff: DateTime(2026, 5, 1),
-      );
+      await writeBackWith(
+        gateway,
+      ).bbt(oldDay, retentionCutoff: DateTime(2026, 5, 1));
 
       expect(gateway.writes, isEmpty);
     });

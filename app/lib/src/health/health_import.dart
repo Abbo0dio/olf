@@ -148,10 +148,11 @@ class HealthImportService {
         ? retentionCutoff
         : windowFrom;
 
-    final incoming =
-        (await _gateway.read(types: _types, from: from, to: to))
-            .where((s) => _inWindow(s.startAt, retentionCutoff))
-            .toList();
+    final incoming = (await _gateway.read(
+      types: _types,
+      from: from,
+      to: to,
+    )).where((s) => _inWindow(s.startAt, retentionCutoff)).toList();
 
     final bbtRows = (await _bbt.allEntries())
         .where((r) => _inWindow(r.date, retentionCutoff))

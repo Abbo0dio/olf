@@ -141,10 +141,7 @@ void main() {
       );
 
       // A plain in-app edit — no source / externalId args.
-      await repo.setFlow(
-        DateTime(2026, 8, 20),
-        intensity: FlowIntensity.heavy,
-      );
+      await repo.setFlow(DateTime(2026, 8, 20), intensity: FlowIntensity.heavy);
 
       final row = (await repo.flowOn(DateTime(2026, 8, 20)))!;
       expect(row.source, 'manual');

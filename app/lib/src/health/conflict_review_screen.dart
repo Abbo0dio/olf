@@ -73,11 +73,13 @@ class ConflictReviewScreen extends ConsumerWidget {
       return;
     }
     messenger.showSnackBar(
-      SnackBar(content: Text(switch (how) {
-        ConflictResolution.keepLocal => 'Kept your entry.',
-        ConflictResolution.takeIncoming => 'Used the imported entry.',
-        ConflictResolution.dismiss => 'Left for now.',
-      })),
+      SnackBar(
+        content: Text(switch (how) {
+          ConflictResolution.keepLocal => 'Kept your entry.',
+          ConflictResolution.takeIncoming => 'Used the imported entry.',
+          ConflictResolution.dismiss => 'Left for now.',
+        }),
+      ),
     );
   }
 }
@@ -98,10 +100,9 @@ class _ConflictCard extends StatelessWidget {
   String _describe(HealthSampleType type, double value) => switch (type) {
     HealthSampleType.basalBodyTemperature => formatTemp(value, unit),
     HealthSampleType.menstrualFlow =>
-      FlowIntensity.values[value.round().clamp(
-        0,
-        FlowIntensity.values.length - 1,
-      )].label,
+      FlowIntensity
+          .values[value.round().clamp(0, FlowIntensity.values.length - 1)]
+          .label,
     HealthSampleType.bodyTemperature ||
     HealthSampleType.wristTemperature ||
     HealthSampleType.sleep => value.toString(),
@@ -189,9 +190,7 @@ class _ValueRow extends StatelessWidget {
             ),
           ),
         ),
-        Expanded(
-          child: Text(value, style: theme.textTheme.bodyLarge),
-        ),
+        Expanded(child: Text(value, style: theme.textTheme.bodyLarge)),
       ],
     );
   }

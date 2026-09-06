@@ -153,34 +153,40 @@ void main() {
     expect(gateway.writes, isEmpty);
   });
 
-  test('does not re-import or push data older than the retention window', () async {
-    // A local manual row and a platform sample, both well before the cutoff.
-    final oldDay = DateTime(2026, 1, 1);
-    await bbt.setTemp(oldDay, 36.5); // manual, out of window
-    final gateway = FakeHealthPlatformGateway(
-      seedSamples: [
-        HealthSample.point(
-          type: HealthSampleType.basalBodyTemperature,
-          at: oldDay,
-          value: 36.9,
-          unit: HealthUnit.celsius,
-          source: HealthDataSource.appleHealth,
-          externalId: 'old-1',
-        ),
-      ],
-    );
+  test(
+    'does not re-import or push data older than the retention window',
+    () async {
+      // A local manual row and a platform sample, both well before the cutoff.
+      final oldDay = DateTime(2026, 1, 1);
+      await bbt.setTemp(oldDay, 36.5); // manual, out of window
+      final gateway = FakeHealthPlatformGateway(
+        seedSamples: [
+          HealthSample.point(
+            type: HealthSampleType.basalBodyTemperature,
+            at: oldDay,
+            value: 36.9,
+            unit: HealthUnit.celsius,
+            source: HealthDataSource.appleHealth,
+            externalId: 'old-1',
+          ),
+        ],
+      );
 
-    // Keep only the last ~30 days (clock is 2026-06-01).
-    final summary = await syncSummary(
-      gateway,
-      retentionCutoff: DateTime(2026, 5, 1),
-    );
+      // Keep only the last ~30 days (clock is 2026-06-01).
+      final summary = await syncSummary(
+        gateway,
+        retentionCutoff: DateTime(2026, 5, 1),
+      );
 
-    // Nothing imported, nothing flagged, nothing written back for the old day.
-    expect(summary, HealthSyncSummary(added: 0, updated: 0, needsReview: 0, at: clock));
-    expect((await bbt.tempOn(oldDay))!.tempCelsius, 36.5); // untouched
-    expect(gateway.writes, isEmpty);
-  });
+      // Nothing imported, nothing flagged, nothing written back for the old day.
+      expect(
+        summary,
+        HealthSyncSummary(added: 0, updated: 0, needsReview: 0, at: clock),
+      );
+      expect((await bbt.tempOn(oldDay))!.tempCelsius, 36.5); // untouched
+      expect(gateway.writes, isEmpty);
+    },
+  );
 
   group('connect', () {
     test(
