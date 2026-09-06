@@ -21,6 +21,7 @@ class LocalSampleView {
     required this.unit,
     required this.source,
     this.externalId,
+    this.sourceDevice,
   });
 
   final String localId;
@@ -33,6 +34,11 @@ class LocalSampleView {
   final HealthDataSource source;
   final String? externalId;
 
+  /// Free-form device / app tag for the row's origin (schema v11, p8.2), or
+  /// `null` for a manual row or one imported before device attribution existed.
+  /// Never a matching key — used only to tell two devices apart on one day.
+  final String? sourceDevice;
+
   @override
   bool operator ==(Object other) =>
       other is LocalSampleView &&
@@ -42,16 +48,25 @@ class LocalSampleView {
       other.value == value &&
       other.unit == unit &&
       other.source == source &&
-      other.externalId == externalId;
+      other.externalId == externalId &&
+      other.sourceDevice == sourceDevice;
 
   @override
-  int get hashCode =>
-      Object.hash(localId, type, day, value, unit, source, externalId);
+  int get hashCode => Object.hash(
+    localId,
+    type,
+    day,
+    value,
+    unit,
+    source,
+    externalId,
+    sourceDevice,
+  );
 
   @override
   String toString() =>
       'LocalSampleView($localId, $type, $day, $value $unit, $source, '
-      'externalId: $externalId)';
+      'externalId: $externalId, sourceDevice: $sourceDevice)';
 }
 
 /// Why an incoming sample could not be auto-applied.
@@ -62,6 +77,14 @@ enum ConflictReason {
 
   /// The matching local row came from a different platform than this import.
   crossSourceDisagreement,
+
+  /// The matching row and this sample came from the **same platform** but from
+  /// two **different devices** (both [HealthSample.sourceDevice] known and
+  /// unequal) and their values disagree (schema v11, p8.2). olf will not pick a
+  /// winner — the multi-source precedence policy is p8.6 — so the user resolves
+  /// it. The "matching row" here may be another sample from the *same* import
+  /// batch that landed first (by the reconciler's stable order).
+  crossDeviceDisagreement,
 }
 
 /// One incoming sample that matched an existing local row whose value differs
@@ -214,12 +237,20 @@ bool _listEq(List<Object?> a, List<Object?> b) {
 /// storage.
 ///
 /// **Matching.** An incoming sample matches a local row by [externalId] first;
-/// failing that, by `(type, day)`. **Hard rules.** When the values already
-/// agree (within [tolerance]) there is nothing to do — the sample is skipped
-/// regardless of source. Otherwise: a [HealthDataSource.manual] local row is
-/// never in [ReconciliationPlan.updates] — a *disagreement* with it is always a
-/// [ReconciliationConflict]; and a `(type, day)` match against a
-/// different-source row that disagrees is a conflict, not an update.
+/// failing that, by `(type, day)` — and a sample that is itself *inserted* this
+/// pass is registered under both keys, so a second incoming sample for the same
+/// not-yet-stored `(type, day)` matches the first (p8.2). **Hard rules.** When
+/// the values already agree (within [tolerance]) there is nothing to do — the
+/// sample is skipped regardless of source or device. Otherwise: a
+/// [HealthDataSource.manual] local row is never in [ReconciliationPlan.updates]
+/// — a *disagreement* with it is always a [ReconciliationConflict]; a
+/// `(type, day)` match against a different-`source` row that disagrees is a
+/// [ConflictReason.crossSourceDisagreement] conflict; a match that is
+/// same-`source` but from a **different, known** device
+/// ([HealthSample.sourceDevice]) that disagrees is a
+/// [ConflictReason.crossDeviceDisagreement] conflict (no winner is picked —
+/// p8.6 owns precedence). Everything else that is same-`source`,
+/// same-or-unknown device, non-manual, revised → an in-place update.
 class ImportReconciler {
   const ImportReconciler({this.tolerance = 0.01});
 
@@ -245,17 +276,33 @@ class ImportReconciler {
     final conflicts = <ReconciliationConflict>[];
     final skipped = <ReconciliationSkip>[];
 
+    // p8.2: `localId`s of the stand-in views registered for samples inserted
+    // *this pass* — so we can tell "matched another same-batch insert" from
+    // "matched a stored row" and keep the single-source plan shape unchanged.
+    final pendingLocalIds = <String>{};
+
     // Process in a stable order so the plan is independent of the caller's
     // input ordering.
     final ordered = [...incoming]..sort(_stableOrder);
+
+    void registerPendingInsert(HealthSample sample) {
+      final pending = _pendingView(sample);
+      pendingLocalIds.add(pending.localId);
+      byTypeDay[(sample.type, dateOnly(sample.day))] = pending;
+      final ext = sample.externalId;
+      if (ext != null) byExternalId.putIfAbsent(ext, () => pending);
+    }
 
     for (final sample in ordered) {
       final match = _matchFor(sample, byExternalId, byTypeDay);
 
       if (match == null) {
         inserts.add(sample);
+        registerPendingInsert(sample);
         continue;
       }
+
+      final matchIsPending = pendingLocalIds.contains(match.localId);
 
       final sameUnit = match.unit == sample.unit;
       final sameValue =
@@ -298,7 +345,36 @@ class ImportReconciler {
         continue;
       }
 
-      // Same non-manual source, value revised — safe in-place update.
+      // p8.2: same platform, but two *different* known devices disagree. olf
+      // does not arbitrate (p8.6 owns precedence) — hand it to the user. A
+      // device revising *itself*, or unattributable legacy rows (either side
+      // `null`), fall through below.
+      final bothDevicesKnown =
+          match.sourceDevice != null && sample.sourceDevice != null;
+      if (bothDevicesKnown && match.sourceDevice != sample.sourceDevice) {
+        conflicts.add(
+          ReconciliationConflict(
+            localId: match.localId,
+            local: match,
+            incoming: sample,
+            reason: ConflictReason.crossDeviceDisagreement,
+          ),
+        );
+        continue;
+      }
+
+      // p8.2: the only thing this sample matched is another insert from this
+      // same batch (no stored row), same/unknown device, values differ. That is
+      // exactly the pre-p8.2 "two same-day incoming samples" case — keep both as
+      // inserts so the plan shape and the apply-time last-writer-wins behaviour
+      // are unchanged for the single-source path.
+      if (matchIsPending) {
+        inserts.add(sample);
+        continue;
+      }
+
+      // Same non-manual source, same-or-unknown device, value revised — safe
+      // in-place update.
       updates.add(
         ReconciliationUpdate(localId: match.localId, incoming: sample),
       );
@@ -309,6 +385,27 @@ class ImportReconciler {
       updates: updates,
       conflicts: conflicts,
       skipped: skipped,
+    );
+  }
+
+  /// A [LocalSampleView] standing in for an incoming [sample] that is being
+  /// inserted this pass, so a later same-`(type, day)` sample can match it
+  /// (p8.2). `localId` is synthetic — the caller applies inserts/updates by
+  /// day + type, and a `crossDeviceDisagreement` conflict is resolved the same
+  /// way — so it only needs to be stable and distinct.
+  static LocalSampleView _pendingView(HealthSample sample) {
+    final day = dateOnly(sample.day);
+    return LocalSampleView(
+      localId:
+          sample.externalId ??
+          'pending:${sample.type.name}:${day.toIso8601String()}',
+      type: sample.type,
+      day: day,
+      value: sample.value,
+      unit: sample.unit,
+      source: sample.source,
+      externalId: sample.externalId,
+      sourceDevice: sample.sourceDevice,
     );
   }
 

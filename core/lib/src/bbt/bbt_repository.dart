@@ -38,12 +38,19 @@ abstract interface class BbtRepository {
   /// Apple Watch reading makes it a typed basal temperature), mirroring how
   /// [source] falls back to `manual`. Only the health-import path passes
   /// [BbtMeasurementKind.sleepingWrist].
+  ///
+  /// [sourceDevice] (schema v11, p8.2) is the free-form device / app tag for a
+  /// health-platform import (an Oura Ring, a Garmin watch). Like [source] and
+  /// [measurementKind] it is **not** sticky: an in-app edit passes no tag and
+  /// the row's `source_device` is cleared to `null` (the value is now the
+  /// user's own). Only the health-import path passes a non-null tag.
   Future<void> setTemp(
     DateTime date,
     double celsius, {
     HealthDataSource source = HealthDataSource.manual,
     String? externalId,
     BbtMeasurementKind measurementKind = BbtMeasurementKind.basal,
+    String? sourceDevice,
   });
 
   /// Remove the reading logged for [date]. A no-op if that day has none.

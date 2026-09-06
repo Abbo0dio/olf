@@ -202,6 +202,8 @@ class HealthImportService {
           unit: HealthUnit.celsius,
           source: healthDataSourceFromStorage(r.source),
           externalId: r.externalId,
+          // p8.2: so the reconciler can tell an Oura day from a Garmin day.
+          sourceDevice: r.sourceDevice,
         ),
       for (final r in flowRows)
         LocalSampleView(
@@ -212,6 +214,7 @@ class HealthImportService {
           unit: HealthUnit.flowLevel,
           source: healthDataSourceFromStorage(r.source),
           externalId: r.externalId,
+          sourceDevice: r.sourceDevice,
         ),
     ];
 
@@ -267,6 +270,8 @@ class HealthImportService {
           measurementKind: asSleepingWrist
               ? BbtMeasurementKind.sleepingWrist
               : BbtMeasurementKind.basal,
+          // p8.2: carry the originating device onto the stored row.
+          sourceDevice: sample.sourceDevice,
         );
       case HealthSampleType.menstrualFlow:
         final idx = sample.value.round().clamp(
@@ -278,6 +283,8 @@ class HealthImportService {
           intensity: FlowIntensity.values[idx],
           source: sample.source,
           externalId: sample.externalId,
+          // p8.2: carry the originating device onto the stored row.
+          sourceDevice: sample.sourceDevice,
         );
       case HealthSampleType.bodyTemperature:
       case HealthSampleType.wristTemperature:

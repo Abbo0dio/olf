@@ -37,6 +37,7 @@ void main() {
     required int flowOrdinal,
     String? externalId,
     HealthDataSource source = HealthDataSource.appleHealth,
+    String? device,
   }) => HealthSample.point(
     type: HealthSampleType.menstrualFlow,
     at: day,
@@ -44,12 +45,14 @@ void main() {
     unit: HealthUnit.flowLevel,
     source: source,
     externalId: externalId,
+    sourceDevice: device,
   );
 
   HealthSample bbtSample({
     required double celsius,
     String? externalId,
     HealthDataSource source = HealthDataSource.appleHealth,
+    String? device,
   }) => HealthSample.point(
     type: HealthSampleType.basalBodyTemperature,
     at: day,
@@ -57,6 +60,7 @@ void main() {
     unit: HealthUnit.celsius,
     source: source,
     externalId: externalId,
+    sourceDevice: device,
   );
 
   HealthSample wristSample({
@@ -311,6 +315,126 @@ void main() {
         expect(untouched.tempCelsius, 36.42);
         expect(untouched.measurementKind, BbtMeasurementKind.basal);
         expect(untouched.source, 'manual');
+      },
+    );
+  });
+
+  group('device provenance (p8.2)', () {
+    test('an imported reading stores its originating-device tag', () async {
+      final gateway = FakeHealthPlatformGateway(
+        seedSamples: [
+          bbtSample(celsius: 36.6, externalId: 't1', device: 'Oura'),
+          flowSample(
+            flowOrdinal: FlowIntensity.light.index,
+            externalId: 'f1',
+            device: 'com.ouraring.oura',
+          ),
+        ],
+      );
+
+      await syncSummary(gateway);
+
+      expect((await bbt.tempOn(day))!.sourceDevice, 'Oura');
+      expect((await flow.flowOn(day))!.sourceDevice, 'com.ouraring.oura');
+    });
+
+    test('an update from the same device refreshes the tag', () async {
+      await bbt.setTemp(
+        day,
+        36.4,
+        source: HealthDataSource.appleHealth,
+        externalId: 't1',
+        sourceDevice: 'Oura',
+      );
+      final gateway = FakeHealthPlatformGateway(
+        seedSamples: [
+          bbtSample(celsius: 36.9, externalId: 't1', device: 'Oura'),
+        ],
+      );
+
+      final summary = await syncSummary(gateway);
+      expect(summary.updated, 1);
+      final row = (await bbt.tempOn(day))!;
+      expect(row.tempCelsius, 36.9);
+      expect(row.sourceDevice, 'Oura');
+    });
+
+    test('editing an imported tagged reading in-app clears the tag', () async {
+      await bbt.setTemp(
+        day,
+        36.6,
+        source: HealthDataSource.appleHealth,
+        externalId: 't1',
+        sourceDevice: 'Oura',
+      );
+      // A plain in-app correction: no source, no device passed.
+      await bbt.setTemp(day, 36.55);
+
+      final row = (await bbt.tempOn(day))!;
+      expect(row.source, 'manual');
+      expect(row.sourceDevice, isNull);
+      expect(row.externalId, 't1'); // externalId stays sticky
+    });
+
+    test(
+      'two devices disagree on the same day → one review, no clobber',
+      () async {
+        // A stored Oura reading, then a Garmin sync for the same day with a
+        // materially different value.
+        await bbt.setTemp(
+          day,
+          36.4,
+          source: HealthDataSource.appleHealth,
+          externalId: 'oura-1',
+          sourceDevice: 'Oura',
+        );
+        final gateway = FakeHealthPlatformGateway(
+          seedSamples: [
+            bbtSample(celsius: 36.95, externalId: 'garmin-1', device: 'Garmin'),
+          ],
+        );
+
+        final result = await serviceWith(gateway).sync();
+
+        expect(result.summary.needsReview, 1);
+        expect(result.summary.updated, 0);
+        expect(result.summary.added, 0);
+        expect(
+          result.conflicts.single.reason,
+          ConflictReason.crossDeviceDisagreement,
+        );
+        // The stored Oura reading is untouched — olf picked no winner.
+        final row = (await bbt.tempOn(day))!;
+        expect(row.tempCelsius, 36.4);
+        expect(row.sourceDevice, 'Oura');
+      },
+    );
+
+    test(
+      'two devices that agree on the same day → one reading, no review',
+      () async {
+        await bbt.setTemp(
+          day,
+          36.50,
+          source: HealthDataSource.appleHealth,
+          externalId: 'oura-1',
+          sourceDevice: 'Oura',
+        );
+        final gateway = FakeHealthPlatformGateway(
+          seedSamples: [
+            bbtSample(
+              celsius: 36.504,
+              externalId: 'garmin-1',
+              device: 'Garmin',
+            ),
+          ],
+        );
+
+        final summary = await syncSummary(gateway);
+        expect(summary.needsReview, 0);
+        expect(summary.updated, 0);
+        expect(summary.added, 0);
+        expect((await bbt.tempOn(day))!.sourceDevice, 'Oura'); // unchanged
       },
     );
   });

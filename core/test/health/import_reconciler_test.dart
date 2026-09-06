@@ -11,6 +11,7 @@ void main() {
     double value = 36.5,
     HealthDataSource source = HealthDataSource.appleHealth,
     String? id,
+    String? device,
   }) => HealthSample.point(
     type: HealthSampleType.basalBodyTemperature,
     at: DateTime(2026, 4, day, 6, 30),
@@ -18,6 +19,7 @@ void main() {
     unit: HealthUnit.celsius,
     source: source,
     externalId: id,
+    sourceDevice: device,
   );
 
   LocalSampleView local(
@@ -25,6 +27,7 @@ void main() {
     double value = 36.5,
     HealthDataSource source = HealthDataSource.appleHealth,
     String? id,
+    String? device,
   }) => LocalSampleView(
     localId: '2026-04-$day',
     type: HealthSampleType.basalBodyTemperature,
@@ -33,6 +36,7 @@ void main() {
     unit: HealthUnit.celsius,
     source: source,
     externalId: id,
+    sourceDevice: device,
   );
 
   group('ImportReconciler', () {
@@ -233,6 +237,172 @@ void main() {
       expect(base.updates, hasLength(5));
       expect(base.skipped, hasLength(5));
       expect(base.inserts, hasLength(1));
+    });
+
+    // ---- p8.2: device provenance (`sourceDevice`) ----------------------------
+
+    group('sourceDevice (p8.2)', () {
+      test('a device tag on a matched same-source update never changes the '
+          'plan shape', () {
+        // Same platform, same device, revised value → still a plain update; the
+        // tag rides along on the incoming sample untouched.
+        final plan = reconciler.reconcile(
+          local: [local(1, value: 36.4, id: 'a', device: 'Oura')],
+          incoming: [bbt(1, value: 36.8, id: 'a', device: 'Oura')],
+        );
+        expect(plan.conflicts, isEmpty);
+        expect(plan.inserts, isEmpty);
+        expect(plan.updates.single.localId, '2026-04-1');
+        expect(plan.updates.single.incoming.sourceDevice, 'Oura');
+      });
+
+      test('a device revising its own earlier reading is an update, not a '
+          'conflict', () {
+        // Stored Oura row, a fresh Oura import for the same day with a corrected
+        // value → a plain in-place update; nothing for the user to resolve.
+        final plan = reconciler.reconcile(
+          local: [local(1, value: 36.4, id: 'a', device: 'Oura')],
+          incoming: [bbt(1, value: 36.9, id: 'a', device: 'Oura')],
+        );
+        expect(plan.conflicts, isEmpty);
+        expect(plan.inserts, isEmpty);
+        expect(plan.updates.single.localId, '2026-04-1');
+        expect(plan.updates.single.incoming.value, 36.9);
+      });
+
+      test(
+        'two same-batch incoming from the SAME device, same day, differing '
+        'values → two inserts (unchanged pre-p8.2 shape), never a conflict',
+        () {
+          final plan = reconciler.reconcile(
+            local: const [],
+            incoming: [
+              bbt(1, value: 36.4, device: 'Oura'),
+              bbt(1, value: 36.9, device: 'Oura'),
+            ],
+          );
+          expect(plan.conflicts, isEmpty);
+          expect(plan.updates, isEmpty);
+          expect(plan.inserts, hasLength(2));
+          expect(plan.total, 2);
+        },
+      );
+
+      test(
+        'two known devices, same day, values agree → one reconciled reading',
+        () {
+          final plan = reconciler.reconcile(
+            local: const [],
+            incoming: [
+              bbt(1, value: 36.50, device: 'Oura'),
+              bbt(1, value: 36.504, device: 'Garmin Connect'),
+            ],
+          );
+          expect(plan.conflicts, isEmpty);
+          expect(plan.inserts.single.sourceDevice, 'Oura');
+          expect(plan.skipped.single.incoming.sourceDevice, 'Garmin Connect');
+          expect(plan.updates, isEmpty);
+        },
+      );
+
+      test('two known devices, same day, material disagreement → one '
+          'crossDeviceDisagreement conflict, no silent overwrite', () {
+        final plan = reconciler.reconcile(
+          local: const [],
+          incoming: [
+            bbt(1, value: 36.4, device: 'Oura'),
+            bbt(1, value: 36.9, device: 'Garmin Connect'),
+          ],
+        );
+        expect(plan.inserts.single.sourceDevice, 'Oura');
+        expect(plan.updates, isEmpty);
+        expect(
+          plan.conflicts.single.reason,
+          ConflictReason.crossDeviceDisagreement,
+        );
+        expect(plan.conflicts.single.incoming.sourceDevice, 'Garmin Connect');
+      });
+
+      test(
+        'a stored device row vs a different incoming device that disagrees → '
+        'crossDeviceDisagreement conflict',
+        () {
+          final plan = reconciler.reconcile(
+            local: [local(2, value: 36.4, device: 'Oura')],
+            incoming: [bbt(2, value: 36.9, device: 'Garmin Connect')],
+          );
+          expect(plan.updates, isEmpty);
+          expect(
+            plan.conflicts.single.reason,
+            ConflictReason.crossDeviceDisagreement,
+          );
+          expect(plan.conflicts.single.local.sourceDevice, 'Oura');
+        },
+      );
+
+      test('one side has an unknown device → falls through to a plain update, '
+          'never a device conflict', () {
+        // Legacy / unattributable local row, a newly-attributed import that
+        // disagrees. Same source → the reconciler updates in place; it must not
+        // manufacture a conflict the user has no basis to resolve.
+        final plan = reconciler.reconcile(
+          local: [local(3, value: 36.4)], // sourceDevice null
+          incoming: [bbt(3, value: 36.9, device: 'Oura')],
+        );
+        expect(plan.conflicts, isEmpty);
+        expect(plan.updates.single.localId, '2026-04-3');
+      });
+
+      test('cross-device disagreement is independent of incoming order', () {
+        final a = bbt(1, value: 36.4, device: 'Oura');
+        final b = bbt(1, value: 36.9, device: 'Garmin Connect');
+        final forward = reconciler.reconcile(local: const [], incoming: [a, b]);
+        final reverse = reconciler.reconcile(local: const [], incoming: [b, a]);
+        expect(forward, equals(reverse));
+        expect(forward.hashCode, reverse.hashCode);
+        expect(
+          forward.conflicts.single.reason,
+          ConflictReason.crossDeviceDisagreement,
+        );
+      });
+
+      test('single-source multi-row batch: plan is identical to the no-device '
+          'run (device tags do not perturb it)', () {
+        List<HealthSample> batch({String? device}) => [
+          for (var d = 1; d <= 6; d++)
+            bbt(
+              d,
+              value: 36.0 + d / 10 + (d.isEven ? 0.3 : 0.0),
+              id: 'id-$d',
+              device: device,
+            ),
+          bbt(20, value: 37.0, id: 'new', device: device),
+        ];
+        final localRows = [
+          for (var d = 1; d <= 6; d++)
+            local(d, value: 36.0 + d / 10, id: 'id-$d'),
+        ];
+        final withoutDevice = reconciler.reconcile(
+          local: localRows,
+          incoming: batch(),
+        );
+        final withDevice = reconciler.reconcile(
+          local: [for (final r in localRows) r], // no device on stored rows
+          incoming: batch(device: 'Oura'),
+        );
+        // Same bucket sizes and same localIds — a uniform device tag on the
+        // incoming batch changes nothing structural.
+        expect(
+          withDevice.updates.map((u) => u.localId),
+          withoutDevice.updates.map((u) => u.localId),
+        );
+        expect(
+          withDevice.skipped.map((s) => s.localId),
+          withoutDevice.skipped.map((s) => s.localId),
+        );
+        expect(withDevice.inserts.length, withoutDevice.inserts.length);
+        expect(withDevice.conflicts, isEmpty);
+      });
     });
   });
 }

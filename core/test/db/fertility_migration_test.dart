@@ -108,7 +108,7 @@ void main() {
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
       expect(version.data.values.first, db.schemaVersion);
-      expect(db.schemaVersion, 10);
+      expect(db.schemaVersion, 11);
 
       final newTables = await db
           .customSelect(

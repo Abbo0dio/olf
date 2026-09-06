@@ -92,6 +92,14 @@ class DailyFlows extends Table {
   /// (schema v7, p6.1)
   TextColumn get externalId => text().nullable()();
 
+  /// Free-form tag for the device / app that originally wrote this day's flow
+  /// into the OS health store (schema v11, p8.2) — `HKSource` / `HKDevice` name
+  /// on iOS, the Health Connect `dataOrigin.packageName` on Android. `null` for
+  /// a manual row, a row imported before device attribution existed, or when the
+  /// platform gave no attribution. Provenance only — never a query or matching
+  /// key; an in-app edit clears it (the value is then the user's own).
+  TextColumn get sourceDevice => text().nullable()();
+
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -224,6 +232,14 @@ class BbtEntries extends Table {
   /// later sync matches instead of duplicating. `null` for manual rows.
   /// (schema v7, p6.1)
   TextColumn get externalId => text().nullable()();
+
+  /// Free-form tag for the device / app that originally wrote this reading into
+  /// the OS health store (schema v11, p8.2) — `HKSource` / `HKDevice` name on
+  /// iOS, the Health Connect `dataOrigin.packageName` on Android. `null` for a
+  /// manual row, a row imported before device attribution existed, or when the
+  /// platform gave no attribution. Provenance only — never a query or matching
+  /// key; an in-app edit clears it (the value is then the user's own).
+  TextColumn get sourceDevice => text().nullable()();
 
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 

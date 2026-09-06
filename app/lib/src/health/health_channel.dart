@@ -57,6 +57,7 @@ class RawHealthSample {
     required this.endMsEpoch,
     required this.value,
     this.externalId,
+    this.sourceDevice,
   });
 
   final HealthSampleType type;
@@ -65,12 +66,20 @@ class RawHealthSample {
   final double value;
   final String? externalId;
 
+  /// The device / app the OS health store attributes this sample to (p8.2) —
+  /// `HKSource.name` / `HKDevice.name` on iOS, `dataOrigin.packageName` on
+  /// Android. `null` when the platform gave no attribution. Read-only: olf
+  /// never sends it back out (see [toWire]).
+  final String? sourceDevice;
+
   Map<String, Object?> toWire() => {
     'type': healthTypeToken(type),
     'startMs': startMsEpoch,
     'endMs': endMsEpoch,
     'value': value,
     if (externalId != null) 'externalId': externalId,
+    // `sourceDevice` is deliberately not written back — it is inbound
+    // provenance only, and an olf-authored row has no originating device.
   };
 
   static RawHealthSample? fromWire(Object? entry) {
@@ -83,12 +92,14 @@ class RawHealthSample {
     final value = (entry['value'] as num?)?.toDouble();
     if (type == null || start == null || value == null) return null;
     final end = (entry['endMs'] as num?)?.toInt() ?? start;
+    final device = (entry['sourceDevice'] as String?)?.trim();
     return RawHealthSample(
       type: type,
       startMsEpoch: start,
       endMsEpoch: end,
       value: value,
       externalId: entry['externalId'] as String?,
+      sourceDevice: (device == null || device.isEmpty) ? null : device,
     );
   }
 }
@@ -118,6 +129,7 @@ HealthSample? healthSampleFromRaw(
         unit: HealthUnit.celsius,
         source: source,
         externalId: raw.externalId,
+        sourceDevice: raw.sourceDevice,
       );
     case HealthSampleType.menstrualFlow:
       final intensity = flowIntensityFromHk(raw.value.round());
@@ -130,6 +142,7 @@ HealthSample? healthSampleFromRaw(
         unit: HealthUnit.flowLevel,
         source: source,
         externalId: raw.externalId,
+        sourceDevice: raw.sourceDevice,
       );
     case HealthSampleType.wristTemperature:
       // p8.1a: passive Apple Watch overnight wrist temperature, °C on the wire
@@ -145,6 +158,7 @@ HealthSample? healthSampleFromRaw(
         unit: HealthUnit.celsius,
         source: source,
         externalId: raw.externalId,
+        sourceDevice: raw.sourceDevice,
       );
     case HealthSampleType.bodyTemperature:
     case HealthSampleType.sleep:

@@ -111,6 +111,31 @@ void main() {
       expect(out.single.source, HealthDataSource.healthConnect);
     });
 
+    test(
+      'carries the Health Connect origin package as the device tag (p8.2)',
+      () async {
+        mockChannel(
+          response: [
+            {
+              'type': 'basalBodyTemperature',
+              'startMs': DateTime(2026, 3, 5).millisecondsSinceEpoch,
+              'endMs': DateTime(2026, 3, 5).millisecondsSinceEpoch,
+              'value': 36.5,
+              'externalId': 'HC-oura',
+              'sourceDevice': 'com.ouraring.oura',
+            },
+          ],
+        );
+
+        final out = await gateway.read(
+          types: {HealthSampleType.basalBodyTemperature},
+          from: from,
+          to: to,
+        );
+        expect(out.single.sourceDevice, 'com.ouraring.oura');
+      },
+    );
+
     test('drops the "no flow" marker', () async {
       mockChannel(
         response: [

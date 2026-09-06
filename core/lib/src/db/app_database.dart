@@ -66,8 +66,17 @@ class AppDatabase extends _$AppDatabase {
   ///            migration after v7 — so it carries the same `to >= N` guard.
   ///            Every pre-existing row is `'basal'`. Dumped as its own real
   ///            snapshot.
+  /// v11 (p8.2): added `source_device` (nullable free-form TEXT) to **both**
+  ///            `daily_flows` and `bbt_entries`, so a reading imported from the
+  ///            health platform can be labelled with the device / app that
+  ///            originally wrote it (an Oura Ring, a Garmin watch). An ALTER of
+  ///            two existing tables — the third such migration after v7 and v10
+  ///            — so each `addColumn` carries the same `to >= N` guard plus the
+  ///            per-table `from >=` inner guard (`daily_flows` arrived in v3,
+  ///            `bbt_entries` in v5). Every pre-existing row is `NULL` (unknown /
+  ///            legacy / manual). Dumped as its own real snapshot.
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -169,6 +178,24 @@ class AppDatabase extends _$AppDatabase {
         // `bbt_entries` arrived in v5.
         if (from >= 5) {
           await m.addColumn(bbtEntries, bbtEntries.measurementKind);
+        }
+      }
+      if (from < 11 && to >= 11) {
+        // p8.2: `source_device` on `daily_flows` and `bbt_entries` — the
+        // free-form device / app tag for a health-platform import (so olf can
+        // show "from your Oura Ring"). Nullable, no default: every row already
+        // in the database comes out `NULL` (unknown / legacy / manual).
+        //
+        // Same `to >= 11` dance as the v7 and v10 column adds: a *column* on a
+        // checked table fails the schema verifier at pre-v11 single-step
+        // targets. The per-table inner guard skips the ALTER when the table
+        // predates this `from` (the `createTable` above then already includes
+        // the column): `daily_flows` arrived in v3, `bbt_entries` in v5.
+        if (from >= 3) {
+          await m.addColumn(dailyFlows, dailyFlows.sourceDevice);
+        }
+        if (from >= 5) {
+          await m.addColumn(bbtEntries, bbtEntries.sourceDevice);
         }
       }
     },

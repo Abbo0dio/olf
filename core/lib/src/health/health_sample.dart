@@ -66,6 +66,7 @@ class HealthSample {
     required this.unit,
     required this.source,
     this.externalId,
+    this.sourceDevice,
   }) : assert(
          !endAt.isBefore(startAt),
          'HealthSample.endAt must not be before startAt',
@@ -83,6 +84,7 @@ class HealthSample {
     required HealthUnit unit,
     required HealthDataSource source,
     String? externalId,
+    String? sourceDevice,
   }) : this(
          type: type,
          startAt: at,
@@ -91,6 +93,7 @@ class HealthSample {
          unit: unit,
          source: source,
          externalId: externalId,
+         sourceDevice: sourceDevice,
        );
 
   final HealthSampleType type;
@@ -111,6 +114,14 @@ class HealthSample {
   /// is about to write out, or a [HealthDataSource.manual] value.
   final String? externalId;
 
+  /// A free-form tag for the device / app that originally wrote this reading
+  /// into the OS health store (schema v11, p8.2) — `HKSource.name` /
+  /// `HKDevice.name` on iOS, the Health Connect `dataOrigin.packageName` on
+  /// Android. `null` when the platform gave no attribution, and for anything
+  /// olf writes out itself. Provenance only — never a matching key; the
+  /// reconciler uses it solely to tell two different devices apart on one day.
+  final String? sourceDevice;
+
   /// `true` when this is a point-in-time reading (`endAt == startAt`).
   bool get isPointSample => endAt.isAtSameMomentAs(startAt);
 
@@ -126,6 +137,8 @@ class HealthSample {
     HealthDataSource? source,
     String? externalId,
     bool clearExternalId = false,
+    String? sourceDevice,
+    bool clearSourceDevice = false,
   }) => HealthSample(
     type: type ?? this.type,
     startAt: startAt ?? this.startAt,
@@ -134,6 +147,9 @@ class HealthSample {
     unit: unit ?? this.unit,
     source: source ?? this.source,
     externalId: clearExternalId ? null : (externalId ?? this.externalId),
+    sourceDevice: clearSourceDevice
+        ? null
+        : (sourceDevice ?? this.sourceDevice),
   );
 
   @override
@@ -145,16 +161,25 @@ class HealthSample {
       other.value == value &&
       other.unit == unit &&
       other.source == source &&
-      other.externalId == externalId;
+      other.externalId == externalId &&
+      other.sourceDevice == sourceDevice;
 
   @override
-  int get hashCode =>
-      Object.hash(type, startAt, endAt, value, unit, source, externalId);
+  int get hashCode => Object.hash(
+    type,
+    startAt,
+    endAt,
+    value,
+    unit,
+    source,
+    externalId,
+    sourceDevice,
+  );
 
   @override
   String toString() =>
       'HealthSample($type, $startAt..$endAt, $value $unit, $source, '
-      'externalId: $externalId)';
+      'externalId: $externalId, sourceDevice: $sourceDevice)';
 }
 
 /// Whether [unit] is a legal unit for [type]. Enforced by the [HealthSample]

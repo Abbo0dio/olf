@@ -8,6 +8,7 @@ void main() {
     double value = 36.5,
     HealthDataSource source = HealthDataSource.appleHealth,
     String? externalId = 'hk-1',
+    String? sourceDevice = 'Oura',
   }) => HealthSample.point(
     type: HealthSampleType.basalBodyTemperature,
     at: at,
@@ -15,6 +16,7 @@ void main() {
     unit: HealthUnit.celsius,
     source: source,
     externalId: externalId,
+    sourceDevice: sourceDevice,
   );
 
   group('HealthSample', () {
@@ -48,6 +50,9 @@ void main() {
       expect(bbt(source: HealthDataSource.healthConnect), isNot(equals(bbt())));
       expect(bbt(externalId: 'hk-2'), isNot(equals(bbt())));
       expect(bbt(externalId: null), isNot(equals(bbt())));
+      // p8.2: the device tag is part of the identity too.
+      expect(bbt(sourceDevice: 'Garmin Connect'), isNot(equals(bbt())));
+      expect(bbt(sourceDevice: null), isNot(equals(bbt())));
     });
 
     test('copyWith replaces one field and can clear the external id', () {
@@ -59,6 +64,19 @@ void main() {
         s.copyWith(source: HealthDataSource.manual).source,
         HealthDataSource.manual,
       );
+    });
+
+    test('copyWith carries, replaces, and clears the device tag (p8.2)', () {
+      final s = bbt();
+      expect(s.copyWith(value: 37.0).sourceDevice, 'Oura'); // carried
+      expect(
+        s.copyWith(sourceDevice: 'Garmin Connect').sourceDevice,
+        'Garmin Connect',
+      ); // replaced
+      expect(
+        s.copyWith(clearSourceDevice: true).sourceDevice,
+        isNull,
+      ); // cleared
     });
 
     test('rejects an endAt before startAt', () {
