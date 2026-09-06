@@ -6,12 +6,12 @@ plan layout and `.claude/skills/herdsman/` for the workflow.
 
 ## Now
 
-Phase 6 — Health-platform interop & doctor export — IN PROGRESS · main @ `2db45db` · next slice p6.5 (last of Phase 6)
+Phase 6 — Health-platform interop & doctor export — IN PROGRESS · main @ `2db45db` · current slice p6.5 (last of Phase 6, dispatched to Worker 1)
 
 ## Workers
 
-| W | agent    | tab   | status | slice | worktree |
-| 1 | worker-1 | w6:t2 | idle   | —     | —        |
+| W | agent    | tab   | status   | slice | worktree        |
+| 1 | worker-1 | w6:t2 | building | p6.5  | ../olf-wt/p6.5  |
 
 ## Tasks
 
@@ -32,7 +32,7 @@ Current phase (6) + previous phase (5). Closed-phase task detail is frozen into
 | p6.2 | DONE | #66 | `76c31cd` | 2026-09-05 — Apple HealthKit gateway (iOS): hand-rolled `olf/health` MethodChannel + Swift `HealthKitBridge`, no dep, no SDK-floor bump, ATS untouched. `setTemp`/`setFlow` gained `source`/`externalId`; `+allEntries()`/`allFlows()`. |
 | p6.3 | DONE | #67 | `de46108` | 2026-09-05 — Android Health Connect gateway: hand-rolled Kotlin bridge on `MainActivity`, same wire contract. `androidx.health.connect:connect-client:1.1.0` as a Gradle dep (not a pub package — `pubspec.lock` clean); `minSdk` 24→26; 4 `android.permission.health.*`. Shared `MethodChannelHealthGateway` base + `sourceTag`. New `docs/health-platform-interop.md`. (Plan had said IN REVIEW; it merged.) |
 | p6.4 | DONE | #69 | `2db45db` | 2026-09-06 — Two-way sync: write-back after every flow/BBT log/edit (`externalId` sticky across an edit so a previously-imported day updates its platform record in place, no dupe; edit still flips `source`→`manual` — the p6.1 deferral), per-source status surface (connected · last-sync "N min ago" · counts · "N differences to review"; `reduceSpokenDetail`-redacted), new `conflict_review_screen.dart` (list + keep-mine / use-theirs / dismiss, no bulk ops). **v1 = manual "Sync now" only** — on-open/resume sync deferred (backlog). Retention respected both directions (purge-before-sync via `retentionController.sweepNow()`; cutoff clamps import window + filters push-out). Reconciler: value-already-agrees is now a skip regardless of source (absorbs the write-back echo); manual-value protection unchanged. In-memory conflict store (`// SHORTCUT`, backlog). No dep / no schema / no permission / no manifest / no CI change. CI Format bounced once (worker's local `dart format` under-reported — `analysis_options.yaml` env bug); fixed in `9d3d403`, squashed into `2db45db`. core 573 / app 426. |
-| p6.5 | TODO | — | — | Doctor-ready offline PDF report — pure `core` `ClinicalReport` + `app` render via `pdf` pkg (§5 pending audit, no `printing`); p1.10 SAF seam; purge-before-export; "not a medical device" disclaimer. |
+| p6.5 | IN PROGRESS | — | — | Worker 1 · worktree `../olf-wt/p6.5` · branch `feat/p6.5-doctor-report` off `2db45db` (dispatched 2026-09-06). Doctor-ready offline PDF report — pure `core` `ClinicalReport` + `app` render via `pdf` pkg (§5 pre-approved in dispatch: conditional on dependency-audit green + Apache-2.0 + no native code + no SDK-floor bump + no `printing`; STOP if any fails). p1.10 SAF seam; neutral filename; purge-before-export; "not a medical device" disclaimer. Last slice of Phase 6. |
 
 ## In-flight PRs
 
