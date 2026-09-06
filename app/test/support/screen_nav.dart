@@ -12,6 +12,7 @@ import 'package:olf_app/src/reminders/reminder_providers.dart';
 import 'package:olf_app/src/reminders/reminder_scheduler.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../health/conflict_fixtures.dart';
 import 'harness.dart';
 
 /// The canonical list of top-level UI surfaces, shared by the p5.1a a11y sweep
@@ -22,9 +23,10 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 18 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 19 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
-/// p6.3, the tile is platform-neutral). The dispatch inventory named
+/// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen). The
+/// dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
 /// flow/spotting/clot chip surface) stand in its place.
@@ -208,6 +210,47 @@ final List<Surface> screenSurfaces = <Surface>[
           200,
           scrollable: find.byType(Scrollable).first,
         );
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('conflict_review_screen — differences to review', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    final settings = DriftSettingsRepository(db);
+    await settings.set(SettingKeys.appleHealthConnected, 'true');
+    await DriftBbtRepository(db).setTemp(DateTime(2026, 5, 10), 36.4);
+    await pumpOlf(
+      tester,
+      overrides: [
+        ...screenNavOverrides(db),
+        healthPlatformGatewayProvider.overrideWithValue(
+          FakeHealthPlatformGateway(),
+        ),
+        healthConflictsProvider.overrideWith(
+          seededConflicts([
+            bbtConflict(DateTime(2026, 5, 10), local: 36.4, incoming: 36.9),
+            flowConflict(
+              DateTime(2026, 5, 11),
+              local: FlowIntensity.spotting,
+              incoming: FlowIntensity.heavy,
+            ),
+          ]),
+        ),
+      ],
+      body: () async {
+        await _openSettings(tester);
+        await tester.scrollUntilVisible(
+          find.textContaining('to review'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.textContaining('to review'));
+        await tester.pumpAndSettle();
+        expect(find.text('Keep mine'), findsWidgets);
         await check(tester);
       },
     );

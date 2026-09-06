@@ -129,6 +129,30 @@ void main() {
     expect(row.intensity, FlowIntensity.heavy);
   });
 
+  test(
+    'editing an imported row (no id passed) flips it to manual but keeps the '
+    'external id — the p6.4 write-back link survives the edit',
+    () async {
+      await repo.setFlow(
+        DateTime(2026, 8, 20),
+        intensity: FlowIntensity.medium,
+        source: HealthDataSource.appleHealth,
+        externalId: 'HK-flow-3',
+      );
+
+      // A plain in-app edit — no source / externalId args.
+      await repo.setFlow(
+        DateTime(2026, 8, 20),
+        intensity: FlowIntensity.heavy,
+      );
+
+      final row = (await repo.flowOn(DateTime(2026, 8, 20)))!;
+      expect(row.source, 'manual');
+      expect(row.externalId, 'HK-flow-3');
+      expect(row.intensity, FlowIntensity.heavy);
+    },
+  );
+
   test('allFlows returns a one-shot snapshot, newest day first', () async {
     await repo.setFlow(DateTime(2026, 8, 10), intensity: FlowIntensity.light);
     await repo.setFlow(DateTime(2026, 8, 25), intensity: FlowIntensity.heavy);

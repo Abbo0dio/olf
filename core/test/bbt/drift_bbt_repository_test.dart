@@ -103,6 +103,27 @@ void main() {
     expect(row.tempCelsius, 36.9);
   });
 
+  test(
+    'editing an imported row (no id passed) flips it to manual but keeps the '
+    'external id — the p6.4 write-back link survives the edit',
+    () async {
+      await repo.setTemp(
+        DateTime(2026, 8, 20),
+        36.4,
+        source: HealthDataSource.appleHealth,
+        externalId: 'HK-bbt-3',
+      );
+
+      // A plain in-app edit — no source / externalId args.
+      await repo.setTemp(DateTime(2026, 8, 20), 36.72);
+
+      final row = (await repo.tempOn(DateTime(2026, 8, 20)))!;
+      expect(row.source, 'manual');
+      expect(row.externalId, 'HK-bbt-3');
+      expect(row.tempCelsius, 36.72);
+    },
+  );
+
   test('allEntries returns a one-shot snapshot, newest day first', () async {
     await repo.setTemp(DateTime(2026, 8, 10), 36.3);
     await repo.setTemp(DateTime(2026, 8, 25), 36.8);

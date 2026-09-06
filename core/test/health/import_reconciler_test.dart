@@ -136,6 +136,27 @@ void main() {
     });
 
     test(
+      'p6.4 write-back echo: manual row, externalId match, unchanged value → '
+      'skip (not a spurious conflict)',
+      () {
+        final plan = reconciler.reconcile(
+          local: [
+            local(3, value: 36.6, source: HealthDataSource.manual, id: 'wb'),
+          ],
+          // The platform returns the row olf just pushed out, attributed to the
+          // platform, same value.
+          incoming: [
+            bbt(3, value: 36.6, source: HealthDataSource.appleHealth, id: 'wb'),
+          ],
+        );
+        expect(plan.conflicts, isEmpty);
+        expect(plan.updates, isEmpty);
+        expect(plan.inserts, isEmpty);
+        expect(plan.skipped.single.localId, '2026-04-3');
+      },
+    );
+
+    test(
       'exact duplicate (value within tolerance, same source) is skipped',
       () {
         final plan = reconciler.reconcile(

@@ -26,6 +26,13 @@ void main() {
         now: () => clock,
       );
 
+  Future<HealthSyncSummary> syncSummary(
+    FakeHealthPlatformGateway gateway, {
+    DateTime? retentionCutoff,
+  }) async => (await serviceWith(
+    gateway,
+  ).sync(retentionCutoff: retentionCutoff)).summary;
+
   HealthSample flowSample({
     required int flowOrdinal,
     String? externalId,
@@ -60,11 +67,11 @@ void main() {
       ],
     );
 
-    final summary = await serviceWith(gateway).sync();
+    final summary = await syncSummary(gateway);
 
     expect(
       summary,
-      const HealthSyncSummary(added: 2, updated: 0, needsReview: 0),
+      HealthSyncSummary(added: 2, updated: 0, needsReview: 0, at: clock),
     );
 
     final flowRow = (await flow.flowOn(day))!;
@@ -90,7 +97,7 @@ void main() {
       seedSamples: [bbtSample(celsius: 36.9, externalId: 't1')],
     );
 
-    final summary = await serviceWith(gateway).sync();
+    final summary = await syncSummary(gateway);
 
     expect(summary.updated, 1);
     expect(summary.added, 0);
@@ -104,7 +111,7 @@ void main() {
       seedSamples: [bbtSample(celsius: 36.9, externalId: 't9')],
     );
 
-    final summary = await serviceWith(gateway).sync();
+    final summary = await syncSummary(gateway);
 
     expect(summary.needsReview, 1);
     expect(summary.added, 0);
@@ -121,7 +128,7 @@ void main() {
       await flow.setFlow(day, intensity: FlowIntensity.light); // manual
 
       final gateway = FakeHealthPlatformGateway();
-      await serviceWith(gateway).sync();
+      await syncSummary(gateway);
 
       expect(gateway.writes, hasLength(2));
       expect(gateway.writes.map((s) => s.type).toSet(), {
@@ -141,8 +148,37 @@ void main() {
     final gateway = FakeHealthPlatformGateway(
       seedSamples: [bbtSample(celsius: 36.5, externalId: 't1')],
     );
-    await serviceWith(gateway).sync();
+    await syncSummary(gateway);
 
+    expect(gateway.writes, isEmpty);
+  });
+
+  test('does not re-import or push data older than the retention window', () async {
+    // A local manual row and a platform sample, both well before the cutoff.
+    final oldDay = DateTime(2026, 1, 1);
+    await bbt.setTemp(oldDay, 36.5); // manual, out of window
+    final gateway = FakeHealthPlatformGateway(
+      seedSamples: [
+        HealthSample.point(
+          type: HealthSampleType.basalBodyTemperature,
+          at: oldDay,
+          value: 36.9,
+          unit: HealthUnit.celsius,
+          source: HealthDataSource.appleHealth,
+          externalId: 'old-1',
+        ),
+      ],
+    );
+
+    // Keep only the last ~30 days (clock is 2026-06-01).
+    final summary = await syncSummary(
+      gateway,
+      retentionCutoff: DateTime(2026, 5, 1),
+    );
+
+    // Nothing imported, nothing flagged, nothing written back for the old day.
+    expect(summary, HealthSyncSummary(added: 0, updated: 0, needsReview: 0, at: clock));
+    expect((await bbt.tempOn(oldDay))!.tempCelsius, 36.5); // untouched
     expect(gateway.writes, isEmpty);
   });
 
@@ -164,8 +200,8 @@ void main() {
       final gateway = FakeHealthPlatformGateway(
         seedSamples: [bbtSample(celsius: 36.7, externalId: 't1')],
       );
-      final summary = await serviceWith(gateway).connect();
-      expect(summary.added, 1);
+      final result = await serviceWith(gateway).connect();
+      expect(result.summary.added, 1);
       expect(gateway.authRequests, hasLength(1));
       expect(gateway.authRequests.single.access, HealthAccess.readWrite);
     });
@@ -180,15 +216,36 @@ void main() {
   });
 
   group('HealthSyncSummary encoding', () {
-    test('round-trips through encode/decode', () {
-      const s = HealthSyncSummary(added: 3, updated: 1, needsReview: 2);
+    test('round-trips through encode/decode, timestamp included', () {
+      final s = HealthSyncSummary(
+        added: 3,
+        updated: 1,
+        needsReview: 2,
+        at: DateTime(2026, 6, 1, 8, 30),
+      );
       expect(HealthSyncSummary.decode(s.encode()), s);
+    });
+
+    test('round-trips with no timestamp', () {
+      const s = HealthSyncSummary(added: 3, updated: 1, needsReview: 2);
+      expect(s.encode(), '3,1,2,');
+      expect(HealthSyncSummary.decode(s.encode()), s);
+    });
+
+    test('still accepts the pre-p6.4 3-field form', () {
+      final decoded = HealthSyncSummary.decode('2,1,0');
+      expect(
+        decoded,
+        const HealthSyncSummary(added: 2, updated: 1, needsReview: 0),
+      );
+      expect(decoded!.at, isNull);
     });
 
     test('decode rejects malformed input', () {
       expect(HealthSyncSummary.decode(null), isNull);
       expect(HealthSyncSummary.decode('1,2'), isNull);
       expect(HealthSyncSummary.decode('a,b,c'), isNull);
+      expect(HealthSyncSummary.decode('1,2,3,not-a-date'), isNull);
     });
   });
 }

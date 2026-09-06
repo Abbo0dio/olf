@@ -5,9 +5,11 @@ import 'package:olf_core/olf_core.dart';
 import '../bbt/bbt_providers.dart';
 import '../flow/flow_providers.dart';
 import '../providers.dart';
+import '../retention/retention_providers.dart';
 import '../settings/settings_providers.dart';
 import 'health_connect_gateway.dart';
 import 'health_import.dart';
+import 'health_write_back.dart';
 import 'healthkit_gateway.dart';
 import 'unavailable_health_gateway.dart';
 
@@ -105,25 +107,73 @@ final healthImportServiceProvider = Provider<HealthImportService>((ref) {
   );
 });
 
-/// Run the opt-in connect: authorize, sync, and — only if that succeeds —
-/// persist the connected flag and the summary. Rethrows
-/// [HealthPlatformUnavailable] / [HealthAuthorizationDenied] so the caller can
-/// show a calm message with nothing persisted.
-Future<HealthSyncSummary> connectHealthPlatform(WidgetRef ref) async {
-  final summary = await ref.read(healthImportServiceProvider).connect();
-  final settings = ref.read(settingsRepositoryProvider);
-  await settings.set(SettingKeys.appleHealthConnected, 'true');
-  await settings.set(SettingKeys.appleHealthLastSync, summary.encode());
-  return summary;
+/// Pushes a single app-entered flow / BBT day out to the connected platform
+/// (p6.4). Used by the log sheets and by "keep mine" on the conflict-review
+/// screen.
+final healthWriteBackProvider = Provider<HealthWriteBack>((ref) {
+  return HealthWriteBack(
+    gateway: ref.watch(healthPlatformGatewayProvider),
+    bbt: ref.watch(bbtRepositoryProvider),
+    flow: ref.watch(dailyFlowRepositoryProvider),
+  );
+});
+
+/// The unresolved conflicts from the most recent sync (p6.4), held in memory
+/// for the conflict-review screen. Re-derived on the next sync; not persisted
+/// across an app restart.
+final healthConflictsProvider =
+    NotifierProvider<HealthConflictsNotifier, List<ReconciliationConflict>>(
+      HealthConflictsNotifier.new,
+    );
+
+class HealthConflictsNotifier extends Notifier<List<ReconciliationConflict>> {
+  @override
+  List<ReconciliationConflict> build() => const [];
+
+  void replaceWith(List<ReconciliationConflict> conflicts) =>
+      state = List.unmodifiable(conflicts);
+
+  void resolve(ReconciliationConflict conflict) =>
+      state = List.unmodifiable(state.where((c) => c != conflict));
 }
 
-/// Re-run the sync for an already-connected user and update the stored summary.
+/// The oldest calendar day the user still keeps, from the live retention
+/// window. `null` when auto-delete is off.
+DateTime? _retentionCutoff(WidgetRef ref) {
+  final window =
+      ref.read(retentionWindowProvider).valueOrNull ?? RetentionWindow.off;
+  return window.cutoff(DateTime.now());
+}
+
+/// Run the opt-in connect: purge anything outside the retention window,
+/// authorize, sync, and — only if that succeeds — persist the connected flag,
+/// the summary and any conflicts. Rethrows [HealthPlatformUnavailable] /
+/// [HealthAuthorizationDenied] so the caller can show a calm message with
+/// nothing persisted.
+Future<HealthSyncSummary> connectHealthPlatform(WidgetRef ref) async {
+  await ref.read(retentionControllerProvider).sweepNow();
+  final result = await ref
+      .read(healthImportServiceProvider)
+      .connect(retentionCutoff: _retentionCutoff(ref));
+  final settings = ref.read(settingsRepositoryProvider);
+  await settings.set(SettingKeys.appleHealthConnected, 'true');
+  await settings.set(SettingKeys.appleHealthLastSync, result.summary.encode());
+  ref.read(healthConflictsProvider.notifier).replaceWith(result.conflicts);
+  return result.summary;
+}
+
+/// Re-run the sync for an already-connected user: purge-before-sync, then
+/// update the stored summary and the in-memory conflict list.
 Future<HealthSyncSummary> syncHealthPlatform(WidgetRef ref) async {
-  final summary = await ref.read(healthImportServiceProvider).sync();
+  await ref.read(retentionControllerProvider).sweepNow();
+  final result = await ref
+      .read(healthImportServiceProvider)
+      .sync(retentionCutoff: _retentionCutoff(ref));
   await ref
       .read(settingsRepositoryProvider)
-      .set(SettingKeys.appleHealthLastSync, summary.encode());
-  return summary;
+      .set(SettingKeys.appleHealthLastSync, result.summary.encode());
+  ref.read(healthConflictsProvider.notifier).replaceWith(result.conflicts);
+  return result.summary;
 }
 
 /// Turn the bridge off. Clears olf's flags only — data already written to each
@@ -133,4 +183,84 @@ Future<void> disconnectHealthPlatform(WidgetRef ref) async {
   final settings = ref.read(settingsRepositoryProvider);
   await settings.set(SettingKeys.appleHealthConnected, 'false');
   await settings.remove(SettingKeys.appleHealthLastSync);
+  ref.read(healthConflictsProvider.notifier).replaceWith(const []);
+}
+
+/// Push the current app-entered value for [day] out to the connected platform,
+/// if one is connected. Fire-and-forget from a log sheet; never throws.
+Future<void> writeBackBbt(WidgetRef ref, DateTime day) async {
+  if (!(ref.read(healthConnectedProvider).valueOrNull ?? false)) return;
+  await ref
+      .read(healthWriteBackProvider)
+      .bbt(day, retentionCutoff: _retentionCutoff(ref));
+}
+
+Future<void> writeBackFlow(WidgetRef ref, DateTime day) async {
+  if (!(ref.read(healthConnectedProvider).valueOrNull ?? false)) return;
+  await ref
+      .read(healthWriteBackProvider)
+      .flow(day, retentionCutoff: _retentionCutoff(ref));
+}
+
+/// How the user resolved one conflict on the review screen (p6.4).
+enum ConflictResolution {
+  /// The app-entered value wins — write it back out so the platform agrees.
+  keepLocal,
+
+  /// The platform value wins — store it locally as a manual entry.
+  takeIncoming,
+
+  /// Leave both sides as they are for now (it reappears on the next sync).
+  dismiss,
+}
+
+/// Apply [how] to [conflict] and drop it from [healthConflictsProvider]. Each
+/// path is an ordinary repository / gateway write, so the outcome is a plain
+/// stored value — nothing conflict-specific is persisted.
+Future<void> resolveHealthConflict(
+  WidgetRef ref,
+  ReconciliationConflict conflict,
+  ConflictResolution how,
+) async {
+  switch (how) {
+    case ConflictResolution.keepLocal:
+      final day = conflict.local.day;
+      switch (conflict.local.type) {
+        case HealthSampleType.basalBodyTemperature:
+          await writeBackBbt(ref, day);
+        case HealthSampleType.menstrualFlow:
+          await writeBackFlow(ref, day);
+        case HealthSampleType.bodyTemperature:
+        case HealthSampleType.wristTemperature:
+        case HealthSampleType.sleep:
+          break;
+      }
+    case ConflictResolution.takeIncoming:
+      final s = conflict.incoming;
+      switch (s.type) {
+        case HealthSampleType.basalBodyTemperature:
+          await ref
+              .read(bbtRepositoryProvider)
+              .setTemp(s.day, s.value, externalId: s.externalId);
+        case HealthSampleType.menstrualFlow:
+          final idx = s.value.round().clamp(
+            0,
+            FlowIntensity.values.length - 1,
+          );
+          await ref
+              .read(dailyFlowRepositoryProvider)
+              .setFlow(
+                s.day,
+                intensity: FlowIntensity.values[idx],
+                externalId: s.externalId,
+              );
+        case HealthSampleType.bodyTemperature:
+        case HealthSampleType.wristTemperature:
+        case HealthSampleType.sleep:
+          break;
+      }
+    case ConflictResolution.dismiss:
+      break;
+  }
+  ref.read(healthConflictsProvider.notifier).resolve(conflict);
 }

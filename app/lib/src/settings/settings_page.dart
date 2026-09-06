@@ -8,8 +8,10 @@ import '../a11y/spoken_detail.dart';
 import '../appearance/app_icon.dart';
 import '../appearance/app_icon_providers.dart';
 import '../backup/backup_page.dart';
+import '../health/conflict_review_screen.dart';
 import '../health/health_import.dart';
 import '../health/health_providers.dart';
+import '../period/period_format.dart';
 import '../personalization/personalization_providers.dart';
 import '../prediction/accuracy_format.dart';
 import '../prediction/accuracy_page.dart';
@@ -64,6 +66,7 @@ class SettingsPage extends ConsumerWidget {
     final healthConnected =
         ref.watch(healthConnectedProvider).valueOrNull ?? false;
     final healthLastSync = ref.watch(healthLastSyncProvider).valueOrNull;
+    final healthReviewCount = ref.watch(healthConflictsProvider).length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -303,6 +306,29 @@ class SettingsPage extends ConsumerWidget {
                 title: const Text('Sync now'),
                 onTap: () => _syncHealth(context, ref),
               ),
+            if (healthConnected && healthReviewCount > 0)
+              ListTile(
+                leading: const Icon(Icons.rule_outlined),
+                title: Text(
+                  '$healthReviewCount '
+                  '${healthReviewCount == 1 ? 'difference' : 'differences'} '
+                  'to review',
+                ),
+                subtitle: Text(
+                  'olf and $healthName disagree on some days. Choose which '
+                  'entry to keep.',
+                  semanticsLabel: spokenLabel(
+                    reduceSpokenDetail,
+                    redacted: 'Some entries need your review.',
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ConflictReviewScreen(),
+                  ),
+                ),
+              ),
           ],
         ],
       ),
@@ -310,8 +336,8 @@ class SettingsPage extends ConsumerWidget {
   }
 
   /// Subtitle for the "Connect a health app" tile. When connected and a sync
-  /// has run it names the counts; under "Reduce spoken detail" the screen
-  /// reader hears only that the bridge is on.
+  /// has run it names the counts and when it ran; under "Reduce spoken detail"
+  /// the screen reader hears only that the bridge is on.
   Widget _healthSubtitle({
     required String name,
     required bool connected,
@@ -321,10 +347,16 @@ class SettingsPage extends ConsumerWidget {
     if (!connected) {
       return Text("Off. olf isn't reading or writing $name.");
     }
-    final visible = lastSync == null
-        ? 'On. Sharing menstrual flow and basal body temperature with $name.'
-        : 'On. Last sync: added ${lastSync.added}, updated '
-              '${lastSync.updated}, ${lastSync.needsReview} need review.';
+    final String visible;
+    if (lastSync == null) {
+      visible =
+          'On. Sharing menstrual flow and basal body temperature with $name.';
+    } else {
+      final when = lastSync.at == null ? '' : ' · ${_ago(lastSync.at!)}';
+      visible =
+          'On. Last sync: added ${lastSync.added}, updated '
+          '${lastSync.updated}$when.';
+    }
     return Text(
       visible,
       semanticsLabel: spokenLabel(
@@ -332,6 +364,16 @@ class SettingsPage extends ConsumerWidget {
         redacted: '$name is connected.',
       ),
     );
+  }
+
+  /// A short "when" for the last sync — "just now", "5 min ago", "3 h ago", or
+  /// the date once it is more than a day old.
+  static String _ago(DateTime at) {
+    final delta = DateTime.now().difference(at);
+    if (delta.inMinutes < 1) return 'just now';
+    if (delta.inMinutes < 60) return '${delta.inMinutes} min ago';
+    if (delta.inHours < 24) return '${delta.inHours} h ago';
+    return formatDay(at);
   }
 
   Future<void> _connectHealth(BuildContext context, WidgetRef ref) async {

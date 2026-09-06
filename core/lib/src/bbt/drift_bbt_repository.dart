@@ -66,13 +66,18 @@ class DriftBbtRepository implements BbtRepository {
             ),
           );
     } else {
+      // `externalId` is sticky: an in-app edit (which passes no id) keeps the
+      // row linked to its platform record so a p6.4 write-back updates that
+      // record in place instead of inserting a duplicate. The `source` still
+      // moves to whatever the caller passed — `manual` by default, i.e. an
+      // edit flips a previously-imported row back to the user's own (p6.1).
       await (_db.update(
         _db.bbtEntries,
       )..where((t) => t.date.equals(day))).write(
         BbtEntriesCompanion(
           tempCelsius: Value(celsius),
           source: Value(source.name),
-          externalId: Value(externalId),
+          externalId: Value(externalId ?? existing.externalId),
           updatedAt: Value(stamp),
         ),
       );

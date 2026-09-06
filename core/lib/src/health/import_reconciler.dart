@@ -214,10 +214,12 @@ bool _listEq(List<Object?> a, List<Object?> b) {
 /// storage.
 ///
 /// **Matching.** An incoming sample matches a local row by [externalId] first;
-/// failing that, by `(type, day)`. **Hard rules.** A [HealthDataSource.manual]
-/// local row is never in [ReconciliationPlan.updates] — a disagreement with it
-/// is always a [ReconciliationConflict]. A `(type, day)` match against a
-/// different-source row is a conflict, not an update.
+/// failing that, by `(type, day)`. **Hard rules.** When the values already
+/// agree (within [tolerance]) there is nothing to do — the sample is skipped
+/// regardless of source. Otherwise: a [HealthDataSource.manual] local row is
+/// never in [ReconciliationPlan.updates] — a *disagreement* with it is always a
+/// [ReconciliationConflict]; and a `(type, day)` match against a
+/// different-source row that disagrees is a conflict, not an update.
 class ImportReconciler {
   const ImportReconciler({this.tolerance = 0.01});
 
@@ -260,7 +262,12 @@ class ImportReconciler {
           sameUnit && (match.value - sample.value).abs() <= tolerance;
       final sameSource = match.source == sample.source;
 
-      if (sameValue && sameSource) {
+      // Values already agree — there is nothing to reconcile and nothing for
+      // the user to review, whatever the sources are. This also absorbs a p6.4
+      // write-back echo: a row olf pushed out comes back from the platform
+      // attributed to that platform, matched by `externalId`, with the value
+      // unchanged.
+      if (sameValue) {
         skipped.add(
           ReconciliationSkip(localId: match.localId, incoming: sample),
         );
@@ -280,20 +287,14 @@ class ImportReconciler {
       }
 
       if (!sameSource) {
-        if (sameValue) {
-          skipped.add(
-            ReconciliationSkip(localId: match.localId, incoming: sample),
-          );
-        } else {
-          conflicts.add(
-            ReconciliationConflict(
-              localId: match.localId,
-              local: match,
-              incoming: sample,
-              reason: ConflictReason.crossSourceDisagreement,
-            ),
-          );
-        }
+        conflicts.add(
+          ReconciliationConflict(
+            localId: match.localId,
+            local: match,
+            incoming: sample,
+            reason: ConflictReason.crossSourceDisagreement,
+          ),
+        );
         continue;
       }
 
