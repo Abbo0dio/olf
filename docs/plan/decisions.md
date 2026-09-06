@@ -2,6 +2,31 @@
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-06 — **p8.1a Apple Watch sleeping-wrist temperature stores in `bbt_entries` behind a
+  `measurement_kind` column; `schemaVersion` 9→10.** `HKQuantityTypeIdentifier.appleSleepingWristTemperature`
+  is a *sleeping wrist* measurement, not a *basal body* temperature. **Rejected** a dedicated
+  `wrist_temperature` table: the p6.1 `ImportReconciler` matches by `(type, day)`, so a
+  separate table makes a wrist import and a manual BBT day independent and the p8.1a criterion
+  "the **unchanged** reconciler conflicts a wrist import against a manual BBT day" becomes
+  impossible without touching the reconciler. **Rejected** unmarked reuse of `tempCelsius`:
+  `thermalShift` (p7.3), the BBT chart (p1.6), `dailyFertilityScore` (p7.3) and the doctor PDF
+  (p6.5) would silently mix sleeping-wrist with basal-body semantics, and the UI can't show
+  passive vs typed distinctly. **Approved** option (a): `measurement_kind` `TEXT NOT NULL
+  DEFAULT 'basal'` on `bbt_entries` (`enum BbtMeasurementKind { basal, sleepingWrist }`),
+  `if (from < 10 && to >= 10) { if (from >= 5) m.addColumn(...) }` (the p6.1 v7 column-add
+  precedent). `HealthImportService` reads the bridge value as `HealthSampleType.wristTemperature`,
+  re-types to `basalBodyTemperature` only for the `reconcile()` `(type, day)` match, stamps
+  `measurementKind: sleepingWrist` on `apply`. **Negotiation condition:** every existing
+  `bbt_entries` temperature reader is audited to filter `measurement_kind = 'basal'` so p8.1a
+  is a zero-behaviour-change addition; p8.5 is where sleeping-wrist deliberately feeds
+  inference. `source_device` (free-form multi-device attribution) is **deferred to p8.2**
+  where Oura/Garmin coexist — for p8.1a, `measurement_kind == sleepingWrist` + `source ==
+  appleHealth` already uniquely identifies an Apple Watch. HRV/sleep stay declared-but-unmapped
+  (each needs a new `HealthSampleType`/`HealthUnit` or an interval-aggregation path — not small)
+  → p8.5. Full migration deliverable (g.dart regen, real `schema dump` → `drift_schema_v10`,
+  `_dumpedVersions` += 10, `migration_matrix_test` → v10, `wrist_temp_migration_test.dart`,
+  backup round-trip) ships in PR #84. — orchestrator, §5 ruling during p8.1a negotiation.
+
 - 2026-09-06 — **p7.6 PMDD daily rating gets a dedicated `pmdd_ratings` table; `schemaVersion` 8→9.**
   A daily multi-symptom rating is a `(date, item, rating)` series — it fits neither p7.5's
   `pain_entries` (one row/day, single intensity) nor the p1.5 presence-only

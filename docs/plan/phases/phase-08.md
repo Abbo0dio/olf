@@ -44,12 +44,14 @@ Phase 3 backtester.
   passive feature changes the default home/calendar for a user who has connected nothing.
 - **Device-level provenance is additive.** olf currently records `source ∈ {manual,
   appleHealth, healthConnect}`. Naming the *device* behind a platform sample ("from your Oura
-  Ring", "from Apple Watch") needs more than that enum. Prefer a nullable `source_device`
-  text column / free-form tag over a closed enum, added as a **schema change** — §5 stop, and
-  it ships with its migration + `migration_matrix_test` extension + a dedicated
-  `*_migration_test.dart` + a backup round-trip in the same PR (the p6.1 / p7.5 / p7.6
-  precedent; `docs/release-checklist.md` "Schema change" block). `schemaVersion` is **9**
-  after Phase 7.
+  Ring", "from Apple Watch") needs more than that enum — a nullable `source_device` text
+  column / free-form tag over a closed enum, added as a **schema change**. It lands in **p8.2**
+  (where multiple devices coexist), not p8.1a — p8.1a distinguishes passive-vs-typed with the
+  `measurement_kind` column alone (negotiation 2026-09-06). Every schema change ships with its
+  migration + `migration_matrix_test` extension + a dedicated `*_migration_test.dart` + a
+  backup round-trip in the same PR (the p6.1 / p7.5 / p7.6 precedent;
+  `docs/release-checklist.md` "Schema change" block). `schemaVersion` is **9** after Phase 7 —
+  p8.1a takes it to **10** (`measurement_kind` on `bbt_entries`).
 - **A direct cloud API is a §5 conversation, per wearable.** The default path is *via the
   health platform* (Apple Health / Health Connect) — no new dependency, no network. A
   vendor's own cloud API (Oura Cloud, WHOOP, Garmin Health) brings an **OAuth
@@ -85,48 +87,78 @@ Phase 3 backtester.
 - **Acceptance criteria:**
   - The HealthKit bridge reads `HKQuantityTypeIdentifier.appleSleepingWristTemperature`
     (add it to the HealthKit read-authorization request; existing usage strings cover it),
-    mapped to the already-declared `HealthSampleType.wristTemperature` (°C). The other two
-    declared-but-unused types: **HRV** (`heartRateVariabilitySDNN`) and **sleep**
-    (`sleepAnalysis` asleep minutes) — map them here *if* it is a small, natural extension of
-    the same query path; otherwise declare them still-unmapped and note it for p8.5. Do not
-    let HRV/sleep balloon this slice.
-  - **Storage decision — flag at negotiation.** `appleSleepingWristTemperature` is a
-    *sleeping wrist* measurement, not a *basal body* temperature, and on some Apple surfaces
-    it is a nightly deviation from a personal baseline rather than an absolute. Writing it
-    straight into `bbt_entries.tempCelsius` conflates two measurements. The Worker assesses
-    and proposes one of: (a) a `measurement_kind` discriminator on `bbt_entries` (basal vs
-    sleeping-wrist), (b) a dedicated `wrist_temperature` table, or (c) documented reuse of
-    `bbt_entries` with the semantic difference recorded. (a) and (b) are **schema changes**
-    — §5 stop, full migration deliverable in the PR.
-  - Imported wrist-temperature readings carry `source = appleHealth` **and** a device tag
-    (see the phase-wide "device-level provenance" constraint — likely the first user of a new
-    nullable `source_device` column; §5 stop if so) so the UI can say "from Apple Watch".
+    mapped to the already-declared `HealthSampleType.wristTemperature` (°C). **HRV / sleep are
+    NOT mapped in this slice** (negotiation 2026-09-06): HRV needs a new `HealthSampleType` +
+    a new `HealthUnit(ms)` + `_unitMatchesType`, sleep needs an interval-aggregation query
+    path — neither is a small extension. Both stay declared-but-unmapped; **p8.5 owns them.**
+  - **Storage decision — RESOLVED at negotiation (2026-09-06, worker: 1, PR #84). Orchestrator
+    approved option (a): a `measurement_kind` discriminator column on `bbt_entries`;
+    `schemaVersion` 9→10.** A dedicated `wrist_temperature` table (option b) was **rejected** —
+    the reconciler matches by `(type, day)`, so a separate table makes a wrist import and a
+    manual BBT day independent, and the "unchanged `ImportReconciler` conflicts a wrist import
+    against a manual BBT day" criterion becomes impossible without touching the reconciler.
+    Plain reuse (option c) was **rejected** — an unmarked `tempCelsius` conflates sleeping-wrist
+    with basal-body: `thermalShift`, the BBT chart, and the doctor PDF would silently mix
+    semantics and the UI can't show passive vs typed distinctly. Approved: `measurement_kind`
+    `TEXT NOT NULL DEFAULT 'basal'` (`enum BbtMeasurementKind { basal, sleepingWrist }`),
+    `textEnum` in drift. `HealthImportService` reads the bridge value as
+    `HealthSampleType.wristTemperature`, re-types it to `basalBodyTemperature` **only** for the
+    `reconcile()` `(type, day)` match so it competes for the one temperature slot per day
+    through the unchanged reconciler, and stamps `measurementKind: sleepingWrist` on `apply`.
+    A code comment at the re-type site must state why.
+  - **Existing `bbt_entries` temperature readers filter to `measurement_kind = 'basal'`
+    (negotiation condition).** Audit every consumer — `thermalShift` (p7.3), `dailyFertilityScore`
+    (p7.3), `ClinicalReport` / doctor PDF (p6.5), the p1.6 BBT chart / any `CycleStats` BBT
+    use — and make each read `basal`-only (or deliberately handle both kinds, documented) so
+    p8.1a introduces **zero behaviour change** to existing features. A `sleepingWrist` row must
+    never silently alter a thermal-shift result, a fertility score, or a doctor-PDF chart.
+    `p8.5` is where sleeping-wrist deliberately feeds inference.
+  - **No `source_device` column in p8.1a** (negotiation 2026-09-06). `measurement_kind ==
+    sleepingWrist` + `source == appleHealth` already uniquely means "passively captured by an
+    Apple Watch" (on iOS today, nothing else writes `appleSleepingWristTemperature`) — enough
+    for the "passive vs typed distinctly" criterion. Free-form multi-device attribution
+    (`source_device`) earns its keep in **p8.2** when Oura / Garmin coexist; added there.
   - Reconciliation is the existing `ImportReconciler` unchanged: a manual BBT entry for a day
     is never overwritten by a wrist-temperature import (it becomes a reviewable conflict); a
-    prior wrist-temperature import for the same day updates in place via `external_id`.
+    prior wrist-temperature import for the same day updates in place via `external_id`; a
+    same-day existing `appleHealth` basal reading is a deterministic same-source update.
   - **Surface:** the BBT / temperature view shows passively-captured readings distinctly from
     typed ones ("Apple Watch · captured while you slept"), and every passive reading is
     editable / correctable / deletable through the existing flow. A per-source status line in
     the "Apps & export" section (connected · last sync · count), `reduceSpokenDetail`-redacted.
   - Retention (p2.3) ages out wrist-temperature readings on the same window as every dated
-    table; backup/restore round-trips them; if a new table/column is added it joins
-    `BackupService.tableOrder` + `RetentionService.deleteWhere`.
-  - `docs/threat-model.md`: review-log entry — new asset (passive wrist-temperature readings,
-    device tag) in the existing encrypted local DB; **no new egress** (data arrives over the
-    existing local HealthKit IPC), no new permission (same HealthKit entitlement), no new
-    dependency. `docs/local-database.md` updated if the schema moves.
+    table; backup/restore round-trips them. `bbt_entries` is **already** in
+    `BackupService.tableOrder` + `RetentionService.deleteWhere` — wrist rows age out /
+    round-trip automatically, no additions needed.
+  - **Migration deliverable (in PR #84):** `schemaVersion` 9→10;
+    `if (from < 10 && to >= 10) { if (from >= 5) m.addColumn(bbtEntries, bbtEntries.measurementKind); }`
+    (the p6.1 v7 column-add precedent — `to >=` guard because it's an ALTER, inner `from >= 5`
+    because `bbt_entries` was created at v5); regen `app_database.g.dart` + real `drift_dev
+    schema dump` → `drift_schemas/drift_schema_v10.json` + `test/db/generated/schema_v10.dart`;
+    `dump_historical_schemas.dart` `_dumpedVersions` += 10; `migration_matrix_test` → v10
+    (asserts `measurement_kind == 'basal'` on every pre-existing row + a backup round-trip
+    carrying a `sleepingWrist` row across the migration); new `wrist_temp_migration_test.dart`
+    (hand-rolled v9 on disk → v10, `PRAGMA table_info` shape check). `docs/local-database.md`
+    "Schema v10" section + `from < 10` row; `docs/release-checklist.md` "Schema change" block
+    already covers the steps.
+  - `docs/threat-model.md`: review-log entry — new asset (passive sleeping-wrist temperature
+    readings, tagged `measurement_kind`) in the existing encrypted local DB; **no new egress**
+    (data arrives over the existing local HealthKit IPC), no new permission (same HealthKit
+    entitlement), no new dependency.
   - New `screen_nav.dart` surface(s) for any new/changed screen; five a11y sweeps green; dark
     mode; `reduceSpokenDetail` on temperatures.
-- **Tests required:** `core` — `wristTemperature` sample round-trips the model invariant
-  (°C); `ImportReconciler` treats a wrist-temp import against a manual BBT day as a conflict,
-  against a prior wrist-temp day as an in-place update; precedence with an existing
-  `appleHealth` basal reading is deterministic. If schema moves: `migration_matrix_test`
-  extended + a dedicated `wrist_temperature_migration_test.dart` (hand-rolled prior version
-  on disk → new) + a backup round-trip carrying a real wrist-temp row across the migration.
-  `app` — the HealthKit channel wrapper decodes a wrist-temperature payload (mocked platform
-  channel); the import service applies inserts + skips conflicts; the temperature view
-  renders passive vs manual distinctly and a passive reading is correctable; per-source
-  status line; sweeps.
+- **Tests required:** `core` — `wristTemperature` sample round-trips the model °C invariant;
+  `ImportReconciler` (unchanged) treats a re-typed wrist import against a manual BBT day as a
+  conflict, against a prior wrist import for the day as an in-place `external_id` update, and
+  against a same-day `appleHealth` basal reading as a deterministic same-source update;
+  `thermalShift` / `dailyFertilityScore` / `buildClinicalReport` ignore `sleepingWrist` rows
+  (a mixed-kind history produces the identical result to a `basal`-only history). Schema:
+  `migration_matrix_test` → v10 + `wrist_temp_migration_test.dart` (v9 on disk → v10) +
+  backup round-trip with a `sleepingWrist` row. `app` — the HealthKit channel wrapper decodes
+  a sleeping-wrist payload (mocked platform channel); the import service applies inserts +
+  skips conflicts + stamps `measurementKind: sleepingWrist`; the temperature view renders
+  passive vs manual distinctly and a passive reading is correctable; per-source status line;
+  sweeps.
 - **Notes / detail:** hand-rolled bridge only — **no `health` package** (p6.2 rejected it;
   no `BASAL_BODY_TEMPERATURE`/wrist-temp coverage and it forces an SDK-floor bump). The Swift
   side is a thin addition to the existing `HealthKitBridge`. Real Apple Watch capture is a
@@ -167,15 +199,17 @@ Phase 3 backtester.
   reviewable PR, the glance view and the complication may split again at negotiation.
 
 #### p8.2 — Third-party wearables via the health platform + device provenance (Oura, Garmin)
-- **Depends on:** p8.1a (the `wristTemperature`/HRV/sleep ingestion path + `source_device`
-  provenance), p6.3 (Health Connect bridge, for the Android side).
+- **Depends on:** p8.1a (the `wristTemperature` ingestion path + the `measurement_kind`
+  column), p6.3 (Health Connect bridge, for the Android side).
 - **Requirement refs:** §2 (Oura, Garmin), §10, §9 (robust sync), §5 (free — not paywalled).
 - **Goal:** a user whose Oura Ring or Garmin device already syncs to Apple Health / Health
   Connect sees that temperature (+ HRV / sleep) in olf, **labelled by device** ("from your
   Oura Ring"), through the same import path — **no vendor SDK, no OAuth, no network**.
 - **Acceptance criteria:**
   - The import path reads the same `HealthSampleType`s regardless of which device wrote them;
-    the `source_device` tag (from p8.1a) is populated from the platform sample's
+    **this slice adds the nullable `source_device` text column** to `daily_flows` +
+    `bbt_entries` (§5 stop — schema change, full migration deliverable in the PR; the p8.1a
+    v9→v10 `measurement_kind` precedent), populated from the platform sample's
     `HKSource` / `HKDevice` (iOS) or the Health Connect origin (Android) so olf can attribute
     a reading to Oura / Garmin / Apple Watch / another app.
   - A per-device status surface in "Apps & export": which devices have contributed data, last
