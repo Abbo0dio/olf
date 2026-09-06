@@ -270,6 +270,14 @@ class _LoadedState extends ConsumerState<_Loaded> {
         ? const <BbtChartPoint>[]
         : bbtChartForCycle(currentCycle, bbtEntries);
     final observedFertile = ref.watch(observedFertileWindowProvider);
+    // p7.2b: while pregnancy mode is on, the forecast card (next-period +
+    // fertile-window estimate) is hidden — not deleted. It comes straight back
+    // when the mode is turned off, or when a p1.11 loss/birth ends it.
+    final pregnancyModeOn =
+        ref
+            .watch(lifeStageModeEnabledProvider(LifeStageMode.pregnancy))
+            .valueOrNull ??
+        false;
     final pregnancyState = ref.watch(pregnancyRecoveryStateProvider);
     final pregnancySince = ref.watch(mostRecentPregnancyEndProvider)?.date;
 
@@ -318,7 +326,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
                   ref.read(correctionNoticeProvider.notifier).clear(),
             ),
           ],
-          if (prediction != null) ...[
+          if (prediction != null && !pregnancyModeOn) ...[
             const SizedBox(height: 16),
             _PredictionCard(
               prediction: prediction,

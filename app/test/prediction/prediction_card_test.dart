@@ -129,6 +129,45 @@ void main() {
     );
   });
 
+  testWidgets(
+    'pregnancy mode hides the forecast card; turning it off restores it',
+    (tester) async {
+      final starts = [
+        daysAgo(132),
+        daysAgo(104),
+        daysAgo(76),
+        daysAgo(48),
+        daysAgo(20),
+      ];
+      final db = memoryDb();
+      for (final s in starts) {
+        await seedStart(db, s);
+      }
+      final settings = DriftSettingsRepository(db);
+
+      await pumpOlf(
+        tester,
+        overrides: [dbOverride(db)],
+        body: () async {
+          expect(find.text('Next period'), findsOneWidget);
+          expect(find.text('Fertile window (estimate)'), findsOneWidget);
+
+          // Turn pregnancy mode on → the whole forecast card goes away.
+          await settings.set(LifeStageMode.pregnancy.settingKey, 'true');
+          await tester.pumpAndSettle();
+          expect(find.text('Next period'), findsNothing);
+          expect(find.textContaining('Fertile window'), findsNothing);
+
+          // Turn it off → the card comes straight back, unchanged.
+          await settings.set(LifeStageMode.pregnancy.settingKey, 'false');
+          await tester.pumpAndSettle();
+          expect(find.text('Next period'), findsOneWidget);
+          expect(find.text('Fertile window (estimate)'), findsOneWidget);
+        },
+      );
+    },
+  );
+
   testWidgets('one logged period → no prediction card yet', (tester) async {
     final db = memoryDb();
     await seedStart(db, daysAgo(4));

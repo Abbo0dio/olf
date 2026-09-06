@@ -6,6 +6,7 @@ import '../a11y/spoken_detail.dart';
 import 'pregnancy_mode_format.dart';
 import 'pregnancy_mode_providers.dart';
 import 'pregnancy_start_sheet.dart';
+import 'pregnancy_symptoms.dart';
 
 /// Pregnancy mode's week view (p7.2a): gestational week + trimester, a short
 /// bundled development note, and the estimated due date — all derived from the
@@ -52,6 +53,18 @@ class PregnancyWeekScreen extends ConsumerWidget {
               ga: ga,
               reduceSpoken: reduceSpoken,
             ),
+          const SizedBox(height: 20),
+          // p7.2b: symptom logging is available whatever the start-reference
+          // state — it goes through the ordinary symptom repo, not the week view.
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const PregnancySymptomsScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.checklist_outlined),
+            label: const Text('Log pregnancy symptoms'),
+          ),
           const SizedBox(height: 24),
           Text(
             pregnancyModeDisclaimer,

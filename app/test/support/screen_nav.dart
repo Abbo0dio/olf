@@ -24,12 +24,13 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 25 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 26 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
 /// cycle-return screen and the loss/birth support-resources screen; p7.2a the
-/// pregnancy week view in its needs-a-start-date and populated states). The
+/// pregnancy week view in its needs-a-start-date and populated states; p7.2b the
+/// pregnancy symptom-logging screen). The
 /// dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
@@ -159,6 +160,18 @@ Future<void> _openPostpartumScreen(WidgetTester tester) async {
 
 Future<void> _openPregnancyScreen(WidgetTester tester) async {
   await _openModeScreen(tester, 'Open Pregnancy');
+}
+
+Future<void> _openPregnancySymptomsScreen(WidgetTester tester) async {
+  await _openPregnancyScreen(tester);
+  final row = find.text('Log pregnancy symptoms');
+  await tester.scrollUntilVisible(
+    row,
+    120,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.tap(row);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _openModeScreen(WidgetTester tester, String rowLabel) async {
@@ -484,6 +497,26 @@ final List<Surface> screenSurfaces = <Surface>[
       body: () async {
         await _openPregnancyScreen(tester);
         expect(find.textContaining('Week 24'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('pregnancy_symptoms_screen — log through the symptom repo', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await _seedPregnancyMode(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openPregnancySymptomsScreen(tester);
+        expect(
+          find.widgetWithText(AppBar, 'Pregnancy symptoms'),
+          findsOneWidget,
+        );
         await check(tester);
       },
     );
