@@ -24,7 +24,7 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 40 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 41 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -36,7 +36,8 @@ import 'harness.dart';
 /// the perimenopause screen in its transition-read + symptom-timeline and its
 /// thin-history states; p7.5 the endometriosis screen in its correlation-view
 /// and empty states and the pain-logging sheet; p7.6 the PMDD screen in its
-/// overlay-view and empty states and the daily rating sheet).
+/// overlay-view and empty states and the daily rating sheet; p8.1a the day sheet
+/// with a passive Apple Watch wrist-temperature reading).
 /// The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
