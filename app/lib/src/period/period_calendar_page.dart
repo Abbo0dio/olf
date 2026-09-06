@@ -14,6 +14,8 @@ import '../flow/flow_providers.dart';
 import '../bbt/bbt_chart_widget.dart';
 import '../bbt/bbt_providers.dart';
 import '../flow/flow_quick_log.dart';
+import '../modes/modes_providers.dart';
+import '../modes/postpartum_screen.dart';
 import '../mucus/mucus_providers.dart';
 import '../pregnancy/pregnancy_format.dart';
 import '../pregnancy/pregnancy_providers.dart';
@@ -1269,17 +1271,24 @@ class _BbtCard extends StatelessWidget {
 }
 
 /// Gentle heads-up shown after a recorded pregnancy loss / birth while cycles
-/// have not resumed (p1.11). Explains why estimates are paused.
-class _PregnancyStatusCard extends StatelessWidget {
+/// have not resumed (p1.11). Explains why estimates are paused. When postpartum
+/// mode (p7.1) is on, it also offers a way into the cycle-return view — nothing
+/// extra shows for a user who hasn't enabled the mode.
+class _PregnancyStatusCard extends ConsumerWidget {
   const _PregnancyStatusCard({required this.state, required this.since});
 
   final PregnancyRecoveryState state;
   final DateTime? since;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final message = pregnancyBanner(state, since);
+    final postpartumMode =
+        ref
+            .watch(lifeStageModeEnabledProvider(LifeStageMode.postpartum))
+            .valueOrNull ??
+        false;
 
     return Semantics(
       container: true,
@@ -1291,24 +1300,41 @@ class _PregnancyStatusCard extends StatelessWidget {
           color: theme.colorScheme.secondaryContainer,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              state == PregnancyRecoveryState.postpartum
-                  ? Icons.child_friendly_outlined
-                  : Icons.favorite_border,
-              color: theme.colorScheme.onSecondaryContainer,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: theme.textTheme.bodyMedium?.copyWith(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  state == PregnancyRecoveryState.postpartum
+                      ? Icons.child_friendly_outlined
+                      : Icons.favorite_border,
                   color: theme.colorScheme.onSecondaryContainer,
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                ),
+              ],
             ),
+            if (postpartumMode)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const PostpartumScreen(),
+                    ),
+                  ),
+                  child: const Text('Open postpartum view'),
+                ),
+              ),
           ],
         ),
       ),

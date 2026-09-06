@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../modes/mode_offer.dart';
 import 'pregnancy_format.dart';
 import 'pregnancy_providers.dart';
 
@@ -85,6 +86,9 @@ class PregnancyEventsPage extends ConsumerWidget {
     await ref
         .read(cycleEventRepositoryProvider)
         .logPregnancyEnd(result.kind, result.date);
+    // p7.1: offer — never force — the postpartum cycle-return view.
+    if (!context.mounted) return;
+    await offerPostpartumMode(context, ref, result.kind);
   }
 
   Future<void> _confirmRemove(

@@ -573,3 +573,31 @@ The CI guard requires an entry naming the current phase.
   **no manifest / plist change**, **no CI gate change**. The `OlfHttpClient`
   TLS chokepoint (p2.6) stays N/A for Phase 6. No further design changes
   required by this review.
+- **2026-09-06 — Phase 7 opening gate / p7.1 landing — reviewer: worker: 1.**
+  Phase 7 adds **opt-in life-stage / condition modes** — each a focused *view*
+  over the data olf already holds, never a new logging model. **p7.1** lands the
+  shared framework plus the postpartum cycle-return mode and loss/birth support
+  resources. **No new asset, adversary, trust boundary, data flow, network path,
+  dependency, permission, manifest / plist change, or CI gate change.**
+  - **Mode enablement** is a set of typed keys in the existing unencrypted
+    `app_settings` KV store — `mode.<name>` = `'true'` / absent, one per Phase 7
+    mode. Same sensitivity class as the other preference keys already listed
+    under Assets (theme, pronouns, retention window): a stored `mode.postpartum`
+    is a weak signal in the same way a tight retention window is, and it lives
+    behind the same app gate. **No schema change** — no new table, no new column,
+    no migration.
+  - The **postpartum cycle-return view** is a pure `core` derivation
+    (`derivePostpartumCycleReturn`, `DateTime.now()`-free, deterministic) over
+    the existing `cycle_events` pregnancy-loss / birth rows (p1.11) and the
+    existing `periods` — recomputed on read, never stored, exactly like the p3
+    predictions already covered by "Derived predictions" under Assets. It
+    fabricates nothing: an honest `null` / "waiting" state until enough
+    post-event cycles exist.
+  - The **support-resources screen** is bundled, non-clinical static text that
+    differs for a loss vs. a birth. It carries the fixed "olf is not a medical
+    device" line (§6) and a pointer to real care, and contains **no external
+    links** — a URL, if one were ever shown, is plain selectable text with no
+    tracked target (asserted by a content test). Nothing here phones home.
+  So postpartum / loss context is now a **derived view over existing data
+  classes** — no new asset to protect and no new egress. No design changes
+  required by this review.
