@@ -26,3 +26,11 @@ final birthControlRepositoryProvider = Provider<BirthControlRepository>((ref) {
 final currentBirthControlProvider = StreamProvider<BirthControlEntry?>((ref) {
   return ref.watch(birthControlRepositoryProvider).watchCurrent();
 });
+
+/// The full birth-control method history, newest start first, live. Used by the
+/// p7.8 recalibration read.
+final birthControlHistoryProvider = StreamProvider<List<BirthControlEntry>>((
+  ref,
+) {
+  return ref.watch(birthControlRepositoryProvider).watchAll();
+});

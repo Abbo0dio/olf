@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import 'birth_control_recalibration_screen.dart';
 import 'mode_catalog.dart';
 import 'modes_providers.dart';
 import 'postpartum_screen.dart';
@@ -43,6 +44,7 @@ class ModesPage extends StatelessWidget {
 Widget _modeScreen(LifeStageMode mode) => switch (mode) {
   LifeStageMode.pregnancy => const PregnancyWeekScreen(),
   LifeStageMode.ttc => const TtcScreen(),
+  LifeStageMode.birthControlSwitch => const BirthControlRecalibrationScreen(),
   _ => const PostpartumScreen(),
 };
 

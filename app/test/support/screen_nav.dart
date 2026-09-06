@@ -24,15 +24,15 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 28 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 29 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
 /// cycle-return screen and the loss/birth support-resources screen; p7.2a the
 /// pregnancy week view in its needs-a-start-date and populated states; p7.2b the
 /// pregnancy symptom-logging screen; p7.3 the TTC fertility-score screen and its
-/// not-enough-history state). The
-/// dispatch inventory named
+/// not-enough-history state; p7.8 the birth-control recalibration explainer).
+/// The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
 /// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
 /// flow/spotting/clot chip surface) stand in its place.
@@ -170,6 +170,14 @@ Future<void> _seedTtcModeThinHistory(AppDatabase db) async {
   ).addPeriod(PeriodDraft(start: _daysAgo(12), end: _daysAgo(9)));
 }
 
+/// Birth-control-change mode on — enough to reach its guided recalibration
+/// explainer from Settings → Modes (p7.8).
+Future<void> _seedBirthControlSwitchMode(AppDatabase db) async {
+  await DriftSettingsRepository(
+    db,
+  ).set(LifeStageMode.birthControlSwitch.settingKey, 'true');
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
@@ -201,6 +209,10 @@ Future<void> _openPregnancySymptomsScreen(WidgetTester tester) async {
   );
   await tester.tap(row);
   await tester.pumpAndSettle();
+}
+
+Future<void> _openBirthControlSwitchScreen(WidgetTester tester) async {
+  await _openModeScreen(tester, 'Open Birth-control change');
 }
 
 Future<void> _openModeScreen(WidgetTester tester, String rowLabel) async {
@@ -664,6 +676,26 @@ final List<Surface> screenSurfaces = <Surface>[
           find.bySemanticsLabel(_todayCellLabel(periodDay: true)),
         );
         await tester.pumpAndSettle();
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('birth_control_recalibration_screen — guided explainer', (
+    tester,
+    check,
+  ) async {
+    final db = memoryDb();
+    await _seedBirthControlSwitchMode(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await _openBirthControlSwitchScreen(tester);
+        expect(
+          find.widgetWithText(AppBar, 'After a birth-control change'),
+          findsOneWidget,
+        );
         await check(tester);
       },
     );
