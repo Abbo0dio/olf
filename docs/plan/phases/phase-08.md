@@ -362,19 +362,35 @@ Phase 3 backtester.
     documented, deterministic order (e.g. dedicated basal device > Apple Watch sleeping wrist
     > generic platform sample), configurable-per-user only if it's cheap — otherwise a fixed,
     documented order is acceptable for v1.
-  - Every raw reading is **retained** (provenance-tagged); the "resolved" day value is a
-    derived read, not a destructive merge — changing the precedence or deleting the winning
-    source re-resolves without data loss.
+  - **Resolution is reversible at the platform level (§5 ruling 2026-09-07, p8.6 negotiation
+    — option (a), no schema change).** olf stores **one row per `(type, day)`**; p8.6 does
+    **not** add a raw-readings archive. Instead the precedence policy runs inside the
+    reconciler's existing decision point: a `crossDeviceDisagreement` (p8.2) whose rank has a
+    clear winner becomes a deterministic `ReconciliationUpdate` (the winner) instead of a
+    user conflict; the losing reading is **not persisted by olf** but remains in the OS
+    health store, so a re-sync re-runs the policy — **"delete the winning source → the
+    runner-up wins on the next sync"** holds, and "no data loss" holds because the platform
+    is the source of truth and olf's import is idempotent. **v1 limitation (documented):**
+    the precedence order is **fixed** for v1, and changing it later would not retroactively
+    re-resolve past days without a re-pull. A local `raw_health_readings` table (giving
+    offline loser-provenance + local retro-re-resolution) is **deferred to the backlog** —
+    it earns its keep only alongside a per-user precedence UI, which v1 does not build. The
+    resolver function itself is never persisted, either way.
   - `conflict_review_screen` (p6.4) extended to N sources: shows each source's value for a
     contested day, which one is winning and why, keep-mine / use-this-source / dismiss. No
     bulk ops (p6.4 posture).
-  - Retention + backup cover every raw reading; the resolver is never persisted.
+  - Retention + backup already cover the single per-`(type, day)` row (no new persisted
+    state under option (a)); the resolver is never persisted.
   - `docs/threat-model.md` review-log entry: arbitration is local, derived, reversible — no
     new asset, no new egress.
 - **Tests required:** `core` — the precedence policy on every combination (manual + 1..N
-  automatic; automatic-only; ties; a deleted winning source re-resolves; a correction
-  overrides all). Order-independence and determinism. `app` — the extended conflict screen
-  renders N sources and each resolution action; retention/backup carry all raw rows. Sweeps.
+  automatic → manual wins, still a conflict never an auto-update; automatic-only with a clear
+  rank winner → deterministic auto-resolve; a same-rank tie → still a conflict; a re-import
+  with the winning source dropped → the runner-up wins on that reconcile; a correction
+  overrides all). Order-independence and determinism (same inputs any order → same plan). The
+  p8.2 `crossDeviceDisagreement` tests still pass or are updated with a documented reason.
+  `app` — the extended conflict screen renders N sources and each resolution action;
+  retention/backup carry the resolved per-day row. Sweeps.
 - **Notes / detail:** this is reconciler hardening, not a new engine. The p6.1
   `ImportReconciler` hard rules (never dupe, never clobber a manual value) are the invariants
   to preserve and extend. p8.2 already added cross-device **detection**

@@ -2,6 +2,29 @@
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-07 — **p8.6 multi-source arbitration ships with NO schema change (option a); the
+  raw-readings archive is deferred to backlog.** p8.6's acceptance criteria ask that "every
+  raw reading is retained … changing the precedence or deleting the winning source re-resolves
+  without data loss." olf stores **one row per `(type, day)`** (`bbt_entries` / `daily_flows`
+  PK is `date`), so a literal reading of that needs a new `raw_health_readings` table with the
+  per-day value demoted to a derived cache — a large change (every reader of those two tables,
+  the backup format, retention, a v11→v12 migration + matrix + `*_migration_test` + backup
+  round-trip). **Approved option (a):** the precedence policy runs inside the reconciler's
+  existing decision point — a `crossDeviceDisagreement` (p8.2) with a clear rank winner becomes
+  a deterministic `ReconciliationUpdate` instead of a user conflict; the losing reading is not
+  persisted by olf but stays in the OS health store, which is the source of truth and whose
+  import is idempotent, so a re-sync re-runs the policy ("delete the winning source → the
+  runner-up wins next sync"). **Rejected option (b)** (the `raw_health_readings` table) for v1:
+  it buys local retro-re-resolution and offline loser-provenance, and **v1 uses neither** —
+  the precedence order is fixed for v1 (the plan already permits a "fixed, documented order"),
+  and there is no per-user precedence UI. **Acceptance criterion relaxed** accordingly (see
+  `phase-08.md` #### p8.6): "reversible at the platform level," with the documented v1
+  limitation that changing the precedence order later would not retroactively re-resolve past
+  days without a re-pull. The `raw_health_readings` table is on the backlog, to land only
+  alongside a per-user precedence feature. The precedence function is pure `core` and stays
+  the seam that option (b) would build on. Resolver function never persisted either way.
+  — orchestrator, §5 ruling during p8.6 negotiation.
+
 - 2026-09-07 — **p8.2 device provenance: one minimal additive `ImportReconciler` clause is
   approved so cross-device disagreement is detected, not silently merged.** The p8.2 dispatch
   said "cross-device reconciliation stays deterministic through the **unchanged**
