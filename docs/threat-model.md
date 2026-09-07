@@ -923,3 +923,39 @@ The CI guard requires an entry naming the current phase.
     no new `HealthSampleType` / `HealthUnit`, no bridge wiring. The types only
     fix the signature so p8.6 corroboration is additive.
   No design changes required by this review.
+- **2026-09-07 — Phase 8 / p8.6 landing — reviewer: worker: 1.** Graceful
+  multi-source arbitration — one coherent value per `(type, day)` when several
+  sources report it, with a documented precedence the user can override. **No
+  new asset, adversary, trust boundary, data flow, egress point, permission,
+  dependency, schema change, or CI gate change** (§5 ruling: option (a), no
+  `raw_health_readings` table).
+  - **Local, derived, reversible.** The precedence policy
+    (`core/lib/src/health/source_precedence.dart` + the shared vendor table
+    `known_devices.dart`) is pure `core` computation, run inside the existing
+    `ImportReconciler` decision point. It classifies each reading into a fixed
+    tier (`manual` > recognised device > Apple-Watch sleeping-wrist > bare
+    platform sample) from data olf already stores — the `source` enum, the
+    p8.1a `measurement_kind`, the p8.2 `source_device` tag. The **resolver
+    function is never persisted**; olf still keeps exactly one per-day row in
+    `bbt_entries` / `daily_flows`, a derived read, already covered by retention
+    (p2.3) and encrypted backup. No new table, column, or `schemaVersion` bump.
+  - **No data loss.** Every raw reading remains in the OS health store; a
+    lower-tier reading olf drops is a `ReconciliationSupersede` (not surfaced,
+    not counted), and deleting the winning source lets the next sync re-run the
+    policy so the runner-up wins. Documented v1 limitation: changing the
+    precedence order does not retroactively re-resolve past days without a
+    re-pull (order is fixed for v1).
+  - **`manual` is never auto-resolved** — a disagreement with a typed value is
+    always a `manualDisagreement` conflict routed to the user (regression-locked
+    in `import_reconciler_test.dart`). Only a clear rank winner *among automatic
+    sources* auto-resolves; a genuine same-tier tie, and any manual-vs-automatic
+    case, still goes to the conflict-review screen. That screen now shows N
+    source rows (each value, a plain "why" line, a per-source "Use this reading"
+    action) with keep-mine / dismiss and **no bulk actions** — the p6.4 posture.
+    Values on the card are `reduceSpokenDetail`-redacted in their semantics
+    labels.
+  - Every p8.2 `crossDeviceDisagreement` test still passes unchanged (two
+    recognised devices are the same tier → still a user conflict). The
+    surface-inventory count is unchanged at 42 — the existing conflict-review
+    a11y surface's seed was extended, no new `Surface`.
+  No design changes required by this review.

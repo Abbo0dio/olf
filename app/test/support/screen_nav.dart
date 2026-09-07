@@ -601,6 +601,13 @@ final List<Surface> screenSurfaces = <Surface>[
               local: FlowIntensity.spotting,
               incoming: FlowIntensity.heavy,
             ),
+            // p8.6: a three-source disagreement so the a11y sweeps exercise the
+            // N-row card, the "why" line, and the per-source "Use" actions.
+            crossDeviceBbtConflict(
+              DateTime(2026, 5, 12),
+              local: ('Oura', 36.30),
+              others: [('Garmin Connect', 36.55), ('Withings', 36.85)],
+            ),
           ]),
         ),
       ],

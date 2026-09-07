@@ -176,7 +176,14 @@ class HealthImportService {
         } else {
           wristDaysNoId.add(s.day);
         }
-        incoming.add(s.copyWith(type: HealthSampleType.basalBodyTemperature));
+        // p8.6: keep the wrist marker on the re-typed sample so the reconciler's
+        // precedence classifier ranks it as the Apple-Watch sleeping-wrist tier.
+        incoming.add(
+          s.copyWith(
+            type: HealthSampleType.basalBodyTemperature,
+            isSleepingWrist: true,
+          ),
+        );
       } else {
         incoming.add(s);
       }
@@ -204,6 +211,9 @@ class HealthImportService {
           externalId: r.externalId,
           // p8.2: so the reconciler can tell an Oura day from a Garmin day.
           sourceDevice: r.sourceDevice,
+          // p8.6: a stored passive wrist row ranks at the sleeping-wrist tier.
+          isSleepingWrist:
+              r.measurementKind == BbtMeasurementKind.sleepingWrist,
         ),
       for (final r in flowRows)
         LocalSampleView(

@@ -214,4 +214,90 @@ void main() {
       },
     );
   });
+
+  // ---- p8.6: N-source conflicts ----------------------------------------
+
+  testWidgets('a three-device conflict shows every value and one "Use" action '
+      'per source', (tester) async {
+    final db = memoryDb();
+    await DriftBbtRepository(db).setTemp(
+      day,
+      36.30,
+      source: HealthDataSource.appleHealth,
+      sourceDevice: 'Oura',
+      externalId: 'seed',
+    );
+
+    await pumpOlf(
+      tester,
+      overrides: overridesFor(
+        db: db,
+        conflicts: [
+          crossDeviceBbtConflict(
+            day,
+            local: ('Oura', 36.30),
+            others: [
+              ('Garmin Connect', 36.60),
+              ('Withings Health Mate', 36.90),
+            ],
+          ),
+        ],
+      ),
+      body: () async {
+        await openReview(tester);
+
+        // every source's value is on screen
+        expect(find.textContaining('36.3'), findsWidgets);
+        expect(find.textContaining('36.6'), findsWidgets);
+        expect(find.textContaining('36.9'), findsWidgets);
+
+        // the "why" line for a same-tie
+        expect(find.textContaining('same kind of source'), findsOneWidget);
+
+        // one "Use <device>" per non-local source, plus Keep + Dismiss
+        expect(find.text('Use Garmin Connect'), findsOneWidget);
+        expect(find.text('Use Withings Health Mate'), findsOneWidget);
+        expect(find.text('Keep Oura'), findsOneWidget);
+        expect(find.text('Dismiss'), findsOneWidget);
+      },
+    );
+  });
+
+  testWidgets('picking one source of three stores that value and clears the '
+      'conflict', (tester) async {
+    final db = memoryDb();
+    final bbt = DriftBbtRepository(db);
+    await bbt.setTemp(
+      day,
+      36.30,
+      source: HealthDataSource.appleHealth,
+      sourceDevice: 'Oura',
+      externalId: 'seed',
+    );
+
+    await pumpOlf(
+      tester,
+      overrides: overridesFor(
+        db: db,
+        conflicts: [
+          crossDeviceBbtConflict(
+            day,
+            local: ('Oura', 36.30),
+            others: [
+              ('Garmin Connect', 36.60),
+              ('Withings Health Mate', 36.90),
+            ],
+          ),
+        ],
+      ),
+      body: () async {
+        await openReview(tester);
+        await tester.tap(find.text('Use Withings Health Mate'));
+        await flush(tester, 30);
+
+        expect((await bbt.tempOn(day))!.tempCelsius, 36.90);
+        expect(find.text('Nothing to review.'), findsOneWidget);
+      },
+    );
+  });
 }

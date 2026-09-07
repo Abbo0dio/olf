@@ -67,6 +67,7 @@ class HealthSample {
     required this.source,
     this.externalId,
     this.sourceDevice,
+    this.isSleepingWrist = false,
   }) : assert(
          !endAt.isBefore(startAt),
          'HealthSample.endAt must not be before startAt',
@@ -85,6 +86,7 @@ class HealthSample {
     required HealthDataSource source,
     String? externalId,
     String? sourceDevice,
+    bool isSleepingWrist = false,
   }) : this(
          type: type,
          startAt: at,
@@ -94,6 +96,7 @@ class HealthSample {
          source: source,
          externalId: externalId,
          sourceDevice: sourceDevice,
+         isSleepingWrist: isSleepingWrist,
        );
 
   final HealthSampleType type;
@@ -122,6 +125,13 @@ class HealthSample {
   /// reconciler uses it solely to tell two different devices apart on one day.
   final String? sourceDevice;
 
+  /// `true` when this reading is a passive Apple-Watch overnight
+  /// wrist-temperature sample (p8.1a), re-typed to `basalBodyTemperature` at the
+  /// reconcile boundary. Consumed only by the p8.6 precedence classifier's
+  /// sleeping-wrist rank; never affects matching. `false` for every other
+  /// sample, including one olf writes out.
+  final bool isSleepingWrist;
+
   /// `true` when this is a point-in-time reading (`endAt == startAt`).
   bool get isPointSample => endAt.isAtSameMomentAs(startAt);
 
@@ -139,6 +149,7 @@ class HealthSample {
     bool clearExternalId = false,
     String? sourceDevice,
     bool clearSourceDevice = false,
+    bool? isSleepingWrist,
   }) => HealthSample(
     type: type ?? this.type,
     startAt: startAt ?? this.startAt,
@@ -150,6 +161,7 @@ class HealthSample {
     sourceDevice: clearSourceDevice
         ? null
         : (sourceDevice ?? this.sourceDevice),
+    isSleepingWrist: isSleepingWrist ?? this.isSleepingWrist,
   );
 
   @override
@@ -162,7 +174,8 @@ class HealthSample {
       other.unit == unit &&
       other.source == source &&
       other.externalId == externalId &&
-      other.sourceDevice == sourceDevice;
+      other.sourceDevice == sourceDevice &&
+      other.isSleepingWrist == isSleepingWrist;
 
   @override
   int get hashCode => Object.hash(
@@ -174,12 +187,14 @@ class HealthSample {
     source,
     externalId,
     sourceDevice,
+    isSleepingWrist,
   );
 
   @override
   String toString() =>
       'HealthSample($type, $startAt..$endAt, $value $unit, $source, '
-      'externalId: $externalId, sourceDevice: $sourceDevice)';
+      'externalId: $externalId, sourceDevice: $sourceDevice, '
+      'isSleepingWrist: $isSleepingWrist)';
 }
 
 /// Whether [unit] is a legal unit for [type]. Enforced by the [HealthSample]

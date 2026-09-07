@@ -91,16 +91,17 @@ above is:
 | Often missing? | `HKDevice` frequently `nil`; the source name is the reliable field | present whenever another app wrote the record; empty for direct user entry |
 
 olf stores the raw string verbatim and **prettifies only at the edge**
-(`app/lib/src/health/device_label.dart`: a small table maps known package
-prefixes — `com.ouraring.*` → "Oura", `com.garmin.*` → "Garmin", … — an unknown
-package id falls back to its last dotted segment, a plain iOS name passes
-through). The tag is **provenance only** — never a query or matching key, and an
-in-app edit clears it (mirroring `source` → `manual`).
+(`app/lib/src/health/device_label.dart`: known package prefixes —
+`com.ouraring.*` → "Oura", `com.garmin.*` → "Garmin", … — an unknown package id
+falls back to its last dotted segment, a plain iOS name passes through). The
+prefix table lives in `core/lib/src/health/known_devices.dart` since p8.6, shared
+with the precedence classifier so the two never drift. The tag is **provenance
+only** — never a query or matching key, and an in-app edit clears it (mirroring
+`source` → `manual`).
 
-Two readings for the same day from **two different, known devices** whose values
-materially disagree become a `ConflictReason.crossDeviceDisagreement` on the
-existing conflict-review screen — olf picks no winner (the full multi-source
-precedence policy is p8.6). Values that agree collapse to one reading; a device
+Two readings for the same day that materially disagree and share a precedence
+tier (see below) become a `ConflictReason.crossDeviceDisagreement` on the
+conflict-review screen. Values that agree collapse to one reading; a device
 revising its own earlier reading is a plain update. Single-source behaviour is
 byte-for-byte unchanged. The "Apps & export" section grows a per-device status
 list (device label, reading count, last-seen; `reduceSpokenDetail`-redacted;
@@ -109,6 +110,62 @@ shown only when at least one tagged row exists — no per-device connect control
 HRV and sleep mapping stay **out of scope until p8.5**; Garmin's server-to-server
 Health API and Oura's cloud API are **not** used — the platform path is the
 supported route (Oura cloud API is p8.3).
+
+## Multi-source precedence (p8.6)
+
+When a single `(type, day)` slot has readings from several places — a typed
+value, an Apple-Watch sleeping-wrist temperature, an Oura temperature, a bare
+platform sample — olf resolves to **one value per day** with a fixed, documented
+order. The policy is pure `core`
+(`core/lib/src/health/source_precedence.dart`), consulted inside the existing
+`ImportReconciler` decision point; **nothing new is persisted** and the resolver
+function is never stored.
+
+### The classifier
+
+Every reading is sorted into one **tier** from exactly what olf already stores —
+the `source` enum, the p8.1a `measurement_kind`, and the p8.2 `source_device`
+tag:
+
+| Rank | Tier | A reading lands here when… |
+|---|---|---|
+| 3 | `manual` | `source == manual` — the user typed it. |
+| 2 | `attributedDevice` | automatic, **not** sleeping-wrist, and `source_device` resolves to a vendor olf recognises (`core/lib/src/health/known_devices.dart` — the same table `device_label.dart` prettifies with: `com.ouraring.*` / "Oura", `com.garmin.*` / "Garmin", "Garmin Connect", Withings, Fitbit, WHOOP, Polar, Wahoo, Samsung Health, plus Google Fit / Health Connect package ids). |
+| 1 | `sleepingWrist` | `measurement_kind == sleepingWrist` (a passive Apple-Watch overnight reading, p8.1a) — regardless of the `source_device` string. |
+| 0 | `genericPlatform` | automatic, not sleeping-wrist, and `source_device` is absent or names nothing recognised — a bare platform sample. |
+
+A `source_device` that only prettifies via the *fallback* (`com.acme.ringapp` →
+"Ringapp", an unknown plain name passing through) is **not** an attributed
+device — `isAttributedDevice` requires an exact table hit.
+
+### How the reconciler uses it
+
+- **`manual` is never auto-resolved.** A disagreement with a typed value is
+  always a `manualDisagreement` conflict, whatever the automatic sources are.
+- **A clear rank winner among automatic sources auto-resolves** — the
+  higher-tier reading becomes a deterministic `ReconciliationUpdate` (or insert);
+  the lower-tier reading is dropped from olf's plan as a `ReconciliationSupersede`
+  (not surfaced, not counted in the sync summary).
+- **A same-tier disagreement between two different recognised devices stays a
+  `crossDeviceDisagreement`** for the user. Three or more same-tier sources for
+  one day fold into a **single** conflict carrying the extras in
+  `ReconciliationConflict.alsoContending`, so the review screen shows every value
+  at once with a per-source "Use this reading" action alongside keep-mine /
+  dismiss. No bulk actions.
+- Fully order-independent: the same inputs in any order produce the same plan.
+
+### No data loss, and the v1 limitation
+
+Every raw reading is retained **in the OS health store**; olf keeps only the
+resolved per-day value (a derived read) in `bbt_entries` / `daily_flows`, which
+retention (p2.3) and encrypted backup already cover. Deleting the winning
+source's stored row lets the next sync re-run the policy and the runner-up win.
+
+**Limitation:** because olf does not persist the losing readings, changing the
+precedence order later does **not** retroactively re-resolve past days — that
+needs a fresh pull from the platform. The v1 order is fixed, so this only
+matters if a later slice makes the order user-configurable (backlog); a
+`raw_health_readings` table was considered for p8.6 and deferred.
 
 ## Android permission set (p6.3)
 

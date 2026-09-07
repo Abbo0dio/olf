@@ -404,5 +404,182 @@ void main() {
         expect(withDevice.conflicts, isEmpty);
       });
     });
+
+    // ---- p8.6: multi-source precedence ------------------------------------
+
+    group('precedence (p8.6)', () {
+      HealthSample wrist(int day, {double value = 36.5, String? id}) =>
+          HealthSample.point(
+            type: HealthSampleType.basalBodyTemperature,
+            at: DateTime(2026, 4, day, 6, 30),
+            value: value,
+            unit: HealthUnit.celsius,
+            source: HealthDataSource.appleHealth,
+            externalId: id,
+            isSleepingWrist: true,
+          );
+
+      LocalSampleView localWrist(int day, {double value = 36.5}) =>
+          LocalSampleView(
+            localId: '2026-04-$day',
+            type: HealthSampleType.basalBodyTemperature,
+            day: DateTime(2026, 4, day),
+            value: value,
+            unit: HealthUnit.celsius,
+            source: HealthDataSource.appleHealth,
+            isSleepingWrist: true,
+          );
+
+      test('a manual local row is never auto-resolved by precedence — a '
+          'disagreeing dedicated-device import is still a conflict', () {
+        final plan = reconciler.reconcile(
+          local: [local(1, value: 36.4, source: HealthDataSource.manual)],
+          incoming: [bbt(1, value: 36.9, device: 'Oura')],
+        );
+        expect(plan.updates, isEmpty);
+        expect(plan.superseded, isEmpty);
+        expect(plan.conflicts.single.reason, ConflictReason.manualDisagreement);
+      });
+
+      test('manual + several automatic sources → one manual conflict, no '
+          'auto-update', () {
+        final plan = reconciler.reconcile(
+          local: [local(2, value: 36.3, source: HealthDataSource.manual)],
+          incoming: [
+            bbt(2, value: 36.8, device: 'Oura'),
+            bbt(2, value: 36.7, device: 'Garmin Connect'),
+            wrist(2, value: 36.9),
+          ],
+        );
+        expect(plan.updates, isEmpty);
+        expect(
+          plan.conflicts.every(
+            (c) => c.reason == ConflictReason.manualDisagreement,
+          ),
+          isTrue,
+        );
+      });
+
+      test('dedicated device outranks a bare platform sample → deterministic '
+          'auto-update, no conflict', () {
+        final plan = reconciler.reconcile(
+          local: [local(3, value: 36.4)], // generic platform, no device
+          incoming: [bbt(3, value: 36.9, device: 'Oura')],
+        );
+        expect(plan.conflicts, isEmpty);
+        expect(plan.updates.single.localId, '2026-04-3');
+        expect(plan.updates.single.incoming.value, 36.9);
+      });
+
+      test('a bare platform sample never overwrites a stored dedicated-device '
+          'reading — it is superseded', () {
+        final plan = reconciler.reconcile(
+          local: [local(4, value: 36.9, device: 'Oura')],
+          incoming: [bbt(4, value: 36.4)], // generic, disagrees
+        );
+        expect(plan.conflicts, isEmpty);
+        expect(plan.updates, isEmpty);
+        expect(plan.superseded.single.incoming.value, 36.4);
+      });
+
+      test('dedicated device outranks Apple-Watch wrist', () {
+        final plan = reconciler.reconcile(
+          local: [localWrist(5, value: 36.5)],
+          incoming: [bbt(5, value: 36.9, device: 'Oura')],
+        );
+        expect(plan.conflicts, isEmpty);
+        expect(plan.updates.single.incoming.value, 36.9);
+      });
+
+      test('Apple-Watch wrist outranks a bare platform sample', () {
+        final plan = reconciler.reconcile(
+          local: [local(6, value: 36.4)], // generic
+          incoming: [wrist(6, value: 36.9)],
+        );
+        expect(plan.conflicts, isEmpty);
+        expect(plan.updates.single.incoming.value, 36.9);
+      });
+
+      test('two dedicated devices at the same tier that disagree stay a '
+          'user conflict (unchanged from p8.2)', () {
+        final plan = reconciler.reconcile(
+          local: const [],
+          incoming: [
+            bbt(7, value: 36.4, device: 'Oura'),
+            bbt(7, value: 36.9, device: 'Garmin Connect'),
+          ],
+        );
+        expect(plan.updates, isEmpty);
+        expect(
+          plan.conflicts.single.reason,
+          ConflictReason.crossDeviceDisagreement,
+        );
+        expect(plan.conflicts.single.alsoContending, isEmpty);
+      });
+
+      test('three same-tier devices disagree → ONE conflict carrying the rest '
+          'in alsoContending', () {
+        final plan = reconciler.reconcile(
+          local: const [],
+          incoming: [
+            bbt(8, value: 36.3, device: 'Oura'),
+            bbt(8, value: 36.6, device: 'Garmin Connect'),
+            bbt(8, value: 36.9, device: 'Withings Health Mate'),
+          ],
+        );
+        expect(plan.conflicts, hasLength(1));
+        final c = plan.conflicts.single;
+        expect(c.reason, ConflictReason.crossDeviceDisagreement);
+        expect(c.alsoContending, hasLength(1));
+        // every disagreeing reading is represented exactly once
+        final values = {
+          c.local.value,
+          c.incoming.value,
+          ...c.alsoContending.map((s) => s.value),
+        };
+        expect(values, {36.3, 36.6, 36.9});
+      });
+
+      test('delete the winning source → next reconcile the runner-up wins', () {
+        // Round 1: a stored generic reading, an Oura import outranks it.
+        final round1 = reconciler.reconcile(
+          local: [local(9, value: 36.4)],
+          incoming: [bbt(9, value: 36.9, device: 'Oura')],
+        );
+        expect(round1.updates.single.incoming.value, 36.9);
+
+        // The user deletes the Oura row. Only a wrist reading remains for the
+        // day; on the next sync it is what wins.
+        final round2 = reconciler.reconcile(
+          local: const [],
+          incoming: [wrist(9, value: 36.7)],
+        );
+        expect(round2.conflicts, isEmpty);
+        expect(round2.inserts.single.value, 36.7);
+      });
+
+      test('auto-resolution is fully order-independent', () {
+        final a = bbt(10, value: 36.9, device: 'Oura'); // attributed
+        final b = wrist(10, value: 36.5); // wrist
+        final c = bbt(10, value: 36.2); // generic
+        final forward = reconciler.reconcile(
+          local: const [],
+          incoming: [a, b, c],
+        );
+        final shuffled = reconciler.reconcile(
+          local: const [],
+          incoming: [c, a, b],
+        );
+        expect(forward, equals(shuffled));
+        expect(forward.hashCode, shuffled.hashCode);
+        // the Oura reading is the one that ends up stored
+        expect(forward.conflicts, isEmpty);
+        final stored = [
+          ...forward.inserts.map((s) => s.value),
+          ...forward.updates.map((u) => u.incoming.value),
+        ];
+        expect(stored, [36.9]);
+      });
+    });
   });
 }
