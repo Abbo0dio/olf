@@ -9,10 +9,14 @@ import 'package:olf_core/olf_core.dart';
 import '../support/harness.dart';
 
 /// r1 — the forecast area is one widget that renders **exactly one** child, by a
-/// fixed priority: overdue check-in > birth-control recalibration >
-/// perimenopause paused > pregnancy mode (nothing) > forecast card > nothing.
-/// A coinciding lower-priority condition adds one secondary line, never a
-/// second card. These tests pin every branch and the single-child invariant.
+/// fixed priority: birth-control recalibration > perimenopause paused >
+/// pregnancy mode (nothing) > overdue check-in > forecast card > nothing.
+///
+/// Priorities 1–3 are the conditions that withheld the prediction card in the
+/// pre-consolidation code, so this is a zero-behaviour-change refactor: an
+/// overdue prediction under any of them still shows the mode's note, never the
+/// check-in. The one consolidation win is that recalibration + a perimenopause
+/// gap collapse to one card + one secondary line instead of two stacked notes.
 void main() {
   final today = DateTime.now();
   DateTime at(int daysFromToday) => DateTime(
@@ -75,7 +79,7 @@ void main() {
       expect(find.text('Period check-in'), findsNothing);
     });
 
-    testWidgets('1. overdue check-in wins over the forecast half', (
+    testWidgets('4. overdue check-in wins over the forecast half (no modes)', (
       tester,
     ) async {
       await pumpArea(tester, area(prediction: overdue()));
@@ -85,7 +89,7 @@ void main() {
       expect(find.textContaining('Fertile window'), findsNothing);
     });
 
-    testWidgets('2. birth-control recalibration note (no prediction yet)', (
+    testWidgets('1. birth-control recalibration note (no prediction yet)', (
       tester,
     ) async {
       await pumpArea(tester, area(bcRecalActive: true));
@@ -94,7 +98,7 @@ void main() {
       expect(find.text('Dismiss'), findsOneWidget);
     });
 
-    testWidgets('2. recalibration beats a non-overdue forecast', (
+    testWidgets('1. recalibration beats a non-overdue forecast', (
       tester,
     ) async {
       await pumpArea(tester, area(prediction: upcoming(), bcRecalActive: true));
@@ -102,7 +106,22 @@ void main() {
       expect(find.text('Next period'), findsNothing);
     });
 
-    testWidgets('3. perimenopause paused note', (tester) async {
+    testWidgets(
+      '1. recalibration beats an OVERDUE prediction — no check-in, no line',
+      (tester) async {
+        await pumpArea(
+          tester,
+          area(prediction: overdue(), bcRecalActive: true),
+        );
+        expect(find.text('Learn more'), findsOneWidget); // the recal card
+        expect(find.text('Period check-in'), findsNothing);
+        expect(find.text('Next period'), findsNothing);
+        // No secondary line — nothing lower-priority carries verbatim copy here.
+        expect(find.text(perimenopauseForecastSuppressedNote), findsNothing);
+      },
+    );
+
+    testWidgets('2. perimenopause paused note', (tester) async {
       await pumpArea(
         tester,
         area(prediction: upcoming(), perimenopauseGapSuppress: true),
@@ -112,12 +131,25 @@ void main() {
       expect(find.text('Period check-in'), findsNothing);
     });
 
-    testWidgets('4. pregnancy mode → nothing, even with a prediction', (
+    testWidgets(
+      '2. perimenopause gap beats an OVERDUE prediction — no check-in',
+      (tester) async {
+        await pumpArea(
+          tester,
+          area(prediction: overdue(), perimenopauseGapSuppress: true),
+        );
+        expect(find.text(perimenopauseForecastSuppressedNote), findsOneWidget);
+        expect(find.text('Period check-in'), findsNothing);
+        expect(find.text('Log period start'), findsNothing);
+      },
+    );
+
+    testWidgets('3. pregnancy mode → nothing, even with a prediction', (
       tester,
     ) async {
       await pumpArea(
         tester,
-        area(prediction: upcoming(), pregnancyModeOn: true),
+        area(prediction: overdue(), pregnancyModeOn: true),
       );
       expect(find.text('Next period'), findsNothing);
       expect(find.text('Period check-in'), findsNothing);
@@ -130,47 +162,30 @@ void main() {
     });
   });
 
-  group('two conditions coincide → one extra secondary line, not a card', () {
-    testWidgets('overdue + recalibration → overdue card + recal line', (
-      tester,
-    ) async {
-      await pumpArea(tester, area(prediction: overdue(), bcRecalActive: true));
-      expect(find.text('Period check-in'), findsOneWidget);
-      expect(find.text(recalNote), findsOneWidget); // the secondary line
-      // …but not the standalone recalibration card.
-      expect(find.text('Learn more'), findsNothing);
-      expect(find.text('Dismiss'), findsNothing);
-    });
-
-    testWidgets('overdue + perimenopause gap → overdue card + paused line', (
-      tester,
-    ) async {
-      await pumpArea(
-        tester,
-        area(prediction: overdue(), perimenopauseGapSuppress: true),
+  group(
+    'recalibration + perimenopause gap → one card + one secondary line',
+    () {
+      testWidgets(
+        'the recalibration card shows the paused note as a sub-line',
+        (tester) async {
+          await pumpArea(
+            tester,
+            area(bcRecalActive: true, perimenopauseGapSuppress: true),
+          );
+          expect(find.text('Learn more'), findsOneWidget); // the recal card
+          expect(
+            find.text(perimenopauseForecastSuppressedNote),
+            findsOneWidget,
+          );
+          expect(find.text('Period check-in'), findsNothing);
+          expect(find.text('Next period'), findsNothing);
+        },
       );
-      expect(find.text('Period check-in'), findsOneWidget);
-      expect(find.text(perimenopauseForecastSuppressedNote), findsOneWidget);
-      expect(find.text('Next period'), findsNothing);
-    });
-
-    testWidgets(
-      'recalibration + perimenopause gap → recal card + paused line',
-      (tester) async {
-        await pumpArea(
-          tester,
-          area(bcRecalActive: true, perimenopauseGapSuppress: true),
-        );
-        expect(find.text('Learn more'), findsOneWidget); // the recal card
-        expect(find.text(perimenopauseForecastSuppressedNote), findsOneWidget);
-        expect(find.text('Period check-in'), findsNothing);
-        expect(find.text('Next period'), findsNothing);
-      },
-    );
-  });
+    },
+  );
 
   testWidgets(
-    'invariant: every mode on at once → exactly one card, one secondary line',
+    'invariant: every suppression + an overdue prediction → one card, one line',
     (tester) async {
       await pumpArea(
         tester,
@@ -181,35 +196,13 @@ void main() {
           pregnancyModeOn: true,
         ),
       );
-      // Priority 1 (overdue) is the single card shown.
-      expect(find.text('Period check-in'), findsOneWidget);
+      // Priority 1 (recalibration) is the single card shown.
+      expect(find.text('Learn more'), findsOneWidget);
+      // The overdue check-in the wrong ordering would surface is suppressed.
+      expect(find.text('Period check-in'), findsNothing);
       expect(find.text('Next period'), findsNothing);
-      // No other card rendered.
-      expect(find.text('Learn more'), findsNothing);
-      // Exactly one secondary line — the highest-priority coinciding condition
-      // (recalibration), and only it.
-      expect(find.text(recalNote), findsOneWidget);
-      expect(find.text(perimenopauseForecastSuppressedNote), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'reduceSpoken: the secondary line is folded into the card semantics',
-    (tester) async {
-      await pumpArea(
-        tester,
-        area(prediction: overdue(), bcRecalActive: true, reduceSpoken: true),
-      );
-      // Visible copy is unchanged…
-      expect(find.text('Period check-in'), findsOneWidget);
-      expect(find.text(recalNote), findsOneWidget);
-      // …and the redacted read-out still carries the secondary line.
-      expect(
-        find.bySemanticsLabel(
-          RegExp('Period check-in available.*${RegExp.escape(recalNote)}'),
-        ),
-        findsOneWidget,
-      );
+      // Exactly one secondary line — the perimenopause note, once.
+      expect(find.text(perimenopauseForecastSuppressedNote), findsOneWidget);
     },
   );
 
@@ -226,11 +219,12 @@ void main() {
         );
 
     testWidgets(
-      'several modes on at once still renders a single forecast-area card',
+      'several suppression modes on at once → a single forecast-area card',
       (tester) async {
         final db = memoryDb();
         // A regular history far in the past → the prediction is overdue and a
-        // perimenopause gap is in play.
+        // perimenopause gap is in play (same fixture as
+        // perimenopause_screen_test.dart "long absence: forecast is paused").
         var start = daysAgo(400 + 28 * 6);
         for (var i = 0; i < 6; i++) {
           await seedStart(db, start);
@@ -246,16 +240,15 @@ void main() {
           tester,
           overrides: [dbOverride(db)],
           body: () async {
-            // Overdue check-in wins; no other forecast-area card co-renders.
-            expect(find.text('Period check-in'), findsOneWidget);
-            expect(find.text('Next period'), findsNothing);
-            expect(find.text('Learn more'), findsNothing);
+            // Recalibration (priority 1) wins; no check-in, no forecast.
             expect(find.byType(ForecastArea), findsOneWidget);
-            // The perimenopause note appears at most once (as a secondary line
-            // here it is suppressed in favour of the recalibration line).
+            expect(find.text('Learn more'), findsOneWidget);
+            expect(find.text('Period check-in'), findsNothing);
+            expect(find.text('Next period'), findsNothing);
+            // The perimenopause note appears exactly once — as the sub-line.
             expect(
               find.text(perimenopauseForecastSuppressedNote),
-              findsNothing,
+              findsOneWidget,
             );
           },
         );

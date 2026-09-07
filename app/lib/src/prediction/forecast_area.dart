@@ -10,23 +10,26 @@ import 'prediction_format.dart';
 
 /// The single "what goes where the forecast lives" widget on the home screen.
 ///
-/// Replaces the old loose stack of mutually-exclusive blocks
-/// (`_PredictionCard`, `_RecalibrationNote`, `_PerimenopausePausedNote`), each
-/// on its own independent condition, which could pile up when a user had two
-/// modes on at once. This renders **exactly one** child (or nothing), by a
-/// fixed priority — first match wins:
+/// Replaces the old loose stack of independently-guarded blocks
+/// (`_PredictionCard`, `_RecalibrationNote`, `_PerimenopausePausedNote`), which
+/// could pile up when a user had two modes on at once. This renders **exactly
+/// one** child (or nothing), by a fixed priority — first match wins:
 ///
-/// 1. overdue check-in       — `prediction.isOverdue`
-/// 2. birth-control recal.   — [bcRecalActive]
-/// 3. perimenopause paused   — [perimenopauseGapSuppress]
-/// 4. pregnancy mode on      — render nothing (the week view is the mode screen)
-/// 5. forecast card          — default, when `prediction != null`
-/// 6. nothing                — no prediction yet
+/// 1. birth-control recalibration — [bcRecalActive]
+/// 2. perimenopause paused        — [perimenopauseGapSuppress]
+/// 3. pregnancy mode on           — render nothing (the week view is the mode
+///    screen)
+/// 4. overdue check-in            — `prediction.isOverdue`
+/// 5. forecast card               — default, when `prediction != null`
+/// 6. nothing                     — no prediction yet
 ///
-/// When a *lower*-priority condition also holds, the shown card gets **one**
-/// extra secondary line (never a second card), reusing that condition's own
-/// copy verbatim. Pregnancy mode as a coinciding condition adds no line — there
-/// is no existing verbatim copy for it.
+/// Priorities 1–3 are the three conditions that withheld the prediction card in
+/// the pre-consolidation code (`!bcRecalActive && !perimenopauseGapSuppress &&
+/// !pregnancyModeOn`), so an overdue prediction under any of them shows the
+/// mode's note, never the check-in — behaviour is unchanged. The one
+/// consolidation win: if recalibration **and** a perimenopause gap both hold,
+/// the recalibration card shows with the perimenopause note as its single
+/// secondary line, instead of two stacked notes.
 ///
 /// `_CorrectionNotice` (transient, `liveRegion`) and `_PregnancyStatusCard`
 /// (post-loss/birth recovery, which already suppresses the prediction) stay
@@ -50,7 +53,8 @@ class ForecastArea extends StatelessWidget {
   /// The current statistical prediction, or null when there isn't one yet.
   final CyclePrediction? prediction;
 
-  /// A hormonal birth-control change is still settling (p7.8).
+  /// A hormonal birth-control change is still settling (p7.8) — withholds the
+  /// forecast entirely.
   final bool bcRecalActive;
 
   /// Perimenopause mode is on and history shows a long gap / 12+ months since
@@ -91,41 +95,32 @@ class ForecastArea extends StatelessWidget {
   }
 
   Widget? _child() {
-    final p = prediction;
-
-    // 1. Overdue check-in — always wins, even while a mode would otherwise
-    //    withhold the forecast. A late period is the one thing that always
-    //    warrants a calm prompt to log the real start.
-    if (p != null && p.isOverdue) {
-      return _PredictionCard(
-        prediction: p,
-        observedFertileWindow: observedFertileWindow,
-        reduceSpoken: reduceSpoken,
-        pcosMode: pcosMode,
-        perimenopauseMode: perimenopauseMode,
-        onLogPeriodStart: onLogPeriodStart,
-        secondaryLine: _coincidingNote(shown: _Shown.overdue),
-      );
-    }
-
-    // 2. Birth-control recalibration.
+    // 1. Birth-control recalibration — withholds the forecast while a hormonal
+    //    change settles. If a perimenopause gap also holds, its note becomes
+    //    this card's one secondary line rather than a second stacked note.
     if (bcRecalActive) {
       return _RecalibrationNote(
         onDismiss: onDismissRecalibration,
-        secondaryLine: _coincidingNote(shown: _Shown.recalibration),
+        secondaryLine: perimenopauseGapSuppress
+            ? perimenopauseForecastSuppressedNote
+            : null,
       );
     }
 
-    // 3. Perimenopause paused. Only pregnancy mode can sit below it, and there
-    //    is no verbatim copy for that — so it never carries a secondary line.
+    // 2. Perimenopause paused — a long gap withholds the forecast.
     if (perimenopauseGapSuppress) {
       return const _PerimenopausePausedNote();
     }
 
-    // 4. Pregnancy mode on — the week view is the mode screen.
+    // 3. Pregnancy mode on — the week view is the mode screen.
     if (pregnancyModeOn) return null;
 
-    // 5. The forecast card (not overdue, no mode withholding it).
+    // 4 & 5. The prediction card — overdue check-in or forecast, chosen inside
+    //        the widget by `prediction.isOverdue`. Only reached when none of the
+    //        three suppression conditions above hold, matching the pre-r1
+    //        `!bcRecalActive && !perimenopauseGapSuppress && !pregnancyModeOn`
+    //        guard exactly.
+    final p = prediction;
     if (p != null) {
       return _PredictionCard(
         prediction: p,
@@ -140,21 +135,7 @@ class ForecastArea extends StatelessWidget {
     // 6. Nothing to show yet.
     return null;
   }
-
-  /// The single secondary line for the highest-priority *other* active
-  /// condition below [shown] that has its own verbatim copy, or null.
-  String? _coincidingNote({required _Shown shown}) {
-    if (shown != _Shown.recalibration && bcRecalActive) {
-      return BirthControlRecalibrationContent.predictionCardNote;
-    }
-    if (perimenopauseGapSuppress) {
-      return perimenopauseForecastSuppressedNote;
-    }
-    return null;
-  }
 }
-
-enum _Shown { overdue, recalibration }
 
 /// The headline forecast: the next-period and fertile windows as **ranges**
 /// with a confidence note — or, when a period is late, a calm check-in that
@@ -168,7 +149,6 @@ class _PredictionCard extends StatelessWidget {
     this.pcosMode = false,
     this.perimenopauseMode = false,
     this.observedFertileWindow,
-    this.secondaryLine,
   });
 
   final CyclePrediction prediction;
@@ -187,10 +167,6 @@ class _PredictionCard extends StatelessWidget {
   /// Fertile window observed from this cycle's cervical-mucus notes (p1.6).
   /// Shown as an extra line alongside the statistical estimate when present.
   final DateRange? observedFertileWindow;
-
-  /// r1: one extra line when a lower-priority mode condition also holds (e.g.
-  /// overdue *and* birth-control recalibration). Existing copy, reused verbatim.
-  final String? secondaryLine;
 
   @override
   Widget build(BuildContext context) {
@@ -281,13 +257,6 @@ class _PredictionCard extends StatelessWidget {
             style: theme.textTheme.bodySmall?.copyWith(color: onColor),
           ),
         ],
-        if (secondaryLine != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            secondaryLine!,
-            style: theme.textTheme.bodySmall?.copyWith(color: onColor),
-          ),
-        ],
       ],
     );
   }
@@ -321,13 +290,6 @@ class _PredictionCard extends StatelessWidget {
             child: const Text('Log period start'),
           ),
         ),
-        if (secondaryLine != null) ...[
-          const SizedBox(height: 12),
-          Text(
-            secondaryLine!,
-            style: theme.textTheme.bodySmall?.copyWith(color: onColor),
-          ),
-        ],
       ],
     );
   }
@@ -336,16 +298,13 @@ class _PredictionCard extends StatelessWidget {
     // p5.3: with "Reduce spoken detail" on, the forecast dates are not spoken —
     // just that a prediction is on screen.
     if (reduceSpoken) {
-      final base = prediction.isOverdue
+      return prediction.isOverdue
           ? 'Period check-in available. Open the calendar for details.'
           : 'Next period prediction available. Open the calendar for the dates.';
-      return secondaryLine == null ? base : '$base $secondaryLine';
     }
     if (prediction.isOverdue) {
-      final base =
-          'Period check-in. '
+      return 'Period check-in. '
           '${overdueHeadline(prediction.daysPastExpected!)}. $overdueBody';
-      return secondaryLine == null ? base : '$base $secondaryLine';
     }
     final signs = observedFertileWindow == null
         ? ''
@@ -356,11 +315,10 @@ class _PredictionCard extends StatelessWidget {
         : perimenopauseMode
         ? ' $perimenopauseWiderIntervalNote'
         : '';
-    final secondary = secondaryLine == null ? '' : ' $secondaryLine';
     return 'Next period estimated ${formatDateRange(prediction.nextPeriod)}, '
         'most likely ${formatDay(prediction.nextPeriodExpected)}. '
         'Fertile window estimated ${formatDateRange(prediction.fertileWindow)}. '
-        '$signs${confidenceNote(prediction)}$widerNote$secondary';
+        '$signs${confidenceNote(prediction)}$widerNote';
   }
 }
 
@@ -374,8 +332,9 @@ class _RecalibrationNote extends StatelessWidget {
 
   final VoidCallback onDismiss;
 
-  /// r1: one extra line when a lower-priority mode condition also holds (e.g.
-  /// recalibration *and* a perimenopause gap). Existing copy, reused verbatim.
+  /// r1: one extra line when a perimenopause gap also holds — the two notes
+  /// used to stack. Existing copy (`perimenopauseForecastSuppressedNote`),
+  /// reused verbatim.
   final String? secondaryLine;
 
   @override
