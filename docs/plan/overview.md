@@ -10,7 +10,7 @@
 | **5** | Accessibility & design polish | `DONE` | WCAG 2.2 AA audit passed; low-end perf verified; discreet icon/name option |
 | **6** | Health-platform interop & doctor export | `DONE` | Two-way Apple Health / Health Connect sync; doctor-ready PDF |
 | **7** | Life-stage & condition modes | `DONE` | Pregnancy, loss/birth, postpartum, PCOS, endo, PMDD, perimenopause modes shipped |
-| **8** | Passive wearable integration | `TODO` | Apple Watch companion + ≥1 third-party wearable; passive phase inference |
+| **8** | Passive wearable integration | `DONE` | Apple Watch wrist-temp path + Oura/Garmin via the platform + passive cycle-phase inference (backtested, correctable) + multi-source arbitration shipped; watch companion (p8.1b) & direct cloud API (p8.3) deferred to backlog |
 | **9** | Optional zero-knowledge encrypted sync | `TODO` | Opt-in multi-device sync; local-first stays default; deletion propagates |
 | **10** | AI assistant + advanced insights | `TODO` | AI assistant privacy design documented in the threat model (on-device / zero-knowledge, no health data to a third party); advanced insights are useful and non-alarming — no diagnosis language. Free, like everything else. |
 | **11** | Educational content & privacy-safe community | `TODO` | Named-reviewer content system; anonymous community with moderation |
