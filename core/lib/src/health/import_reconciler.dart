@@ -377,8 +377,14 @@ class ImportReconciler {
     // "matched a stored row" and keep the single-source plan shape unchanged.
     final pendingLocalIds = <String>{};
     // p8.6: the actual sample behind each pending view, so a later higher-tier
-    // reading for the same day can replace it in [inserts].
+    // reading for the same day can replace the running winner.
     final pendingSampleByLocalId = <String, HealthSample>{};
+    // p8.6: the update currently emitted for a slot whose stored row a
+    // higher-tier reading has already won — so a still-higher reading can
+    // retract it, and a same-tier disagreement can withdraw it entirely
+    // ("no blind update" when the day becomes the user's call).
+    final slotUpdateByKey =
+        <(HealthSampleType, DateTime), ReconciliationUpdate>{};
 
     // Process in a stable order so the plan is independent of the caller's
     // input ordering.
@@ -460,27 +466,69 @@ class ImportReconciler {
         sourceDevice: sample.sourceDevice,
       );
 
+      final slot = (sample.type, dateOnly(sample.day));
+
       if (localTier != incomingTier) {
         if (incomingTier.outranks(localTier)) {
-          if (matchIsPending) {
-            // Replace the earlier, lower-tier same-batch insert.
-            final loser = pendingSampleByLocalId[match.localId];
-            if (loser != null) inserts.remove(loser);
+          // The incoming reading beats the slot's current occupant. It becomes
+          // the occupant for the rest of the pass (a pending view), and we
+          // record which reading it displaced.
+          final displaced = matchIsPending
+              ? pendingSampleByLocalId[match.localId]
+              : null;
+          final priorUpdate = slotUpdateByKey[slot];
+
+          if (priorUpdate != null) {
+            // The occupant was a stored row we had already auto-updated once —
+            // retract that update, supersede the reading it carried, and
+            // re-point the update at the same stored row with the new winner.
+            updates.remove(priorUpdate);
+            if (displaced != null) {
+              superseded.add(
+                ReconciliationSupersede(
+                  localId: priorUpdate.localId,
+                  incoming: displaced,
+                ),
+              );
+            }
+            final u = ReconciliationUpdate(
+              localId: priorUpdate.localId,
+              incoming: sample,
+            );
+            updates.add(u);
+            slotUpdateByKey[slot] = u;
+          } else if (matchIsPending) {
+            // The occupant was an insert from this same batch — swap it out.
+            if (displaced != null) {
+              inserts.remove(displaced);
+              superseded.add(
+                ReconciliationSupersede(
+                  localId: match.localId,
+                  incoming: displaced,
+                ),
+              );
+            }
             inserts.add(sample);
+          } else {
+            // The occupant is an untouched stored row — overwrite it in place,
+            // record that it lost the tier race, and remember the update so a
+            // still-higher reading (or a same-tier dispute) can pull it back.
             superseded.add(
               ReconciliationSupersede(
                 localId: match.localId,
-                incoming: loser ?? sample,
+                incoming: _asSample(match),
               ),
             );
-            registerPendingInsert(sample);
-          } else {
-            updates.add(
-              ReconciliationUpdate(localId: match.localId, incoming: sample),
+            final u = ReconciliationUpdate(
+              localId: match.localId,
+              incoming: sample,
             );
+            updates.add(u);
+            slotUpdateByKey[slot] = u;
           }
+          registerPendingInsert(sample);
         } else {
-          // The stored / earlier reading outranks this one — keep it, drop this.
+          // The occupant outranks this reading — keep it, drop this one.
           superseded.add(
             ReconciliationSupersede(localId: match.localId, incoming: sample),
           );
@@ -488,13 +536,19 @@ class ImportReconciler {
         continue;
       }
 
-      // p8.2: same tier, but two *different* known devices disagree. olf does
-      // not arbitrate — hand it to the user. A device revising *itself*, or a
-      // side whose tag olf does not recognise, falls through below.
+      // p8.2: same tier, but two *different* recognised devices disagree. olf
+      // does not arbitrate — hand it to the user. A device revising *itself*,
+      // or a side whose tag olf does not recognise, falls through below.
       final bothDevicesKnown =
           isAttributedDevice(match.sourceDevice) &&
           isAttributedDevice(sample.sourceDevice);
       if (bothDevicesKnown && match.sourceDevice != sample.sourceDevice) {
+        // "No blind update": if a higher-tier reading had already auto-updated
+        // this slot's stored row earlier in the pass, withdraw that update —
+        // the day is the user's call now. The stored row is left as-is
+        // (carried) until they resolve the conflict.
+        final priorUpdate = slotUpdateByKey.remove(slot);
+        if (priorUpdate != null) updates.remove(priorUpdate);
         conflicts.add(
           ReconciliationConflict(
             localId: match.localId,
@@ -595,6 +649,20 @@ class ImportReconciler {
       isSleepingWrist: sample.isSleepingWrist,
     );
   }
+
+  /// A point [HealthSample] mirror of a stored [view] — used only to record a
+  /// stored row in [ReconciliationPlan.superseded] when a higher-tier reading
+  /// has overwritten it (p8.6). Never applied by the caller.
+  static HealthSample _asSample(LocalSampleView view) => HealthSample.point(
+    type: view.type,
+    at: dateOnly(view.day),
+    value: view.value,
+    unit: view.unit,
+    source: view.source,
+    externalId: view.externalId,
+    sourceDevice: view.sourceDevice,
+    isSleepingWrist: view.isSleepingWrist,
+  );
 
   LocalSampleView? _matchFor(
     HealthSample sample,

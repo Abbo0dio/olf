@@ -580,6 +580,108 @@ void main() {
         ];
         expect(stored, [36.9]);
       });
+
+      // ---- stored non-manual row + >=2 incoming (PR #87 review blocker) ----
+      // The running winner must occupy the slot for the rest of the pass, so a
+      // later same-day reading reconciles against it — not the original stored
+      // row.
+
+      List<double> storedValue(ReconciliationPlan p) => [
+        ...p.inserts.map((s) => s.value),
+        ...p.updates.map((u) => u.incoming.value),
+      ];
+
+      test(
+        'stored bare-platform row + [attributed, wrist] (either order) → the '
+        'attributed reading is stored; wrist and the stored row are '
+        'superseded; no conflict',
+        () {
+          for (final order in [
+            [bbt(11, value: 36.50, device: 'Oura'), wrist(11, value: 36.90)],
+            [wrist(11, value: 36.20), bbt(11, value: 36.50, device: 'Oura')],
+          ]) {
+            final plan = reconciler.reconcile(
+              local: [local(11, value: 36.40)], // genericPlatform, stored
+              incoming: order,
+            );
+            expect(plan.conflicts, isEmpty, reason: '$order');
+            expect(storedValue(plan), [36.50], reason: '$order');
+            // both the wrist reading and the displaced stored row are recorded
+            expect(
+              plan.superseded.map((s) => s.incoming.value).toSet(),
+              containsAll(<double>[36.40]),
+              reason: '$order',
+            );
+            expect(
+              plan.superseded.any((s) => s.incoming.isSleepingWrist),
+              isTrue,
+              reason: 'the wrist reading is superseded ($order)',
+            );
+          }
+        },
+      );
+
+      test('stored bare-platform row + [Oura, Garmin] → exactly one '
+          'crossDeviceDisagreement, no blind update', () {
+        final plan = reconciler.reconcile(
+          local: [local(12, value: 36.40)], // genericPlatform, stored
+          incoming: [
+            bbt(12, value: 36.50, device: 'Oura'),
+            bbt(12, value: 36.90, device: 'Garmin Connect'),
+          ],
+        );
+        expect(
+          plan.conflicts.single.reason,
+          ConflictReason.crossDeviceDisagreement,
+        );
+        // the day is the user's call now — nothing is auto-written
+        expect(plan.updates, isEmpty);
+        expect(plan.inserts, isEmpty);
+        // the two devices are both represented in the conflict
+        final values = {
+          plan.conflicts.single.local.value,
+          plan.conflicts.single.incoming.value,
+          ...plan.conflicts.single.alsoContending.map((s) => s.value),
+        };
+        expect(values, containsAll(<double>[36.50, 36.90]));
+      });
+
+      test(
+        'stored bare-platform row + [Oura, Garmin] is order-independent',
+        () {
+          final a = bbt(13, value: 36.50, device: 'Oura');
+          final b = bbt(13, value: 36.90, device: 'Garmin Connect');
+          final forward = reconciler.reconcile(
+            local: [local(13, value: 36.40)],
+            incoming: [a, b],
+          );
+          final reverse = reconciler.reconcile(
+            local: [local(13, value: 36.40)],
+            incoming: [b, a],
+          );
+          expect(forward, equals(reverse));
+          expect(forward.hashCode, reverse.hashCode);
+        },
+      );
+
+      test('stored bare-platform row + [wrist, Oura, Garmin] → the two devices '
+          'tie for review, the wrist reading is superseded', () {
+        final plan = reconciler.reconcile(
+          local: [local(14, value: 36.40)],
+          incoming: [
+            wrist(14, value: 36.20),
+            bbt(14, value: 36.55, device: 'Oura'),
+            bbt(14, value: 36.95, device: 'Garmin Connect'),
+          ],
+        );
+        expect(plan.conflicts, hasLength(1));
+        expect(
+          plan.conflicts.single.reason,
+          ConflictReason.crossDeviceDisagreement,
+        );
+        expect(plan.updates, isEmpty);
+        expect(plan.superseded.any((s) => s.incoming.isSleepingWrist), isTrue);
+      });
     });
   });
 }
