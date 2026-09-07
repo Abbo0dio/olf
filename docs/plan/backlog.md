@@ -417,4 +417,28 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   security-surface change in the project; design + review as its own effort. — orchestrator
   during the Phase 8 close.
 
+- **UI / UX refresh — refinement pass (2026-09-08).** Full slice breakdown in
+  `docs/plan/ui-refresh.md`; live status in `.herdsman/state.md` `## Tasks`. From the
+  2026-09-08 IA review: home is one unbounded scroll, there are two overlapping day-log
+  sheets, and `settings_page.dart` (933 lines) is doing duty as the app menu. Slices:
+  **r1** consolidate the home forecast/banner stack into one `ForecastArea` widget ·
+  **r2** merge `showFlowQuickLog` + `showSymptomDaySheet` into one date-titled day-log sheet ·
+  **r3a** 3-tab bottom nav (Home / Calendar / Patterns) + "Log" FAB, month grid + history
+  move to the Calendar tab · **r3b** the Patterns tab (accuracy, cycle stats, BBT history,
+  correlations, active-mode views) · **r4** Settings becomes settings-only + a "Data &
+  sharing" screen · **r5a/b/c** aesthetic consistency (cards via the theme, one accent,
+  lazy lists, shared empty state, subtle motion, calendar swipe). Feature roadmap
+  (phases 9–13) stays paused; this is refinement of phases 0–8, run as dispatched slices
+  because it touches `screen_nav` + the a11y/perf gates. — orchestrator, 2026-09-08.
+- **UI refresh deferrals (2026-09-08) — not in the r1–r5 pass:**
+  (a) **4-phase cycle-wheel palette tokens.** `cycle_wheel.dart` maps the phases to
+  `primary / secondary / tertiary / outline` — three near-identical sage greens + a grey,
+  so the glance doesn't read. Define 4 explicit low-chroma, hue-spaced, AA-verified phase
+  tokens with `a11y/theme_contrast_test.dart` extended as the gate. Its own design task;
+  risk of drifting toward the "flowery" look the product rejects (§4 / §9(7)) — keep chroma
+  low. (b) **Day-cell simplification.** The 40px calendar cell packs day number + a
+  4-segment flow bar + a symptom dot — cramped at 2.0× text scaling; reduce to number +
+  one intensity-coloured underline + one symptom dot, 4-segment detail moves into the
+  day-log sheet. See `docs/plan/ui-refresh.md` "Deferred to backlog". — orchestrator, 2026-09-08.
+
 - (add more here)
