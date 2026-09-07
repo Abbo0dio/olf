@@ -2,6 +2,89 @@
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-07 — **p8.6 multi-source arbitration ships with NO schema change (option a); the
+  raw-readings archive is deferred to backlog.** p8.6's acceptance criteria ask that "every
+  raw reading is retained … changing the precedence or deleting the winning source re-resolves
+  without data loss." olf stores **one row per `(type, day)`** (`bbt_entries` / `daily_flows`
+  PK is `date`), so a literal reading of that needs a new `raw_health_readings` table with the
+  per-day value demoted to a derived cache — a large change (every reader of those two tables,
+  the backup format, retention, a v11→v12 migration + matrix + `*_migration_test` + backup
+  round-trip). **Approved option (a):** the precedence policy runs inside the reconciler's
+  existing decision point — a `crossDeviceDisagreement` (p8.2) with a clear rank winner becomes
+  a deterministic `ReconciliationUpdate` instead of a user conflict; the losing reading is not
+  persisted by olf but stays in the OS health store, which is the source of truth and whose
+  import is idempotent, so a re-sync re-runs the policy ("delete the winning source → the
+  runner-up wins next sync"). **Rejected option (b)** (the `raw_health_readings` table) for v1:
+  it buys local retro-re-resolution and offline loser-provenance, and **v1 uses neither** —
+  the precedence order is fixed for v1 (the plan already permits a "fixed, documented order"),
+  and there is no per-user precedence UI. **Acceptance criterion relaxed** accordingly (see
+  `phase-08.md` #### p8.6): "reversible at the platform level," with the documented v1
+  limitation that changing the precedence order later would not retroactively re-resolve past
+  days without a re-pull. The `raw_health_readings` table is on the backlog, to land only
+  alongside a per-user precedence feature. The precedence function is pure `core` and stays
+  the seam that option (b) would build on. Resolver function never persisted either way.
+  — orchestrator, §5 ruling during p8.6 negotiation.
+
+- 2026-09-07 — **p8.2 device provenance: one minimal additive `ImportReconciler` clause is
+  approved so cross-device disagreement is detected, not silently merged.** The p8.2 dispatch
+  said "cross-device reconciliation stays deterministic through the **unchanged**
+  `ImportReconciler`" **and** "a material disagreement is a reviewable conflict, never silently
+  overwrite data". Worker 1 showed these can't both hold as written: two devices that both sync
+  to one platform (Oura + Garmin → Apple Health) arrive with the same `source` enum
+  (`appleHealth`), so the existing `crossSourceDisagreement` path (gated on `match.source !=
+  sample.source`) never fires; and two incoming rows for a not-yet-stored `(type, day)` are
+  never compared at all (`byTypeDay` is built from local rows only) → both hit `inserts`, the
+  day-keyed upsert in `HealthImportService` keeps the last writer, the other reading is lost
+  with no conflict and no trace. The plan's own floor for p8.2 is "must at least not dupe or
+  **clobber**" and the phase §9 ref is "no data loss on sync" — so **option B (ship labelling
+  only, reword the criterion away, let last-writer-wins stand) was rejected**: it ships a
+  silent-data-loss bug. **Option C (synthesise the conflict inside `HealthImportService`) was
+  rejected**: it scatters conflict semantics out of the one pure component whose contract is
+  "never dupe, never clobber", and needs a fake `LocalSampleView` for the no-local-row case.
+  **Approved option A** — additive, not a fork: thread the nullable `sourceDevice` (the column
+  p8.2 adds anyway) through `HealthSample` + `LocalSampleView`; register `inserts` into
+  `byTypeDay` as they accumulate so a second incoming for the same fresh `(type, day)` is
+  matched; add `ConflictReason.crossDeviceDisagreement` for a `(type, day)` match that is
+  **same `source`, different non-null `sourceDevice`, values beyond `tolerance`**. `externalId`
+  match still pre-empts; within-`tolerance` agreement still skips regardless of device;
+  same-`sourceDevice` or both-null intra-batch disagreement stays a deterministic
+  last-by-`_stableOrder` update (a device revising itself / unattributable legacy rows — not a
+  conflict a user could resolve). **No precedence or arbitration in p8.2** — the user resolves
+  on the existing `conflict_review_screen`; **p8.6 owns the precedence policy** and now sits on
+  a reconciler that *detects* cross-device disagreement rather than one that silently merged it.
+  Single-source behaviour is byte-for-byte unchanged, regression-locked by the existing
+  reconciler suite plus an explicit "single source, any input order → identical plan" test
+  (~15 lines in the reconciler + model threading). Licensed by the Phase 8 phase-wide
+  constraint "a source that needs a genuinely new ingestion shape flags it at negotiation".
+  Also corrected in the plan: `daily_flows` was created at **v3** (not v5), so the v11
+  migration inner guards are `from >= 3` / `from >= 5` (v7 per-table precedent).
+  — orchestrator, §5 ruling during p8.2 negotiation.
+
+- 2026-09-06 — **p8.1a Apple Watch sleeping-wrist temperature stores in `bbt_entries` behind a
+  `measurement_kind` column; `schemaVersion` 9→10.** `HKQuantityTypeIdentifier.appleSleepingWristTemperature`
+  is a *sleeping wrist* measurement, not a *basal body* temperature. **Rejected** a dedicated
+  `wrist_temperature` table: the p6.1 `ImportReconciler` matches by `(type, day)`, so a
+  separate table makes a wrist import and a manual BBT day independent and the p8.1a criterion
+  "the **unchanged** reconciler conflicts a wrist import against a manual BBT day" becomes
+  impossible without touching the reconciler. **Rejected** unmarked reuse of `tempCelsius`:
+  `thermalShift` (p7.3), the BBT chart (p1.6), `dailyFertilityScore` (p7.3) and the doctor PDF
+  (p6.5) would silently mix sleeping-wrist with basal-body semantics, and the UI can't show
+  passive vs typed distinctly. **Approved** option (a): `measurement_kind` `TEXT NOT NULL
+  DEFAULT 'basal'` on `bbt_entries` (`enum BbtMeasurementKind { basal, sleepingWrist }`),
+  `if (from < 10 && to >= 10) { if (from >= 5) m.addColumn(...) }` (the p6.1 v7 column-add
+  precedent). `HealthImportService` reads the bridge value as `HealthSampleType.wristTemperature`,
+  re-types to `basalBodyTemperature` only for the `reconcile()` `(type, day)` match, stamps
+  `measurementKind: sleepingWrist` on `apply`. **Negotiation condition:** every existing
+  `bbt_entries` temperature reader is audited to filter `measurement_kind = 'basal'` so p8.1a
+  is a zero-behaviour-change addition; p8.5 is where sleeping-wrist deliberately feeds
+  inference. `source_device` (free-form multi-device attribution) is **deferred to p8.2**
+  where Oura/Garmin coexist — for p8.1a, `measurement_kind == sleepingWrist` + `source ==
+  appleHealth` already uniquely identifies an Apple Watch. HRV/sleep stay declared-but-unmapped
+  (each needs a new `HealthSampleType`/`HealthUnit` or an interval-aggregation path — not small)
+  → p8.5. Full migration deliverable (g.dart regen, real `schema dump` → `drift_schema_v10`,
+  `_dumpedVersions` += 10, `migration_matrix_test` → v10, `wrist_temp_migration_test.dart`,
+  backup round-trip) ships in PR #84. — orchestrator, §5 ruling during p8.1a negotiation.
+
 - 2026-09-06 — **p7.6 PMDD daily rating gets a dedicated `pmdd_ratings` table; `schemaVersion` 8→9.**
   A daily multi-symptom rating is a `(date, item, rating)` series — it fits neither p7.5's
   `pain_entries` (one row/day, single intensity) nor the p1.5 presence-only

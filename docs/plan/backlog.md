@@ -381,4 +381,40 @@ Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases la
   time-series chart** — the "pain over time" view reuses the p7.4 `CorrelationChart`
   (cycle-phase-banded); a standalone dated-line widget was out of scope against that AC. —
   noted by worker: 1 during p7.5.
+- **p8.6 (2026-09-07) — local `raw_health_readings` archive.** Deferred at the p8.6 §5
+  negotiation (option (a) shipped — no schema change; arbitration runs inside the reconciler
+  and the loser stays in the OS health store). A per-day multi-source archive, with the
+  `bbt_entries` / `daily_flows` value demoted to a derived cache, would buy **local**
+  retro-re-resolution when the precedence order changes and **offline** loser-provenance —
+  neither of which v1 uses (the order is fixed for v1 and there is no per-user precedence UI).
+  Full v11→v12 migration deliverable when it lands (guarded `createTable`, g.dart regen + real
+  `schema dump` → `drift_schema_v12` + `schema_v12.dart` + `_dumpedVersions += 12`,
+  `migration_matrix_test` → v12, a dedicated `*_migration_test.dart`, backup round-trip; the
+  table joins `BackupService.tableOrder` + `RetentionService.deleteWhere`). Earns its keep
+  only alongside a per-user precedence feature. See `docs/plan/decisions.md` 2026-09-07 and
+  `phase-08.md` #### p8.6. — noted by orchestrator during p8.6 negotiation.
+
+- **p8.1b (2026-09-07) — watchOS SwiftUI companion app + complication.** Deferred at the
+  Phase 8 close. A glanceable current-cycle-phase view (mirrors p1.12 `currentCyclePhase`) +
+  the last passive temperature + ≥1 watch-face complication, phone↔watch over App Group /
+  `WatchConnectivity` (no network, no cycle data leaves the device). §5-heavy: a new Xcode
+  watchOS target under the existing app id, its own HealthKit entitlement + usage strings, a
+  CI compile lane for the target (no signing). Pure payload codec unit-tested; real paired-
+  device behaviour is a p0.5 smoke item. Full spec: `phase-08.md` #### p8.1b. Pick up as
+  dedicated work — the Phase 8 hard exit gate was met without it. — orchestrator during the
+  Phase 8 close.
+
+- **p8.3 (2026-09-07) — direct wearable cloud API (WHOOP / Oura Cloud).** Deferred at the
+  Phase 8 close (the exit gate explicitly permits "ships or is recorded as a backlog
+  deferral"). For a wearable that does not reliably write to a health platform (WHOOP) or
+  where the cloud gives richer data (Oura). Adds an OAuth2 client (creds via build-time
+  config, not committed), the first real outbound egress through `OlfHttpClient` (pin/verify
+  per p2.6), a `flutter_secure_storage` token store, and a `docs/threat-model.md`
+  new-boundary entry (new trust boundary + egress; olf still *uploads nothing* — pull only).
+  Opt-in from "Apps & export", explicit fetch-only consent, revoke deletes the token,
+  imported readings run the same `ImportReconciler` + retention. Every acceptance criterion
+  is a negotiation point — resolve before code. Full spec: `phase-08.md` #### p8.3. Largest
+  security-surface change in the project; design + review as its own effort. — orchestrator
+  during the Phase 8 close.
+
 - (add more here)
