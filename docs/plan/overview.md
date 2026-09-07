@@ -17,6 +17,14 @@
 | **12** | Scale & defensibility (ISO 27001, optional FDA) | `TODO` | compliance ledger complete; FDA decision recorded |
 | **13** | Desktop app provision (separate, lean) | `TODO` | Separate desktop shell reusing `core`; zero added weight to mobile |
 
+**Roadmap paused after Phase 8 (2026-09-07).** Phases 0–8 are `DONE` and the app is
+feature-complete for its current scope. Near-term work is **testing, functionality
+hardening, and refinement** of that scope — not new phases. Phases 9–13 stay as the
+eventual roadmap and resume when the stabilisation pass is done. The herdsman phase/slice
+cadence is on hold; hardening is tracked against `backlog.md` + the §9 follow-up list. See
+`decisions.md` (2026-09-07). Release `v1.2.0` brings the downloadable build up to everything
+on `main` through the Phase 8 close.
+
 Cross-cutting work (compliance ledger, release/store readiness, threat model) is tracked in `cross-cutting.md`.
 
 ---

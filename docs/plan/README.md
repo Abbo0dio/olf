@@ -5,6 +5,11 @@ The living roadmap for olf, split out of the old monolithic `DEVELOPMENT_PLAN.md
 [`../../requirements.md`](../../requirements.md) is the source of truth for *what*
 the product must do.
 
+> **Roadmap paused after Phase 8 (2026-09-07).** Phases 0–8 are `DONE`. Near-term work is
+> testing / hardening / refinement of the current scope, not new phases; the herdsman
+> phase-slice cadence is on hold. Phases 9–13 remain the eventual roadmap. See `overview.md`
+> and `decisions.md` (2026-09-07).
+
 | File | Holds |
 |---|---|
 | `conventions.md` | How the plan is used, guiding principles, foundational technical decisions. Stable — read once. |
