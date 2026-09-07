@@ -35,7 +35,7 @@ Full Phase 8 slice scope: `docs/plan/phases/phase-08.md`.
 
 ## In-flight PRs
 
-- **p8.6** — Worker 1 building on `feat/p8.6-multi-source-arbitration` off `origin/main` @ `3f41629`. Draft PR #87 open. §5 negotiation RESOLVED 2026-09-07 — option (a), no schema change (see the p8.6 task row + `decisions.md`); Worker cleared to build. Next poke: "Worker 1: PR #87 ready".
+- **p8.6** — PR #87 (head `9598fec`) **BOUNCED 2026-09-07** at the PR gate — 1 core blocker: `ImportReconciler.reconcile` never refreshes `byTypeDay` after a *stored-row* update, so a pre-existing lower-tier stored row + ≥2 higher-tier imports in one batch → (A) deterministic tier inversion, silent, no conflict, and (B) two recognised devices silently last-writer-wins instead of a `crossDeviceDisagreement` (breaks the p8.2 negotiated invariant). Uncaught — no p8.6 test has `local:[non-manual row]` + ≥2 incoming. Everything else passed review (source_precedence/known_devices clean, `isSleepingWrist` plumbed, device_label table move behaviour-preserving, N-source conflict screen + redaction, docs + threat-model honest, §5 option-a followed, surface count 42). CI monitor NOT armed. Next poke: "Worker 1: PR #87 ready" (fix + running-winner tests).
 - p8.1a #84 `5bee215`, p8.2 #85 `c36836f`, p8.5 #86 `3f41629` — all merged, nothing else in flight.
 
 ## Notes
