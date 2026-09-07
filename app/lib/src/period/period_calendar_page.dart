@@ -14,9 +14,7 @@ import '../flow/flow_providers.dart';
 import '../bbt/bbt_chart_widget.dart';
 import '../bbt/bbt_providers.dart';
 import '../flow/flow_quick_log.dart';
-import '../modes/birth_control_recalibration_content.dart';
 import '../modes/birth_control_recalibration_providers.dart';
-import '../modes/birth_control_recalibration_screen.dart';
 import '../modes/modes_providers.dart';
 import '../modes/pcos_correlation_format.dart';
 import '../modes/perimenopause_format.dart';
@@ -26,6 +24,7 @@ import '../mucus/mucus_providers.dart';
 import '../pregnancy/pregnancy_format.dart';
 import '../pregnancy/pregnancy_providers.dart';
 import '../prediction/correction_notice_providers.dart';
+import '../prediction/forecast_area.dart';
 import '../prediction/prediction_format.dart';
 import '../prediction/prediction_providers.dart';
 import '../symptom/symptom_day_sheet.dart';
@@ -386,30 +385,22 @@ class _LoadedState extends ConsumerState<_Loaded> {
                   ref.read(correctionNoticeProvider.notifier).clear(),
             ),
           ],
-          if (bcRecalActive) ...[
-            const SizedBox(height: 16),
-            _RecalibrationNote(
-              onDismiss: () => dismissBirthControlRecalibration(ref),
-            ),
-          ],
-          if (perimenopauseGapSuppress) ...[
-            const SizedBox(height: 16),
-            const _PerimenopausePausedNote(),
-          ],
-          if (prediction != null &&
-              !pregnancyModeOn &&
-              !bcRecalActive &&
-              !perimenopauseGapSuppress) ...[
-            const SizedBox(height: 16),
-            _PredictionCard(
-              prediction: prediction,
-              observedFertileWindow: observedFertile,
-              reduceSpoken: reduceSpoken,
-              pcosMode: pcosModeOn,
-              perimenopauseMode: perimenopauseModeOn,
-              onLogPeriodStart: _addPeriod,
-            ),
-          ],
+          // r1: one widget owns "what goes where the forecast lives" — it picks
+          // exactly one of the overdue check-in / recalibration note /
+          // perimenopause-paused note / forecast card (or nothing), by a fixed
+          // priority, so two active modes can't stack banners here.
+          ForecastArea(
+            prediction: prediction,
+            bcRecalActive: bcRecalActive,
+            perimenopauseGapSuppress: perimenopauseGapSuppress,
+            pregnancyModeOn: pregnancyModeOn,
+            reduceSpoken: reduceSpoken,
+            observedFertileWindow: observedFertile,
+            pcosMode: pcosModeOn,
+            perimenopauseMode: perimenopauseModeOn,
+            onLogPeriodStart: _addPeriod,
+            onDismissRecalibration: () => dismissBirthControlRecalibration(ref),
+          ),
           if (_periods.isNotEmpty) ...[
             const SizedBox(height: 16),
             _CycleStatsCard(
@@ -997,191 +988,6 @@ class _HistoryRowDetail extends StatelessWidget {
   }
 }
 
-/// The headline forecast: the next-period and fertile windows as **ranges**
-/// with a confidence note — or, when a period is late, a calm check-in that
-/// does **not** roll the estimate forward (it still shows the from-last-period
-/// dates and asks the user to log the real start).
-class _PredictionCard extends StatelessWidget {
-  const _PredictionCard({
-    required this.prediction,
-    required this.onLogPeriodStart,
-    required this.reduceSpoken,
-    this.pcosMode = false,
-    this.perimenopauseMode = false,
-    this.observedFertileWindow,
-  });
-
-  final CyclePrediction prediction;
-  final VoidCallback onLogPeriodStart;
-  final bool reduceSpoken;
-
-  /// p7.4: append a wider-interval note (PCOS cycles vary more, so the range is
-  /// wide and the estimate loose). The prediction itself is unchanged.
-  final bool pcosMode;
-
-  /// p7.7: append a wider-interval note (cycle length gets more variable through
-  /// the perimenopause transition). The prediction itself is unchanged. When
-  /// history shows a long gap the card is withheld upstream instead.
-  final bool perimenopauseMode;
-
-  /// Fertile window observed from this cycle's cervical-mucus notes (p1.6).
-  /// Shown as an extra line alongside the statistical estimate when present.
-  final DateRange? observedFertileWindow;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      container: true,
-      label: _semanticLabel(),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: prediction.isOverdue
-              ? theme.colorScheme.tertiaryContainer
-              : theme.colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: prediction.isOverdue ? _overdue(context) : _forecast(context),
-      ),
-    );
-  }
-
-  Widget _forecast(BuildContext context) {
-    final theme = Theme.of(context);
-    final onColor = theme.colorScheme.onPrimaryContainer;
-    final expected = formatDay(prediction.nextPeriodExpected);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Next period',
-              style: theme.textTheme.labelMedium?.copyWith(color: onColor),
-            ),
-            const Spacer(),
-            Text(
-              confidenceLabel(prediction.confidence),
-              style: theme.textTheme.labelSmall?.copyWith(color: onColor),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          formatDateRange(prediction.nextPeriod),
-          style: theme.textTheme.titleLarge?.copyWith(color: onColor),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          prediction.status == PredictionStatus.dueNow
-              ? 'Expected around now — most likely $expected'
-              : 'Most likely $expected',
-          style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Fertile window (estimate)',
-          style: theme.textTheme.labelMedium?.copyWith(color: onColor),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          formatDateRange(prediction.fertileWindow),
-          style: theme.textTheme.bodyLarge?.copyWith(color: onColor),
-        ),
-        if (observedFertileWindow != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            'Fertile signs (from your notes): '
-            '${formatDateRange(observedFertileWindow!)}',
-            style: theme.textTheme.bodySmall?.copyWith(color: onColor),
-          ),
-        ],
-        const SizedBox(height: 12),
-        Text(
-          confidenceNote(prediction),
-          style: theme.textTheme.bodySmall?.copyWith(color: onColor),
-        ),
-        if (pcosMode) ...[
-          const SizedBox(height: 4),
-          Text(
-            pcosWiderIntervalNote,
-            style: theme.textTheme.bodySmall?.copyWith(color: onColor),
-          ),
-        ],
-        if (perimenopauseMode) ...[
-          const SizedBox(height: 4),
-          Text(
-            perimenopauseWiderIntervalNote,
-            style: theme.textTheme.bodySmall?.copyWith(color: onColor),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _overdue(BuildContext context) {
-    final theme = Theme.of(context);
-    final onColor = theme.colorScheme.onTertiaryContainer;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Period check-in',
-          style: theme.textTheme.labelMedium?.copyWith(color: onColor),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          overdueHeadline(prediction.daysPastExpected!),
-          style: theme.textTheme.titleMedium?.copyWith(color: onColor),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          overdueBody,
-          style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
-        ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.tonal(
-            onPressed: onLogPeriodStart,
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
-            child: const Text('Log period start'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _semanticLabel() {
-    // p5.3: with "Reduce spoken detail" on, the forecast dates are not spoken —
-    // just that a prediction is on screen.
-    if (reduceSpoken) {
-      return prediction.isOverdue
-          ? 'Period check-in available. Open the calendar for details.'
-          : 'Next period prediction available. Open the calendar for the dates.';
-    }
-    if (prediction.isOverdue) {
-      return 'Period check-in. '
-          '${overdueHeadline(prediction.daysPastExpected!)}. $overdueBody';
-    }
-    final signs = observedFertileWindow == null
-        ? ''
-        : 'Fertile signs from your notes '
-              '${formatDateRange(observedFertileWindow!)}. ';
-    final widerNote = pcosMode
-        ? ' $pcosWiderIntervalNote'
-        : perimenopauseMode
-        ? ' $perimenopauseWiderIntervalNote'
-        : '';
-    return 'Next period estimated ${formatDateRange(prediction.nextPeriod)}, '
-        'most likely ${formatDay(prediction.nextPeriodExpected)}. '
-        'Fertile window estimated ${formatDateRange(prediction.fertileWindow)}. '
-        '$signs${confidenceNote(prediction)}$widerNote';
-  }
-}
-
 /// Transient "your update was taken in" note (p3.3).
 ///
 /// Shown right where the prediction card is (or would be) after the user edits,
@@ -1502,124 +1308,6 @@ class _PregnancyStatusCard extends ConsumerWidget {
                   child: const Text('Open postpartum view'),
                 ),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// p7.8: shown in place of the forecast card while a hormonal birth-control
-/// change is still settling. A plain, non-alarming note — no method name, no
-/// diagnosis — with a way into the guided explainer and a way to dismiss it
-/// early. Only rendered when the birth-control-change mode is on and the
-/// recalibration window is active (see `birthControlRecalibrationProvider`).
-class _RecalibrationNote extends StatelessWidget {
-  const _RecalibrationNote({required this.onDismiss});
-
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    const note = BirthControlRecalibrationContent.predictionCardNote;
-
-    return Semantics(
-      container: true,
-      label: note,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.timelapse_outlined,
-                  color: theme.colorScheme.onSecondaryContainer,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    note,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSecondaryContainer,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const BirthControlRecalibrationScreen(),
-                    ),
-                  ),
-                  child: const Text('Learn more'),
-                ),
-                TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
-              ],
-            ),
-            Text(
-              BirthControlRecalibrationContent.notMedicalDeviceLine,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSecondaryContainer,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// p7.7: shown in place of the forecast card while perimenopause mode is on and
-/// the logged history shows a long gap / 12+ months since the last period. A
-/// plain, non-alarming note — longer and skipped cycles are the expected signal
-/// in this stage, so the estimate pauses rather than asserting a forecast built
-/// on pre-gap cycles.
-class _PerimenopausePausedNote extends StatelessWidget {
-  const _PerimenopausePausedNote();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      container: true,
-      label: perimenopauseForecastSuppressedNote,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              Icons.timelapse_outlined,
-              color: theme.colorScheme.onSecondaryContainer,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                perimenopauseForecastSuppressedNote,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSecondaryContainer,
-                ),
-              ),
-            ),
           ],
         ),
       ),
