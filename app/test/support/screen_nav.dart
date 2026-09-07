@@ -948,8 +948,11 @@ final List<Surface> screenSurfaces = <Surface>[
 
   // r2: the one unified day-log sheet, opened from a period day so the Flow
   // section leads (its intensity / clot chips are on screen with no expand
-  // step — the ≤ 2-tap flow fast path). Symptoms / Temperature / Cervical
-  // fluid are collapsible sections in the same sheet.
+  // step — the ≤ 2-tap flow fast path). Every non-mode section is then expanded
+  // for the sweep: Symptoms and Cervical fluid here (their chip grids used to
+  // ride the old `symptom_day_sheet` surface), Temperature on the sibling
+  // `day_log — passive Apple Watch temperature` surface, and PMDD / endo on the
+  // `pmdd_rating_sheet` / `endometriosis_pain_sheet` surfaces.
   Surface('day_log', (tester, check) async {
     final db = memoryDb();
     await DriftPeriodRepository(
@@ -967,6 +970,10 @@ final List<Surface> screenSurfaces = <Surface>[
           find.text('Day log — ${formatDay(DateTime.now())}'),
           findsOneWidget,
         );
+        await tester.tap(find.text('Symptoms'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Cervical fluid'));
+        await tester.pumpAndSettle();
         await check(tester);
       },
     );
