@@ -2,6 +2,24 @@
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-07 — **Feature phases 9–13 are paused; near-term work is testing, functionality
+  hardening, and refinement of the current app (phases 0–8). A release (`v1.2.0`) is cut off
+  the current `main`.** The core product is complete and usable on `main`: end-to-end cycle
+  tracking with a visible correction loop, privacy/security hardening, the correctable
+  adaptive prediction engine, notifications, a full accessibility pass, Apple Health /
+  Health Connect interop + doctor PDF export, eight life-stage/condition modes, and passive
+  wearable temperature integration. Rather than open **Phase 9** (optional zero-knowledge
+  encrypted sync) now, effort shifts to: broadening automated test coverage, exercising and
+  polishing the existing feature set on real use, and closing the standing per-slice §9
+  follow-ups (`backlog.md`). **The herdsman phase/slice cadence is on hold** — no new phase
+  is expanded or dispatched during this pass; hardening work is tracked ad hoc against
+  `backlog.md` and the §9 list. `docs/plan/phases/phase-09.md … phase-13.md` stay as the
+  eventual roadmap and resume once this stabilisation pass is judged done. The last cut
+  release (`v1.1.0`) predated Phases 6–8; `v1.2.0` brings the downloadable build up to
+  everything on `main` through the Phase 8 close (`719ad04`). Version per the 2026-09-04
+  policy: a **minor** bump — new features (Phases 6, 7, 8) shipped since the last release,
+  still `1.x` alpha because not every phase is `DONE`. — user decision.
+
 - 2026-09-07 — **p8.6 multi-source arbitration ships with NO schema change (option a); the
   raw-readings archive is deferred to backlog.** p8.6's acceptance criteria ask that "every
   raw reading is retained … changing the precedence or deleting the winning source re-resolves
