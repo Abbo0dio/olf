@@ -11,7 +11,7 @@ import '../support/harness.dart';
 /// never change.
 ///
 /// Redacted surfaces exercised here: the calendar day cell, today's flow chip,
-/// the recent-symptoms list, and the symptom day sheet's chips. (Also redacted
+/// the recent-symptoms list, and the day-log sheet's symptom chips. (Also redacted
 /// in `lib/`: the prediction card and the correction notice — see the p5.3
 /// build notes.)
 void main() {
@@ -82,11 +82,12 @@ void main() {
     );
   });
 
-  testWidgets('reduce ON: symptom day-sheet chips announce "symptom"', (
+  testWidgets('reduce ON: day-log sheet symptom chips announce "symptom"', (
     tester,
   ) async {
     final db = memoryDb();
-    // No period on today → tapping it opens the symptom day sheet.
+    // Tapping today opens the unified day-log sheet; today leads with Flow, so
+    // expand the Symptoms section to reach its chips.
     await pumpOlf(
       tester,
       overrides: [
@@ -102,6 +103,8 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Day log — ${formatDay(today)}'), findsOneWidget);
+        await tester.tap(find.text('Symptoms'));
+        await tester.pumpAndSettle();
         // The chip's visible label is the real name…
         expect(find.widgetWithText(FilterChip, 'Headache'), findsOneWidget);
         // …but a screen reader hears the generic word.

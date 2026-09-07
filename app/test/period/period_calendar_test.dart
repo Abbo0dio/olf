@@ -121,8 +121,8 @@ void main() {
   });
 
   testWidgets(
-    'tapping a period day opens the flow quick-log; "Edit period dates" '
-    'reaches the period editor',
+    'tapping a period day opens the unified day-log sheet; "Edit period '
+    'dates" reaches the period editor',
     (tester) async {
       final db = memoryDb();
       await seed(db, PeriodDraft(start: daysAgo(2), end: today));
@@ -135,7 +135,7 @@ void main() {
             find.bySemanticsLabel('${formatDay(today)}, period day'),
           );
           await tester.pumpAndSettle();
-          expect(find.text('Flow — ${formatDay(today)}'), findsOneWidget);
+          expect(find.text('Day log — ${formatDay(today)}'), findsOneWidget);
 
           // the period-dates editor is still one tap away from the calendar
           await tester.tap(find.text('Edit period dates'));

@@ -13,7 +13,7 @@ import '../flow/flow_format.dart';
 import '../flow/flow_providers.dart';
 import '../bbt/bbt_chart_widget.dart';
 import '../bbt/bbt_providers.dart';
-import '../flow/flow_quick_log.dart';
+import '../day_log/day_log_sheet.dart';
 import '../modes/birth_control_recalibration_providers.dart';
 import '../modes/modes_providers.dart';
 import '../modes/pcos_correlation_format.dart';
@@ -27,7 +27,6 @@ import '../prediction/correction_notice_providers.dart';
 import '../prediction/forecast_area.dart';
 import '../prediction/prediction_format.dart';
 import '../prediction/prediction_providers.dart';
-import '../symptom/symptom_day_sheet.dart';
 import '../symptom/symptom_format.dart';
 import '../symptom/symptom_providers.dart';
 import '../wearable/passive_phase_providers.dart';
@@ -38,11 +37,12 @@ import 'period_providers.dart';
 /// The home screen: a month calendar of logged periods and per-day flow, a
 /// running summary, and a history list.
 ///
-/// Tapping a **period day** opens the flow quick-log (p1.2); tapping any other
-/// day opens the symptom day sheet (p1.5), which itself offers "Start a period"
-/// to reach the period-dates editor (p1.1). The "Add a period" button opens
-/// that editor directly. Every view watches the same streams so they stay in
-/// sync.
+/// Tapping any day — from the calendar, the cycle wheel, or the summary chips —
+/// opens the one unified day-log sheet (r2), which leads with Flow for a period
+/// day / today and Symptoms otherwise, and offers "Start a period" / "Edit
+/// period dates" for the day's state to reach the period-dates editor (p1.1).
+/// The "Add a period" button opens that editor directly. Every view watches the
+/// same streams so they stay in sync.
 class PeriodCalendarView extends ConsumerWidget {
   const PeriodCalendarView({super.key});
 
@@ -94,28 +94,20 @@ class _LoadedState extends ConsumerState<_Loaded> {
     return null;
   }
 
-  Future<void> _openForDay(DateTime day) async {
-    final period = _periodOn(day);
-    if (period != null) {
-      // Period day → fast path: log what happened that day.
-      await showFlowQuickLog(
-        context,
-        date: day,
-        onEditPeriodDates: () => _edit(period),
-        onAddSymptoms: () => _openSymptoms(day),
-      );
-      return;
-    }
-    // Any other day → the low-friction symptom sheet, which offers a shortcut
-    // to start a period here.
-    await _openSymptoms(day, onStartPeriod: () => _startPeriodOn(day));
-  }
+  Future<void> _openForDay(DateTime day) => _openDayLog(day);
 
-  Future<void> _openSymptoms(DateTime day, {VoidCallback? onStartPeriod}) {
-    return showSymptomDaySheet(
+  /// The one entry into the unified day-log sheet (r2). Every entry point — the
+  /// calendar cells, the cycle wheel, both summary chips — routes here; [lead]
+  /// forces which section opens expanded (the summary "symptoms" chip passes
+  /// [DayLogLead.symptoms]), otherwise the sheet derives it from the day.
+  Future<void> _openDayLog(DateTime day, {DayLogLead? lead}) {
+    final period = _periodOn(day);
+    return showDayLog(
       context,
       date: day,
-      onStartPeriod: onStartPeriod,
+      lead: lead,
+      onEditPeriodDates: period != null ? () => _edit(period) : null,
+      onStartPeriod: period == null ? () => _startPeriodOn(day) : null,
     );
   }
 
@@ -337,7 +329,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
           CycleWheel(
             phase: cyclePhase,
             reduceSpoken: reduceSpoken,
-            onTap: () => showFlowQuickLog(context, date: today),
+            onTap: () => _openDayLog(today),
           ),
           // p8.5: when the passive temperature signal has confirmed this
           // cycle's post-ovulatory shift, the wheel above already reflects it
@@ -364,13 +356,9 @@ class _LoadedState extends ConsumerState<_Loaded> {
             todayFlow: flowOn(today),
             todaySymptomCount: symptomCountOn(today),
             reduceSpoken: reduceSpoken,
-            onLogTodayFlow: () => showFlowQuickLog(context, date: today),
-            onLogTodaySymptoms: () => _openSymptoms(
-              today,
-              onStartPeriod: _periodOn(today) == null
-                  ? () => _startPeriodOn(today)
-                  : null,
-            ),
+            onLogTodayFlow: () => _openDayLog(today, lead: DayLogLead.flow),
+            onLogTodaySymptoms: () =>
+                _openDayLog(today, lead: DayLogLead.symptoms),
           ),
           if (pregnancyState != PregnancyRecoveryState.none) ...[
             const SizedBox(height: 16),

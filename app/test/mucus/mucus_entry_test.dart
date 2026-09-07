@@ -26,6 +26,8 @@ void main() {
             find.bySemanticsLabel('${formatDay(today)}, no period logged'),
           );
           await tester.pumpAndSettle();
+          await tester.tap(find.text('Cervical fluid'));
+          await tester.pumpAndSettle();
 
           await tester.tap(chip('Creamy'));
           await tester.pumpAndSettle();
@@ -65,6 +67,8 @@ void main() {
         await tester.tap(
           find.bySemanticsLabel('${formatDay(today)}, no period logged'),
         );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Cervical fluid'));
         await tester.pumpAndSettle();
         await tester.tap(chip('Egg-white'));
         await tester.pumpAndSettle();
