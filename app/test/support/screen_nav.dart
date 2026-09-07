@@ -91,6 +91,19 @@ Future<void> _seedRecentCycle(AppDatabase db) async {
     );
     start = start.add(const Duration(days: 28));
   }
+  // p8.5: passive sleeping-wrist readings across the open cycle (started 20d
+  // ago) with a +0.35 °C step from day 13, so the "past ovulation" caption
+  // under the wheel renders and gets swept for labels/contrast/scaling.
+  final bbt = DriftBbtRepository(db);
+  for (var d = 0; d <= 20; d++) {
+    await bbt.setTemp(
+      _daysAgo(20 - d),
+      36.30 + (d >= 13 ? 0.35 : 0.0) + ((d * 37) % 7 - 3) * 0.01,
+      source: HealthDataSource.appleHealth,
+      externalId: 'p85-wrist-$d',
+      measurementKind: BbtMeasurementKind.sleepingWrist,
+    );
+  }
 }
 
 /// Put the app in the "health app already connected" state so the

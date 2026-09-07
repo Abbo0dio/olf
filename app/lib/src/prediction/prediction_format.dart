@@ -71,3 +71,24 @@ const String overdueBody =
 /// Button label for dismissing the transient "your update was applied" note
 /// (p3.3). The note's body text comes entirely from `PredictionDelta.reasons`.
 const String correctionNoticeDismissLabel = 'Dismiss';
+
+/// One-sentence, **non-diagnostic** note for a passive temperature-shift read
+/// (p8.5). Describes a pattern, never a verdict: no "you did not ovulate", no
+/// fertility / conception / pregnancy claim (§6, §9(12)). Always frames the
+/// result as an estimate the user can correct by logging. Locked by
+/// `app/test/wearable/passive_phase_copy_test.dart`.
+String passivePhaseNote(PassivePhaseEstimate estimate) {
+  final strength = switch (estimate.confidence) {
+    PassiveConfidence.high => 'a clear',
+    PassiveConfidence.medium => 'a',
+    PassiveConfidence.low => 'an early',
+  };
+  return 'Your temperature pattern shows $strength rise, which usually means '
+      "you're past ovulation for this cycle. It's an estimate — logging a "
+      'period or a temperature keeps it up to date.';
+}
+
+/// Short redacted form of [passivePhaseNote] for screen readers under
+/// "Reduce spoken detail".
+const String passivePhaseNoteRedacted =
+    'A temperature-based cycle estimate is shown.';

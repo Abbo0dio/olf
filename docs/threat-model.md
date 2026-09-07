@@ -889,3 +889,37 @@ The CI guard requires an entry naming the current phase.
     export/restore **and** age out on the retention window like every other
     dated row.
   No design changes required by this review.
+- **2026-09-07 — Phase 8 / p8.5 landing — reviewer: worker: 1.** Passive
+  cycle-phase inference from the temperature history. **No new asset, adversary,
+  trust boundary, data flow, egress point, permission, dependency, schema
+  change, or CI gate change.**
+  - **Derived-on-read, never stored.** `inferPassivePhase(...)` is pure `core`
+    computation over rows already in the encrypted `olf.db` (`bbt_entries` —
+    manual basal entries and the p8.1a Apple Watch `sleepingWrist` rows) plus
+    the in-memory `CyclePrediction`. Its output — a "your temperature pattern
+    suggests you're past ovulation" read with a coarse confidence band — is
+    recomputed on every read, held only in a Riverpod `Provider`, and written
+    nowhere. Same lifecycle as the p3 predictions and the Phase 7 correlation
+    views.
+  - **Reuses the p7.3 `thermalShift` detector** — no second shift algorithm, no
+    fitted/ML model, no ML runtime dependency (`pubspec.lock` untouched).
+  - **Input to the predictor, not a replacement.** A `PassiveInformedPredictor`
+    decorator (the `Predictor` interface is unchanged) refines **only** the
+    current cycle's `fertileWindow`; every next-period field is passed through
+    verbatim, and with no passive temperature data the forecast is byte-for-byte
+    the bare `AdaptivePredictor` result. The inferred phase stays visibly
+    correctable through the p1.12 quick-log — a logged period or temperature
+    re-derives everything and always wins.
+  - **Non-diagnostic by construction (§6, §9(12)).** The read enum has a single
+    one-sided value (`ovulationLikelyPassed`) — there is no "did not ovulate"
+    and no fertility / conception / pregnancy verdict it can express. The
+    user-facing caption is a fixed pattern-language string routed through the
+    p1.9/p4.3 copy seam, always names itself an estimate, and is redacted to one
+    neutral sentence under "Reduce spoken detail" — locked by
+    `app/test/wearable/passive_phase_copy_test.dart`.
+  - **HRV / sleep:** `inferPassivePhase` and the decorator accept
+    `PassiveHrvSample` / `PassiveSleepSample` lists but **do not consume them**
+    in this slice, and nothing ingests HRV or sleep from the OS health store —
+    no new `HealthSampleType` / `HealthUnit`, no bridge wiring. The types only
+    fix the signature so p8.6 corroboration is additive.
+  No design changes required by this review.
