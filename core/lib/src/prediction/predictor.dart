@@ -62,6 +62,27 @@ class CyclePrediction {
 
   bool get isOverdue => status == PredictionStatus.overdue;
 
+  /// A copy with individual fields replaced. Additive (p8.5) — used by
+  /// `PassiveInformedPredictor` to re-anchor only [fertileWindow] on a
+  /// passively-observed ovulation while leaving every next-period field alone.
+  CyclePrediction copyWith({
+    DateRange? nextPeriod,
+    DateTime? nextPeriodExpected,
+    DateRange? fertileWindow,
+    PredictionConfidence? confidence,
+    int? basedOnCycles,
+    PredictionStatus? status,
+    int? daysPastExpected,
+  }) => CyclePrediction(
+    nextPeriod: nextPeriod ?? this.nextPeriod,
+    nextPeriodExpected: nextPeriodExpected ?? this.nextPeriodExpected,
+    fertileWindow: fertileWindow ?? this.fertileWindow,
+    confidence: confidence ?? this.confidence,
+    basedOnCycles: basedOnCycles ?? this.basedOnCycles,
+    status: status ?? this.status,
+    daysPastExpected: daysPastExpected ?? this.daysPastExpected,
+  );
+
   @override
   bool operator ==(Object other) =>
       other is CyclePrediction &&

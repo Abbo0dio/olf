@@ -31,6 +31,7 @@ import '../prediction/prediction_providers.dart';
 import '../symptom/symptom_day_sheet.dart';
 import '../symptom/symptom_format.dart';
 import '../symptom/symptom_providers.dart';
+import '../wearable/passive_phase_providers.dart';
 import 'period_editor.dart';
 import 'period_format.dart';
 import 'period_providers.dart';
@@ -325,6 +326,10 @@ class _LoadedState extends ConsumerState<_Loaded> {
     final reduceSpoken =
         ref.watch(reduceSpokenDetailProvider).valueOrNull ?? false;
 
+    // p8.5: the passive temperature-shift read for this cycle, or null when the
+    // signal is too thin / shows no confirmed shift.
+    final passivePhase = ref.watch(passivePhaseEstimateProvider);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
@@ -335,6 +340,24 @@ class _LoadedState extends ConsumerState<_Loaded> {
             reduceSpoken: reduceSpoken,
             onTap: () => showFlowQuickLog(context, date: today),
           ),
+          // p8.5: when the passive temperature signal has confirmed this
+          // cycle's post-ovulatory shift, the wheel above already reflects it
+          // (the fertile window is re-anchored on the observed ovulation) — this
+          // caption says so, in non-diagnostic terms. Absent when there is no
+          // passive signal, so the wheel then looks exactly as it did before.
+          if (cyclePhase != null && passivePhase != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              passivePhaseNote(passivePhase),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+              semanticsLabel: spokenDetail(
+                reduceSpoken,
+                full: passivePhaseNote(passivePhase),
+                redacted: passivePhaseNoteRedacted,
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           _Summary(
             periods: _periods,
