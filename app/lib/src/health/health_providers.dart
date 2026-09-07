@@ -325,35 +325,51 @@ Future<void> resolveHealthConflict(
           break;
       }
     case ConflictResolution.takeIncoming:
-      final s = conflict.incoming;
-      switch (s.type) {
-        case HealthSampleType.basalBodyTemperature:
-          // SHORTCUT: a passive Apple Watch wrist reading is re-typed to
-          // `basalBodyTemperature` before reconciliation (p8.1a), so a
-          // wrist-vs-manual-BBT conflict resolved "take incoming" here stores
-          // it as a basal temperature — the pure `ReconciliationConflict` does
-          // not carry the measurement kind. Rare manual action; the row can be
-          // re-corrected in the day sheet. A cleaner fix (kind on the conflict)
-          // waits for p8.5's richer multi-source model.
-          await ref
-              .read(bbtRepositoryProvider)
-              .setTemp(s.day, s.value, externalId: s.externalId);
-        case HealthSampleType.menstrualFlow:
-          final idx = s.value.round().clamp(0, FlowIntensity.values.length - 1);
-          await ref
-              .read(dailyFlowRepositoryProvider)
-              .setFlow(
-                s.day,
-                intensity: FlowIntensity.values[idx],
-                externalId: s.externalId,
-              );
-        case HealthSampleType.bodyTemperature:
-        case HealthSampleType.wristTemperature:
-        case HealthSampleType.sleep:
-          break;
-      }
+      await _storeReadingLocally(ref, conflict.incoming);
     case ConflictResolution.dismiss:
       break;
   }
   ref.read(healthConflictsProvider.notifier).resolve(conflict);
+}
+
+/// Resolve [conflict] by keeping one specific [chosen] reading — used by the
+/// "Use this reading" action on each row of an N-source conflict (p8.6).
+/// [chosen] is [ReconciliationConflict.incoming] or one of its
+/// [ReconciliationConflict.alsoContending] entries. Stores that value locally,
+/// exactly like [ConflictResolution.takeIncoming], then drops the conflict.
+Future<void> resolveHealthConflictWithReading(
+  WidgetRef ref,
+  ReconciliationConflict conflict,
+  HealthSample chosen,
+) async {
+  await _storeReadingLocally(ref, chosen);
+  ref.read(healthConflictsProvider.notifier).resolve(conflict);
+}
+
+/// Write [s]'s value into the local repositories as a plain stored entry.
+Future<void> _storeReadingLocally(WidgetRef ref, HealthSample s) async {
+  switch (s.type) {
+    case HealthSampleType.basalBodyTemperature:
+      // SHORTCUT: a passive Apple Watch wrist reading is re-typed to
+      // `basalBodyTemperature` before reconciliation (p8.1a); the pure
+      // `ReconciliationConflict` still does not carry the measurement kind, so a
+      // wrist reading chosen here stores as a basal temperature. Rare manual
+      // action; the row is re-correctable in the day sheet.
+      await ref
+          .read(bbtRepositoryProvider)
+          .setTemp(s.day, s.value, externalId: s.externalId);
+    case HealthSampleType.menstrualFlow:
+      final idx = s.value.round().clamp(0, FlowIntensity.values.length - 1);
+      await ref
+          .read(dailyFlowRepositoryProvider)
+          .setFlow(
+            s.day,
+            intensity: FlowIntensity.values[idx],
+            externalId: s.externalId,
+          );
+    case HealthSampleType.bodyTemperature:
+    case HealthSampleType.wristTemperature:
+    case HealthSampleType.sleep:
+      break;
+  }
 }

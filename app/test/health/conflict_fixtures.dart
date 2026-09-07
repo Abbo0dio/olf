@@ -15,6 +15,41 @@ class _SeededConflicts extends HealthConflictsNotifier {
   List<ReconciliationConflict> build() => List.unmodifiable(_seed);
 }
 
+/// A p8.6 same-tier BBT disagreement between two or more recognised devices for
+/// one day — `local` is the first device, `others` the rest (the first of
+/// `others` becomes `incoming`, any remainder rides in `alsoContending`).
+ReconciliationConflict crossDeviceBbtConflict(
+  DateTime day, {
+  required (String device, double value) local,
+  required List<(String device, double value)> others,
+}) {
+  final d = DateTime(day.year, day.month, day.day);
+  HealthSample sample((String, double) s) => HealthSample.point(
+    type: HealthSampleType.basalBodyTemperature,
+    at: d,
+    value: s.$2,
+    unit: HealthUnit.celsius,
+    source: HealthDataSource.appleHealth,
+    externalId: 'hk-${s.$1}-${d.toIso8601String()}',
+    sourceDevice: s.$1,
+  );
+  return ReconciliationConflict(
+    localId: 'bbt:${d.toIso8601String()}',
+    local: LocalSampleView(
+      localId: 'bbt:${d.toIso8601String()}',
+      type: HealthSampleType.basalBodyTemperature,
+      day: d,
+      value: local.$2,
+      unit: HealthUnit.celsius,
+      source: HealthDataSource.appleHealth,
+      sourceDevice: local.$1,
+    ),
+    incoming: sample(others.first),
+    reason: ConflictReason.crossDeviceDisagreement,
+    alsoContending: [for (final o in others.skip(1)) sample(o)],
+  );
+}
+
 ReconciliationConflict bbtConflict(
   DateTime day, {
   required double local,

@@ -2,6 +2,8 @@ import 'package:meta/meta.dart';
 
 import '../date_math.dart';
 import 'health_sample.dart';
+import 'known_devices.dart';
+import 'source_precedence.dart';
 
 /// A lightweight projection of one locally-stored row, as the reconciler needs
 /// to see it.
@@ -22,6 +24,7 @@ class LocalSampleView {
     required this.source,
     this.externalId,
     this.sourceDevice,
+    this.isSleepingWrist = false,
   });
 
   final String localId;
@@ -39,6 +42,12 @@ class LocalSampleView {
   /// Never a matching key — used only to tell two devices apart on one day.
   final String? sourceDevice;
 
+  /// `true` when this stored row is a passive Apple-Watch sleeping-wrist
+  /// reading (p8.1a `measurement_kind`). Feeds the p8.6 precedence classifier's
+  /// sleeping-wrist rank; never affects matching. The caller sets it when
+  /// building the view from a `sleepingWrist` `bbt_entries` row.
+  final bool isSleepingWrist;
+
   @override
   bool operator ==(Object other) =>
       other is LocalSampleView &&
@@ -49,7 +58,8 @@ class LocalSampleView {
       other.unit == unit &&
       other.source == source &&
       other.externalId == externalId &&
-      other.sourceDevice == sourceDevice;
+      other.sourceDevice == sourceDevice &&
+      other.isSleepingWrist == isSleepingWrist;
 
   @override
   int get hashCode => Object.hash(
@@ -61,12 +71,14 @@ class LocalSampleView {
     source,
     externalId,
     sourceDevice,
+    isSleepingWrist,
   );
 
   @override
   String toString() =>
       'LocalSampleView($localId, $type, $day, $value $unit, $source, '
-      'externalId: $externalId, sourceDevice: $sourceDevice)';
+      'externalId: $externalId, sourceDevice: $sourceDevice, '
+      'isSleepingWrist: $isSleepingWrist)';
 }
 
 /// Why an incoming sample could not be auto-applied.
@@ -92,17 +104,37 @@ enum ConflictReason {
 /// resolve (p6.4 conflict-review screen).
 @immutable
 class ReconciliationConflict {
-  const ReconciliationConflict({
+  ReconciliationConflict({
     required this.localId,
     required this.local,
     required this.incoming,
     required this.reason,
-  });
+    List<HealthSample> alsoContending = const [],
+  }) : alsoContending = List.unmodifiable(alsoContending);
 
   final String localId;
   final LocalSampleView local;
   final HealthSample incoming;
   final ConflictReason reason;
+
+  /// Extra automatic readings for the **same `(type, day)`** that also disagree
+  /// and share the top precedence tier with [incoming] (p8.6). Empty for an
+  /// ordinary two-way conflict; non-empty only when three or more sources tie
+  /// for a day, so the review screen can show every value at once. [local] and
+  /// [incoming] carry the first two; this list carries the rest, in the
+  /// reconciler's stable order.
+  final List<HealthSample> alsoContending;
+
+  /// This conflict with [alsoContending] replaced — used by the reconciler's
+  /// finalize pass to fold sibling same-slot conflicts into one N-way card.
+  ReconciliationConflict withAlsoContending(List<HealthSample> extra) =>
+      ReconciliationConflict(
+        localId: localId,
+        local: local,
+        incoming: incoming,
+        reason: reason,
+        alsoContending: extra,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -110,14 +142,22 @@ class ReconciliationConflict {
       other.localId == localId &&
       other.local == local &&
       other.incoming == incoming &&
-      other.reason == reason;
+      other.reason == reason &&
+      _listEq(other.alsoContending, alsoContending);
 
   @override
-  int get hashCode => Object.hash(localId, local, incoming, reason);
+  int get hashCode => Object.hash(
+    localId,
+    local,
+    incoming,
+    reason,
+    Object.hashAll(alsoContending),
+  );
 
   @override
   String toString() =>
-      'ReconciliationConflict($localId, $reason, incoming: $incoming)';
+      'ReconciliationConflict($localId, $reason, incoming: $incoming'
+      '${alsoContending.isEmpty ? '' : ', +${alsoContending.length} more'})';
 }
 
 /// One incoming sample that matched a non-manual local row of the same source
@@ -163,6 +203,37 @@ class ReconciliationSkip {
   String toString() => 'ReconciliationSkip($localId, $incoming)';
 }
 
+/// One incoming sample dropped because a **higher precedence-tier** reading
+/// already holds this `(type, day)` slot (p8.6). Not an error and not
+/// user-visible — olf simply keeps the better reading. The dropped value is not
+/// persisted by olf but remains in the OS health store, so if the winning
+/// source is later deleted a re-sync lets the runner-up win.
+@immutable
+class ReconciliationSupersede {
+  const ReconciliationSupersede({
+    required this.localId,
+    required this.incoming,
+  });
+
+  /// The [LocalSampleView.localId] (or pending id) of the winning reading.
+  final String localId;
+
+  /// The lower-tier incoming sample that was set aside.
+  final HealthSample incoming;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ReconciliationSupersede &&
+      other.localId == localId &&
+      other.incoming == incoming;
+
+  @override
+  int get hashCode => Object.hash(localId, incoming);
+
+  @override
+  String toString() => 'ReconciliationSupersede($localId, $incoming)';
+}
+
 /// The output of [ImportReconciler.reconcile] — a pure value object the caller
 /// applies to its own storage. The reconciler itself writes nothing.
 @immutable
@@ -172,10 +243,12 @@ class ReconciliationPlan {
     required List<ReconciliationUpdate> updates,
     required List<ReconciliationConflict> conflicts,
     required List<ReconciliationSkip> skipped,
+    List<ReconciliationSupersede> superseded = const [],
   }) : inserts = List.unmodifiable(inserts),
        updates = List.unmodifiable(updates),
        conflicts = List.unmodifiable(conflicts),
-       skipped = List.unmodifiable(skipped);
+       skipped = List.unmodifiable(skipped),
+       superseded = List.unmodifiable(superseded);
 
   /// Incoming samples with no local match — insert as-is.
   final List<HealthSample> inserts;
@@ -190,14 +263,24 @@ class ReconciliationPlan {
   /// Incoming samples already stored identically.
   final List<ReconciliationSkip> skipped;
 
+  /// Incoming samples dropped in favour of a higher precedence-tier reading for
+  /// the same day (p8.6). Not surfaced to the user and not counted in the sync
+  /// summary — olf just keeps the better reading.
+  final List<ReconciliationSupersede> superseded;
+
   bool get isEmpty =>
       inserts.isEmpty &&
       updates.isEmpty &&
       conflicts.isEmpty &&
-      skipped.isEmpty;
+      skipped.isEmpty &&
+      superseded.isEmpty;
 
   int get total =>
-      inserts.length + updates.length + conflicts.length + skipped.length;
+      inserts.length +
+      updates.length +
+      conflicts.length +
+      skipped.length +
+      superseded.length;
 
   @override
   bool operator ==(Object other) =>
@@ -205,7 +288,8 @@ class ReconciliationPlan {
       _listEq(other.inserts, inserts) &&
       _listEq(other.updates, updates) &&
       _listEq(other.conflicts, conflicts) &&
-      _listEq(other.skipped, skipped);
+      _listEq(other.skipped, skipped) &&
+      _listEq(other.superseded, superseded);
 
   @override
   int get hashCode => Object.hash(
@@ -213,12 +297,14 @@ class ReconciliationPlan {
     Object.hashAll(updates),
     Object.hashAll(conflicts),
     Object.hashAll(skipped),
+    Object.hashAll(superseded),
   );
 
   @override
   String toString() =>
       'ReconciliationPlan(inserts: ${inserts.length}, updates: ${updates.length}, '
-      'conflicts: ${conflicts.length}, skipped: ${skipped.length})';
+      'conflicts: ${conflicts.length}, skipped: ${skipped.length}, '
+      'superseded: ${superseded.length})';
 }
 
 bool _listEq(List<Object?> a, List<Object?> b) {
@@ -245,12 +331,21 @@ bool _listEq(List<Object?> a, List<Object?> b) {
 /// [HealthDataSource.manual] local row is never in [ReconciliationPlan.updates]
 /// — a *disagreement* with it is always a [ReconciliationConflict]; a
 /// `(type, day)` match against a different-`source` row that disagrees is a
-/// [ConflictReason.crossSourceDisagreement] conflict; a match that is
-/// same-`source` but from a **different, known** device
-/// ([HealthSample.sourceDevice]) that disagrees is a
-/// [ConflictReason.crossDeviceDisagreement] conflict (no winner is picked —
-/// p8.6 owns precedence). Everything else that is same-`source`,
-/// same-or-unknown device, non-manual, revised → an in-place update.
+/// [ConflictReason.crossSourceDisagreement] conflict.
+///
+/// **p8.6 multi-source precedence.** When a same-`source`, non-manual
+/// disagreement is between readings of **different precedence tiers**
+/// ([sourcePrecedenceTier] — dedicated device > Apple-Watch wrist > bare
+/// platform sample), the higher tier wins deterministically: the incoming
+/// sample becomes a [ReconciliationUpdate] if it outranks the stored row, or a
+/// [ReconciliationSupersede] (silently dropped) if the stored row outranks it.
+/// Only a **same-tier** disagreement between two different known devices is a
+/// [ConflictReason.crossDeviceDisagreement] the user must resolve; three or more
+/// same-tier sources for one day fold into a single conflict carrying the rest
+/// in [ReconciliationConflict.alsoContending]. A disagreement with a
+/// [HealthDataSource.manual] row is **always** a conflict — never auto-resolved.
+/// Everything else that is same-`source`, same-or-unknown device, same tier,
+/// non-manual, revised → an in-place update.
 class ImportReconciler {
   const ImportReconciler({this.tolerance = 0.01});
 
@@ -275,11 +370,21 @@ class ImportReconciler {
     final updates = <ReconciliationUpdate>[];
     final conflicts = <ReconciliationConflict>[];
     final skipped = <ReconciliationSkip>[];
+    final superseded = <ReconciliationSupersede>[];
 
     // p8.2: `localId`s of the stand-in views registered for samples inserted
     // *this pass* — so we can tell "matched another same-batch insert" from
     // "matched a stored row" and keep the single-source plan shape unchanged.
     final pendingLocalIds = <String>{};
+    // p8.6: the actual sample behind each pending view, so a later higher-tier
+    // reading for the same day can replace the running winner.
+    final pendingSampleByLocalId = <String, HealthSample>{};
+    // p8.6: the update currently emitted for a slot whose stored row a
+    // higher-tier reading has already won — so a still-higher reading can
+    // retract it, and a same-tier disagreement can withdraw it entirely
+    // ("no blind update" when the day becomes the user's call).
+    final slotUpdateByKey =
+        <(HealthSampleType, DateTime), ReconciliationUpdate>{};
 
     // Process in a stable order so the plan is independent of the caller's
     // input ordering.
@@ -288,6 +393,7 @@ class ImportReconciler {
     void registerPendingInsert(HealthSample sample) {
       final pending = _pendingView(sample);
       pendingLocalIds.add(pending.localId);
+      pendingSampleByLocalId[pending.localId] = sample;
       byTypeDay[(sample.type, dateOnly(sample.day))] = pending;
       final ext = sample.externalId;
       if (ext != null) byExternalId.putIfAbsent(ext, () => pending);
@@ -345,13 +451,104 @@ class ImportReconciler {
         continue;
       }
 
-      // p8.2: same platform, but two *different* known devices disagree. olf
-      // does not arbitrate (p8.6 owns precedence) — hand it to the user. A
-      // device revising *itself*, or unattributable legacy rows (either side
-      // `null`), fall through below.
+      // p8.6: same non-manual platform, values disagree, and the two readings
+      // sit at different precedence tiers — resolve it deterministically, no
+      // user prompt. (Tiers: dedicated device > Apple-Watch wrist > bare
+      // platform sample; see [sourcePrecedenceTier].)
+      final localTier = sourcePrecedenceTier(
+        source: match.source,
+        isSleepingWrist: match.isSleepingWrist,
+        sourceDevice: match.sourceDevice,
+      );
+      final incomingTier = sourcePrecedenceTier(
+        source: sample.source,
+        isSleepingWrist: sample.isSleepingWrist,
+        sourceDevice: sample.sourceDevice,
+      );
+
+      final slot = (sample.type, dateOnly(sample.day));
+
+      if (localTier != incomingTier) {
+        if (incomingTier.outranks(localTier)) {
+          // The incoming reading beats the slot's current occupant. It becomes
+          // the occupant for the rest of the pass (a pending view), and we
+          // record which reading it displaced.
+          final displaced = matchIsPending
+              ? pendingSampleByLocalId[match.localId]
+              : null;
+          final priorUpdate = slotUpdateByKey[slot];
+
+          if (priorUpdate != null) {
+            // The occupant was a stored row we had already auto-updated once —
+            // retract that update, supersede the reading it carried, and
+            // re-point the update at the same stored row with the new winner.
+            updates.remove(priorUpdate);
+            if (displaced != null) {
+              superseded.add(
+                ReconciliationSupersede(
+                  localId: priorUpdate.localId,
+                  incoming: displaced,
+                ),
+              );
+            }
+            final u = ReconciliationUpdate(
+              localId: priorUpdate.localId,
+              incoming: sample,
+            );
+            updates.add(u);
+            slotUpdateByKey[slot] = u;
+          } else if (matchIsPending) {
+            // The occupant was an insert from this same batch — swap it out.
+            if (displaced != null) {
+              inserts.remove(displaced);
+              superseded.add(
+                ReconciliationSupersede(
+                  localId: match.localId,
+                  incoming: displaced,
+                ),
+              );
+            }
+            inserts.add(sample);
+          } else {
+            // The occupant is an untouched stored row — overwrite it in place,
+            // record that it lost the tier race, and remember the update so a
+            // still-higher reading (or a same-tier dispute) can pull it back.
+            superseded.add(
+              ReconciliationSupersede(
+                localId: match.localId,
+                incoming: _asSample(match),
+              ),
+            );
+            final u = ReconciliationUpdate(
+              localId: match.localId,
+              incoming: sample,
+            );
+            updates.add(u);
+            slotUpdateByKey[slot] = u;
+          }
+          registerPendingInsert(sample);
+        } else {
+          // The occupant outranks this reading — keep it, drop this one.
+          superseded.add(
+            ReconciliationSupersede(localId: match.localId, incoming: sample),
+          );
+        }
+        continue;
+      }
+
+      // p8.2: same tier, but two *different* recognised devices disagree. olf
+      // does not arbitrate — hand it to the user. A device revising *itself*,
+      // or a side whose tag olf does not recognise, falls through below.
       final bothDevicesKnown =
-          match.sourceDevice != null && sample.sourceDevice != null;
+          isAttributedDevice(match.sourceDevice) &&
+          isAttributedDevice(sample.sourceDevice);
       if (bothDevicesKnown && match.sourceDevice != sample.sourceDevice) {
+        // "No blind update": if a higher-tier reading had already auto-updated
+        // this slot's stored row earlier in the pass, withdraw that update —
+        // the day is the user's call now. The stored row is left as-is
+        // (carried) until they resolve the conflict.
+        final priorUpdate = slotUpdateByKey.remove(slot);
+        if (priorUpdate != null) updates.remove(priorUpdate);
         conflicts.add(
           ReconciliationConflict(
             localId: match.localId,
@@ -364,17 +561,17 @@ class ImportReconciler {
       }
 
       // p8.2: the only thing this sample matched is another insert from this
-      // same batch (no stored row), same/unknown device, values differ. That is
-      // exactly the pre-p8.2 "two same-day incoming samples" case — keep both as
-      // inserts so the plan shape and the apply-time last-writer-wins behaviour
-      // are unchanged for the single-source path.
+      // same batch (no stored row), same tier, same/unknown device, values
+      // differ. That is exactly the pre-p8.2 "two same-day incoming samples"
+      // case — keep both as inserts so the plan shape and the apply-time
+      // last-writer-wins behaviour are unchanged for the single-source path.
       if (matchIsPending) {
         inserts.add(sample);
         continue;
       }
 
-      // Same non-manual source, same-or-unknown device, value revised — safe
-      // in-place update.
+      // Same non-manual source, same tier, same-or-unknown device, value
+      // revised — safe in-place update.
       updates.add(
         ReconciliationUpdate(localId: match.localId, incoming: sample),
       );
@@ -383,9 +580,52 @@ class ImportReconciler {
     return ReconciliationPlan(
       inserts: inserts,
       updates: updates,
-      conflicts: conflicts,
+      conflicts: _foldSameSlotConflicts(conflicts),
       skipped: skipped,
+      superseded: superseded,
     );
+  }
+
+  /// Fold two or more `crossDeviceDisagreement` conflicts that landed on the
+  /// same `(type, day)` into one N-way conflict — the first keeps its `local` /
+  /// `incoming`, the rest ride along in [ReconciliationConflict.alsoContending]
+  /// (p8.6). Every other conflict, and any slot with a single conflict, is
+  /// returned untouched and in its original position.
+  static List<ReconciliationConflict> _foldSameSlotConflicts(
+    List<ReconciliationConflict> raw,
+  ) {
+    final bySlot =
+        <(HealthSampleType, DateTime), List<ReconciliationConflict>>{};
+    for (final c in raw) {
+      bySlot
+          .putIfAbsent((c.local.type, dateOnly(c.local.day)), () => [])
+          .add(c);
+    }
+    if (bySlot.values.every((g) => g.length < 2)) return raw;
+
+    final out = <ReconciliationConflict>[];
+    final emitted = <(HealthSampleType, DateTime)>{};
+    for (final c in raw) {
+      final key = (c.local.type, dateOnly(c.local.day));
+      final group = bySlot[key]!;
+      final foldable =
+          group.length > 1 &&
+          group.every(
+            (x) => x.reason == ConflictReason.crossDeviceDisagreement,
+          );
+      if (!foldable) {
+        out.add(c);
+        continue;
+      }
+      if (emitted.add(key)) {
+        out.add(
+          group.first.withAlsoContending([
+            for (final x in group.skip(1)) x.incoming,
+          ]),
+        );
+      }
+    }
+    return out;
   }
 
   /// A [LocalSampleView] standing in for an incoming [sample] that is being
@@ -406,8 +646,23 @@ class ImportReconciler {
       source: sample.source,
       externalId: sample.externalId,
       sourceDevice: sample.sourceDevice,
+      isSleepingWrist: sample.isSleepingWrist,
     );
   }
+
+  /// A point [HealthSample] mirror of a stored [view] — used only to record a
+  /// stored row in [ReconciliationPlan.superseded] when a higher-tier reading
+  /// has overwritten it (p8.6). Never applied by the caller.
+  static HealthSample _asSample(LocalSampleView view) => HealthSample.point(
+    type: view.type,
+    at: dateOnly(view.day),
+    value: view.value,
+    unit: view.unit,
+    source: view.source,
+    externalId: view.externalId,
+    sourceDevice: view.sourceDevice,
+    isSleepingWrist: view.isSleepingWrist,
+  );
 
   LocalSampleView? _matchFor(
     HealthSample sample,
