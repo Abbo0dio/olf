@@ -23,6 +23,8 @@ void main() {
             find.bySemanticsLabel('${formatDay(today)}, no period logged'),
           );
           await tester.pumpAndSettle();
+          await tester.tap(find.text('Temperature'));
+          await tester.pumpAndSettle();
 
           await tester.tap(find.text('Add basal temperature'));
           await tester.pumpAndSettle();
@@ -63,6 +65,8 @@ void main() {
         await tester.tap(
           find.bySemanticsLabel('${formatDay(today)}, no period logged'),
         );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Temperature'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Add basal temperature'));
         await tester.pumpAndSettle();

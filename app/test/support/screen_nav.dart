@@ -24,7 +24,7 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 42 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 41 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -39,11 +39,12 @@ import 'harness.dart';
 /// overlay-view and empty states and the daily rating sheet; p8.1a the day sheet
 /// with a passive Apple Watch wrist-temperature reading; p8.2 the "Apps &
 /// export" per-device provenance list for third-party wearables synced through
-/// the health platform).
+/// the health platform; r2 merged the old `symptom_day_sheet` and `flow_quick_log`
+/// surfaces into one `day_log` sheet — net −1 — and re-pointed the p8.1a passive
+/// wrist-temperature surface onto it).
 /// The dispatch inventory named
 /// `security/screen_security`, which is the non-visual `ScreenSecurity`
-/// platform seam; `symptom_day_sheet` and `flow_quick_log` (the
-/// flow/spotting/clot chip surface) stand in its place.
+/// platform seam; the unified `day_log` sheet stands in its place.
 typedef SurfaceCheck = Future<void> Function(WidgetTester tester);
 
 class Surface {
@@ -945,27 +946,38 @@ final List<Surface> screenSurfaces = <Surface>[
     );
   }),
 
-  Surface('symptom_day_sheet', (tester, check) async {
+  // r2: the one unified day-log sheet, opened from a period day so the Flow
+  // section leads (its intensity / clot chips are on screen with no expand
+  // step — the ≤ 2-tap flow fast path). Symptoms / Temperature / Cervical
+  // fluid are collapsible sections in the same sheet.
+  Surface('day_log', (tester, check) async {
+    final db = memoryDb();
+    await DriftPeriodRepository(
+      db,
+    ).addPeriod(PeriodDraft(start: _daysAgo(1), end: _daysAgo(0)));
     await pumpOlf(
       tester,
-      overrides: screenNavOverrides(memoryDb()),
+      overrides: screenNavOverrides(db),
       body: () async {
         await tester.tap(
-          find.bySemanticsLabel(_todayCellLabel(periodDay: false)),
+          find.bySemanticsLabel(_todayCellLabel(periodDay: true)),
         );
         await tester.pumpAndSettle();
+        expect(
+          find.text('Day log — ${formatDay(DateTime.now())}'),
+          findsOneWidget,
+        );
         await check(tester);
       },
     );
   }),
 
-  // p8.1a: the day sheet with a passively-captured Apple Watch reading for
-  // today — the temperature chip carries the "captured while you slept"
-  // sub-label, and tapping it corrects the value into a typed basal reading.
-  Surface('symptom_day_sheet — passive Apple Watch temperature', (
-    tester,
-    check,
-  ) async {
+  // p8.1a (re-pointed by r2): the unified day-log sheet with a passively-
+  // captured Apple Watch reading for today — the Temperature section's chip
+  // carries the "captured while you slept" sub-label, and tapping it corrects
+  // the value into a typed basal reading. The section starts collapsed, so the
+  // sweep expands it first.
+  Surface('day_log — passive Apple Watch temperature', (tester, check) async {
     final db = memoryDb();
     await DriftBbtRepository(db).setTemp(
       _daysAgo(0),
@@ -982,31 +994,12 @@ final List<Surface> screenSurfaces = <Surface>[
           find.bySemanticsLabel(_todayCellLabel(periodDay: false)),
         );
         await tester.pumpAndSettle();
+        await tester.tap(find.text('Temperature'));
+        await tester.pumpAndSettle();
         expect(
           find.text('Apple Watch · captured while you slept'),
           findsOneWidget,
         );
-        await check(tester);
-      },
-    );
-  }),
-
-  Surface('flow_quick_log sheet (flow / spotting / clot chips)', (
-    tester,
-    check,
-  ) async {
-    final db = memoryDb();
-    await DriftPeriodRepository(
-      db,
-    ).addPeriod(PeriodDraft(start: _daysAgo(1), end: _daysAgo(0)));
-    await pumpOlf(
-      tester,
-      overrides: screenNavOverrides(db),
-      body: () async {
-        await tester.tap(
-          find.bySemanticsLabel(_todayCellLabel(periodDay: true)),
-        );
-        await tester.pumpAndSettle();
         await check(tester);
       },
     );

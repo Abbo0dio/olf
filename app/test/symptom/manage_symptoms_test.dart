@@ -41,8 +41,10 @@ void main() {
 
         expect(find.text('Cravings'), findsOneWidget);
 
-        // back to the day sheet — the new symptom is a chip
+        // back to the day-log sheet — expand Symptoms; the new symptom is a chip
         await tester.tap(find.byTooltip('Back'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Symptoms'));
         await tester.pumpAndSettle();
         expect(chip('Cravings'), findsOneWidget);
       },
