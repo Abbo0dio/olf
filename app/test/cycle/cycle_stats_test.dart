@@ -25,7 +25,8 @@ void main() {
       tester,
       overrides: [dbOverride(db)],
       body: () async {
-        // The cycle-insights card is on Home …
+        // The cycle-insights card is on the Patterns tab now (r3b) …
+        await switchTab(tester, 'Patterns');
         expect(find.text('28-day typical cycle'), findsOneWidget);
         expect(find.text('Regular'), findsOneWidget);
         expect(find.text('Typical period 4 days'), findsOneWidget);
@@ -47,6 +48,7 @@ void main() {
       tester,
       overrides: [dbOverride(db)],
       body: () async {
+        await switchTab(tester, 'Patterns');
         expect(find.textContaining('Log at least two periods'), findsOneWidget);
         expect(find.textContaining('28-day'), findsNothing);
         await switchTab(tester, 'Calendar');
@@ -64,6 +66,7 @@ void main() {
       tester,
       overrides: [dbOverride(db)],
       body: () async {
+        await switchTab(tester, 'Patterns');
         expect(find.text('28-day typical cycle'), findsOneWidget);
 
         // The delete affordance is on the Calendar history rows now.
@@ -74,7 +77,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // one period left → back to the nudge, no stale "28-day" figure
-        await switchTab(tester, 'Home');
+        await switchTab(tester, 'Patterns');
         expect(find.text('28-day typical cycle'), findsNothing);
         expect(find.textContaining('Log at least two periods'), findsOneWidget);
       },
@@ -93,6 +96,7 @@ void main() {
       tester,
       overrides: [dbOverride(db)],
       body: () async {
+        await switchTab(tester, 'Patterns');
         // the 28-day cycle still counts; the 60-day stretch does not
         expect(find.text('28-day typical cycle'), findsOneWidget);
         expect(

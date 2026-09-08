@@ -93,9 +93,9 @@ class PatternsView extends ConsumerWidget {
           icon: Icons.insights_outlined,
           title: accuracySettingsTitle,
           subtitle: accuracySettingsSubtitle,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const AccuracyPage()),
-          ),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => const AccuracyPage())),
         ),
 
         const _SectionHeader('Your cycles'),
@@ -151,9 +151,9 @@ class PatternsView extends ConsumerWidget {
         for (final mode in enabledModes)
           _NavRow(
             title: 'Open ${modeCatalogEntry(mode).title}',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => modeScreen(mode)),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => modeScreen(mode))),
           ),
         _NavRow(
           icon: Icons.tune_outlined,
@@ -161,9 +161,9 @@ class PatternsView extends ConsumerWidget {
           subtitle:
               'Optional lenses — postpartum, pregnancy, PCOS and more. All '
               'off until you turn them on.',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const ModesPage()),
-          ),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => const ModesPage())),
         ),
       ],
     );
@@ -269,13 +269,6 @@ class _CycleStatsCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Your cycles',
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 6),
             if (typical != null) ...[
               Text(
                 '$typical-day typical cycle',

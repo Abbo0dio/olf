@@ -108,9 +108,8 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          // Into Settings → Modes.
-          await tester.tap(find.byTooltip('Settings'));
-          await tester.pumpAndSettle();
+          // Into the Patterns tab → Modes (r3b moved the entry here).
+          await switchTab(tester, 'Patterns');
           await tester.scrollUntilVisible(
             find.text('Life-stage & condition modes'),
             200,

@@ -40,10 +40,9 @@ void main() {
 
         await switchTab(tester, 'Patterns');
         expect(find.widgetWithText(AppBar, 'Patterns'), findsOneWidget);
-        expect(
-          find.text('Your longer-term patterns will show here.'),
-          findsOneWidget,
-        );
+        // r3b populated this tab: section headers render even on an empty DB.
+        expect(find.text('Your cycles'), findsOneWidget);
+        expect(find.text('Life-stage & condition modes'), findsOneWidget);
 
         await switchTab(tester, 'Home');
         expect(find.widgetWithText(AppBar, 'olf'), findsOneWidget);

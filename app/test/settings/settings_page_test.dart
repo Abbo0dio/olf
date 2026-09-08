@@ -173,6 +173,32 @@ void main() {
     },
   );
 
+  testWidgets(
+    'r3b: "Prediction accuracy" and the Modes on/off entry are gone from '
+    'Settings (moved to the Patterns tab)',
+    (tester) async {
+      await pumpOlf(
+        tester,
+        overrides: [dbOverride(memoryDb())],
+        body: () async {
+          await openSettings(tester);
+          // Bring the Cycle section into view via a stable anchor inside it.
+          await tester.scrollUntilVisible(
+            find.text('Pregnancy loss & birth'),
+            200,
+            scrollable: find.byType(Scrollable).first,
+          );
+          // The Cycle header stays (it still holds this row) …
+          expect(find.text('Pregnancy loss & birth'), findsOneWidget);
+          // … but the two relocated entry points are gone.
+          expect(find.text('Prediction accuracy'), findsNothing);
+          expect(find.text('Life-stage & condition modes'), findsNothing);
+          expect(find.text('Modes'), findsNothing);
+        },
+      );
+    },
+  );
+
   testWidgets('no biometric hardware → the switch is present but disabled', (
     tester,
   ) async {

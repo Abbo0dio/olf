@@ -24,12 +24,16 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 42 surfaces (r3a split the old single home/calendar scroll into a
+/// 43 surfaces (r3a split the old single home/calendar scroll into a
 /// bottom-nav shell: `home_tab` keeps the cycle wheel + slim summary, the new
-/// `calendar_tab` holds the month grid + year-grouped history, and a new
-/// `patterns_tab` placeholder surface is swept for the empty Patterns tab;
+/// `calendar_tab` holds the month grid + year-grouped history;
 /// Medications moved to the Calendar tab's overflow menu, and the day-log sheet
-/// is now reached from the "Log" FAB. p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// is now reached from the "Log" FAB. r3b filled the Patterns tab — its one
+/// placeholder surface became a `patterns_tab — populated` sweep (every section
+/// rendered) and a `patterns_tab — thin data` sweep (the empty/keep-logging
+/// states); "Prediction accuracy" and the Modes on/off entry moved off Settings
+/// onto Patterns, so the `accuracy_page` and `modes_page` surfaces navigate
+/// through the Patterns tab now. p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -370,13 +374,26 @@ Future<void> _seedPmddModeEmpty(AppDatabase db) async {
   await DriftSettingsRepository(db).set(LifeStageMode.pmdd.settingKey, 'true');
 }
 
+/// r3b: a Patterns tab where every section renders — a regular history (the
+/// cycle-stats card), basal readings across the open cycle (a per-cycle BBT
+/// chart), a symptom logged across cycle phases (the correlations section) and
+/// PCOS mode on (an "Open PCOS" row plus the Modes on/off entry).
+Future<void> _seedPatternsPopulated(AppDatabase db) async {
+  await _seedPcosModeWithCorrelation(db);
+  final bbt = DriftBbtRepository(db);
+  for (var d = 0; d <= 18; d++) {
+    await bbt.setTemp(_daysAgo(20 - d), 36.35 + (d >= 10 ? 0.30 : 0.0));
+  }
+}
+
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
 }
 
 Future<void> _openModesPage(WidgetTester tester) async {
-  await _openFromSettings(tester, find.text('Life-stage & condition modes'));
+  // r3b: the Modes on/off entry moved from Settings to the Patterns tab.
+  await _openFromPatterns(tester, find.text('Life-stage & condition modes'));
 }
 
 Future<void> _openPostpartumScreen(WidgetTester tester) async {
@@ -448,6 +465,19 @@ Future<void> _openFromSettings(WidgetTester tester, Finder row) async {
   await tester.pumpAndSettle();
 }
 
+/// r3b: reach a row on the Patterns tab (the accuracy row + the Modes on/off
+/// entry moved here from Settings).
+Future<void> _openFromPatterns(WidgetTester tester, Finder row) async {
+  await switchTab(tester, 'Patterns');
+  await tester.scrollUntilVisible(
+    row,
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.tap(row);
+  await tester.pumpAndSettle();
+}
+
 final List<Surface> screenSurfaces = <Surface>[
   Surface('home_page — empty state', (tester, check) async {
     await pumpOlf(
@@ -493,8 +523,23 @@ final List<Surface> screenSurfaces = <Surface>[
     );
   }),
 
-  // r3a: the Patterns tab is an empty scaffold in this slice (r3b fills it).
-  Surface('patterns_tab — placeholder', (tester, check) async {
+  // r3b: the Patterns tab, every section rendered.
+  Surface('patterns_tab — populated', (tester, check) async {
+    final db = memoryDb();
+    await _seedPatternsPopulated(db);
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(db),
+      body: () async {
+        await switchTab(tester, 'Patterns');
+        expect(find.text('Basal temperature'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  // r3b: the Patterns tab on an empty DB — the keep-logging / empty states.
+  Surface('patterns_tab — thin data', (tester, check) async {
     await pumpOlf(
       tester,
       overrides: screenNavOverrides(memoryDb()),
@@ -705,7 +750,7 @@ final List<Surface> screenSurfaces = <Surface>[
       tester,
       overrides: screenNavOverrides(db),
       body: () async {
-        await _openFromSettings(tester, find.text(accuracySettingsTitle));
+        await _openFromPatterns(tester, find.text(accuracySettingsTitle));
         await flush(tester, 20);
         await check(tester);
       },

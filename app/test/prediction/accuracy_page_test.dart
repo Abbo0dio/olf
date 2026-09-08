@@ -26,8 +26,8 @@ void main() {
   }
 
   Future<void> openAccuracy(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
+    // r3b: "Prediction accuracy" moved from Settings → Cycle to the Patterns tab.
+    await switchTab(tester, 'Patterns');
     await tester.scrollUntilVisible(
       find.text(accuracySettingsTitle),
       200,

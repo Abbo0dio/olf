@@ -15,7 +15,9 @@ import '../symptom/symptom_providers.dart';
 /// `postpartumCycleReturnProvider`. Symptom names come from the full catalogue
 /// (archived types included) so a later-removed symptom is still named. Empty
 /// until both streams have loaded.
-final symptomPhaseCorrelationsProvider = Provider<List<PhaseCorrelation>>((ref) {
+final symptomPhaseCorrelationsProvider = Provider<List<PhaseCorrelation>>((
+  ref,
+) {
   final entries =
       ref.watch(symptomEntriesProvider).valueOrNull ??
       const <DailySymptomEntry>[];
