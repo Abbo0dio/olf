@@ -6,6 +6,7 @@ import 'package:olf_core/olf_core.dart';
 
 import '../a11y/announce.dart';
 import '../a11y/spoken_detail.dart';
+import '../app_shell.dart';
 import '../cycle/cycle_format.dart';
 import '../cycle/cycle_providers.dart';
 import '../cycle/cycle_wheel.dart';
@@ -15,6 +16,8 @@ import '../bbt/bbt_chart_widget.dart';
 import '../bbt/bbt_providers.dart';
 import '../day_log/day_log_sheet.dart';
 import '../modes/birth_control_recalibration_providers.dart';
+import '../modes/mode_catalog.dart';
+import '../modes/modes_page.dart';
 import '../modes/modes_providers.dart';
 import '../modes/pcos_correlation_format.dart';
 import '../modes/perimenopause_format.dart';
@@ -34,23 +37,36 @@ import 'period_editor.dart';
 import 'period_format.dart';
 import 'period_providers.dart';
 
-/// The home screen: a month calendar of logged periods and per-day flow, a
-/// running summary, and a history list.
+/// Which shell tab this instance renders (r3a).
+enum HomeVariant {
+  /// The slim home: cycle wheel, mode strip, forecast, "this cycle" card,
+  /// recent activity. No month grid, no history list.
+  home,
+
+  /// The Calendar tab: the month grid + the full, lazily-built, year-grouped
+  /// history.
+  calendar,
+}
+
+/// The Home / Calendar tab body. Both variants share the same period-editing
+/// plumbing (add / edit / delete / mark-start, the correction notice) and the
+/// same "Log" FAB → [showDayLog]; they differ only in what they lay out.
 ///
-/// Tapping any day — from the calendar, the cycle wheel, or the summary chips —
-/// opens the one unified day-log sheet (r2), which leads with Flow for a period
-/// day / today and Symptoms otherwise, and offers "Start a period" / "Edit
-/// period dates" for the day's state to reach the period-dates editor (p1.1).
-/// The "Add a period" button opens that editor directly. Every view watches the
-/// same streams so they stay in sync.
+/// Tapping any day — a calendar cell, the cycle wheel, the FAB, a recent-
+/// activity row — opens the one unified day-log sheet (r2). For **today** the
+/// sheet carries a one-tap "Mark today as period start" that writes the period
+/// directly (r3a §5); a past day's "Start a period" still goes through the
+/// period editor (p1.1).
 class PeriodCalendarView extends ConsumerWidget {
-  const PeriodCalendarView({super.key});
+  const PeriodCalendarView({super.key, this.variant = HomeVariant.home});
+
+  final HomeVariant variant;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final periods = ref.watch(periodsProvider);
     return switch (periods) {
-      AsyncData(:final value) => _Loaded(periods: value),
+      AsyncData(:final value) => _Loaded(periods: value, variant: variant),
       AsyncError() => const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
@@ -68,9 +84,10 @@ class PeriodCalendarView extends ConsumerWidget {
 }
 
 class _Loaded extends ConsumerStatefulWidget {
-  const _Loaded({required this.periods});
+  const _Loaded({required this.periods, required this.variant});
 
   final List<Period> periods;
+  final HomeVariant variant;
 
   @override
   ConsumerState<_Loaded> createState() => _LoadedState();
@@ -96,18 +113,22 @@ class _LoadedState extends ConsumerState<_Loaded> {
 
   Future<void> _openForDay(DateTime day) => _openDayLog(day);
 
-  /// The one entry into the unified day-log sheet (r2). Every entry point — the
-  /// calendar cells, the cycle wheel, both summary chips — routes here; [lead]
-  /// forces which section opens expanded (the summary "symptoms" chip passes
-  /// [DayLogLead.symptoms]), otherwise the sheet derives it from the day.
+  /// The one entry into the unified day-log sheet (r2). [lead] forces which
+  /// section opens expanded; otherwise the sheet derives it from the day.
   Future<void> _openDayLog(DateTime day, {DayLogLead? lead}) {
     final period = _periodOn(day);
+    final isToday = dateOnly(day) == dateOnly(DateTime.now());
     return showDayLog(
       context,
       date: day,
       lead: lead,
       onEditPeriodDates: period != null ? () => _edit(period) : null,
-      onStartPeriod: period == null ? () => _startPeriodOn(day) : null,
+      onStartPeriod: (period == null && !isToday)
+          ? () => _startPeriodOn(day)
+          : null,
+      onMarkPeriodStart: (period == null && isToday)
+          ? _markTodayAsPeriodStart
+          : null,
     );
   }
 
@@ -126,6 +147,27 @@ class _LoadedState extends ConsumerState<_Loaded> {
     () => showPeriodEditor(context, initialStart: DateTime.now()),
     _logging,
   );
+
+  /// r3a §5: the one-tap "Mark today as period start" write. Builds **exactly**
+  /// the draft the period editor's default today-Save builds
+  /// (`addPeriod(PeriodDraft(start: today, end: null))`, nothing else) and runs
+  /// it through the same outcome / correction-notice path — no editor surface.
+  /// A validation failure (today already covered) is caught and surfaced, same
+  /// as the editor's inline error; nothing is written.
+  Future<void> _markTodayAsPeriodStart() => _runHistoryEdit(() async {
+    final repo = ref.read(periodRepositoryProvider);
+    try {
+      await repo.addPeriod(PeriodDraft(start: dateOnly(DateTime.now())));
+      return PeriodEditorOutcome.saved;
+    } on PeriodValidationException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't mark today as a period.")),
+        );
+      }
+      return null;
+    }
+  }, _logging);
 
   Future<void> _edit(Period period) => _runHistoryEdit(
     () => showPeriodEditor(context, existing: period),
@@ -226,38 +268,62 @@ class _LoadedState extends ConsumerState<_Loaded> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  void _goToPatterns() => ref.read(appTabIndexProvider.notifier).state = 2;
+
+  void _goToCalendar() => ref.read(appTabIndexProvider.notifier).state = 1;
+
+  void _stepMonth(int delta) =>
+      setState(() => _visibleMonth = addMonths(_visibleMonth, delta));
+
+  void _jumpToToday() =>
+      setState(() => _visibleMonth = firstOfMonth(DateTime.now()));
+
   @override
   Widget build(BuildContext context) {
+    final fab = FloatingActionButton.extended(
+      // null tag: both variants mount at once in the shell's IndexedStack, so
+      // a shared default hero tag would collide.
+      heroTag: null,
+      onPressed: () => _openDayLog(DateTime.now()),
+      icon: const Icon(Icons.add),
+      label: const Text('Log'),
+    );
+    return Scaffold(
+      body: widget.variant == HomeVariant.home
+          ? _HomeBody(state: this)
+          : _CalendarBody(state: this),
+      floatingActionButton: fab,
+    );
+  }
+}
+
+/// The slim Home tab.
+class _HomeBody extends ConsumerWidget {
+  const _HomeBody({required this.state});
+
+  final _LoadedState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final today = DateTime.now();
+
     final flows = ref.watch(dailyFlowsProvider).value ?? const <DailyFlow>[];
-    final flowByDay = <DateTime, DailyFlow>{
-      for (final f in flows) dateOnly(f.date): f,
-    };
-    DailyFlow? flowOn(DateTime day) => flowByDay[dateOnly(day)];
-
-    final cycles = ref.watch(cyclesProvider);
-    final cycleStats = ref.watch(cycleStatsProvider);
-    final prediction = ref.watch(predictionProvider);
-    final correctionDelta = ref.watch(correctionNoticeProvider);
-    final cycleByStart = <DateTime, Cycle>{
-      for (final c in cycles) c.periodStart: c,
-    };
-
     final symptomEntries =
         ref.watch(symptomEntriesProvider).value ?? const <DailySymptomEntry>[];
     final symptomTypes =
         ref.watch(symptomTypesProvider).value ?? const <SymptomType>[];
-    final symptomIdsByDay = <DateTime, List<int>>{};
-    for (final e in symptomEntries) {
-      (symptomIdsByDay[dateOnly(e.date)] ??= <int>[]).add(e.symptomTypeId);
-    }
-    int symptomCountOn(DateTime day) =>
-        symptomIdsByDay[dateOnly(day)]?.length ?? 0;
-
     final bbtEntries =
         ref.watch(bbtEntriesProvider).value ?? const <BbtEntry>[];
+    final mucusEntries =
+        ref.watch(cervicalMucusEntriesProvider).value ??
+        const <CervicalMucusEntry>[];
     final tempUnit =
         ref.watch(temperatureUnitProvider).value ?? TemperatureUnit.celsius;
+
+    final cycles = ref.watch(cyclesProvider);
+    final prediction = ref.watch(predictionProvider);
+    final correctionDelta = ref.watch(correctionNoticeProvider);
+    final observedFertile = ref.watch(observedFertileWindowProvider);
     final currentCycle = cycles.isEmpty ? null : cycles.first;
     final cyclePhase = currentCyclePhase(
       cycle: currentCycle,
@@ -267,29 +333,17 @@ class _LoadedState extends ConsumerState<_Loaded> {
     final bbtPoints = currentCycle == null
         ? const <BbtChartPoint>[]
         : bbtChartForCycle(currentCycle, bbtEntries);
-    final observedFertile = ref.watch(observedFertileWindowProvider);
-    // p7.2b: while pregnancy mode is on, the forecast card (next-period +
-    // fertile-window estimate) is hidden — not deleted. It comes straight back
-    // when the mode is turned off, or when a p1.11 loss/birth ends it.
+
     final pregnancyModeOn =
         ref
             .watch(lifeStageModeEnabledProvider(LifeStageMode.pregnancy))
             .valueOrNull ??
         false;
-    // p7.4: PCOS mode softens the cycle-card / prediction wording — long and
-    // variable cycles are framed as expected, not as errors. Presentation only;
-    // `deriveCycles` and the predictor are untouched.
     final pcosModeOn =
         ref
             .watch(lifeStageModeEnabledProvider(LifeStageMode.pcos))
             .valueOrNull ??
         false;
-    // p7.7: perimenopause mode softens the same cycle-card / prediction wording
-    // — longer, variable and skipped cycles are the expected signal here, not
-    // errors. Presentation only; `deriveCycles`, `CycleStats` and the predictor
-    // are untouched. When history shows a long gap / 12+ months since the last
-    // period, the forecast card is withheld (a plain note takes its place)
-    // rather than asserting a forecast built on pre-gap cycles.
     final perimenopauseModeOn =
         ref
             .watch(lifeStageModeEnabledProvider(LifeStageMode.perimenopause))
@@ -303,39 +357,30 @@ class _LoadedState extends ConsumerState<_Loaded> {
     final pregnancyState = ref.watch(pregnancyRecoveryStateProvider);
     final pregnancySince = ref.watch(mostRecentPregnancyEndProvider)?.date;
 
-    // p7.8: while a hormonal birth-control change is still settling, the forecast
-    // card is withheld and a plain recalibration note takes its place. Clears on
-    // its own after the window, once enough post-change cycles are logged, or
-    // when the user dismisses it — and only shows when the mode is enabled.
     final bcRecalibration = ref.watch(birthControlRecalibrationProvider);
     final bcRecalActive = bcRecalibration?.active ?? false;
 
-    // p5.3: when "Reduce spoken detail" is on, sensitive read-outs on this
-    // screen (day cells, the prediction card, the correction notice, the
-    // recent-symptoms list, today's flow chip) announce only that an entry
-    // exists. Visible text is unchanged.
     final reduceSpoken =
         ref.watch(reduceSpokenDetailProvider).valueOrNull ?? false;
-
-    // p8.5: the passive temperature-shift read for this cycle, or null when the
-    // signal is too thin / shows no confirmed shift.
     final passivePhase = ref.watch(passivePhaseEstimateProvider);
 
+    final recent = _recentActivityDays(
+      flows: flows,
+      symptomEntries: symptomEntries,
+      bbtEntries: bbtEntries,
+      mucusEntries: mucusEntries,
+    );
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           CycleWheel(
             phase: cyclePhase,
             reduceSpoken: reduceSpoken,
-            onTap: () => _openDayLog(today),
+            onTap: () => state._openDayLog(today),
           ),
-          // p8.5: when the passive temperature signal has confirmed this
-          // cycle's post-ovulatory shift, the wheel above already reflects it
-          // (the fertile window is re-anchored on the observed ovulation) — this
-          // caption says so, in non-diagnostic terms. Absent when there is no
-          // passive signal, so the wheel then looks exactly as it did before.
           if (cyclePhase != null && passivePhase != null) ...[
             const SizedBox(height: 8),
             Text(
@@ -350,16 +395,9 @@ class _LoadedState extends ConsumerState<_Loaded> {
             ),
           ],
           const SizedBox(height: 16),
-          _Summary(
-            periods: _periods,
-            today: today,
-            todayFlow: flowOn(today),
-            todaySymptomCount: symptomCountOn(today),
-            reduceSpoken: reduceSpoken,
-            onLogTodayFlow: () => _openDayLog(today, lead: DayLogLead.flow),
-            onLogTodaySymptoms: () =>
-                _openDayLog(today, lead: DayLogLead.symptoms),
-          ),
+          _PeriodStatusLine(periods: state._periods, today: today),
+          const SizedBox(height: 12),
+          const _ModeChipStrip(),
           if (pregnancyState != PregnancyRecoveryState.none) ...[
             const SizedBox(height: 16),
             _PregnancyStatusCard(state: pregnancyState, since: pregnancySince),
@@ -373,10 +411,6 @@ class _LoadedState extends ConsumerState<_Loaded> {
                   ref.read(correctionNoticeProvider.notifier).clear(),
             ),
           ],
-          // r1: one widget owns "what goes where the forecast lives" — it picks
-          // exactly one of the overdue check-in / recalibration note /
-          // perimenopause-paused note / forecast card (or nothing), by a fixed
-          // priority, so two active modes can't stack banners here.
           ForecastArea(
             prediction: prediction,
             bcRecalActive: bcRecalActive,
@@ -386,62 +420,40 @@ class _LoadedState extends ConsumerState<_Loaded> {
             observedFertileWindow: observedFertile,
             pcosMode: pcosModeOn,
             perimenopauseMode: perimenopauseModeOn,
-            onLogPeriodStart: _addPeriod,
+            onLogPeriodStart: state._addPeriod,
             onDismissRecalibration: () => dismissBirthControlRecalibration(ref),
           ),
-          if (_periods.isNotEmpty) ...[
+          if (bbtPoints.length >= 2 ||
+              prediction != null ||
+              observedFertile != null) ...[
             const SizedBox(height: 16),
+            _ThisCycleCard(
+              points: bbtPoints,
+              unit: tempUnit,
+              fertileWindow: prediction?.fertileWindow,
+              observedFertile: observedFertile,
+              onTap: state._goToPatterns,
+            ),
+          ],
+          if (state._periods.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            // r3b relocates this to the Patterns tab; kept on Home for now so
+            // cycle-length insight isn't lost in this slice.
             _CycleStatsCard(
-              stats: cycleStats,
+              stats: ref.watch(cycleStatsProvider),
               pcosMode: pcosModeOn,
               perimenopauseMode: perimenopauseModeOn,
             ),
           ],
-          if (bbtPoints.length >= 2) ...[
-            const SizedBox(height: 16),
-            _BbtCard(points: bbtPoints, unit: tempUnit),
-          ],
           const SizedBox(height: 24),
-          _MonthCalendar(
-            month: _visibleMonth,
-            today: today,
-            periodOn: _periodOn,
-            flowOn: flowOn,
-            symptomCountOn: symptomCountOn,
-            reduceSpoken: reduceSpoken,
-            onPrev: () =>
-                setState(() => _visibleMonth = addMonths(_visibleMonth, -1)),
-            onNext: _visibleMonth.isBefore(firstOfMonth(today))
-                ? () => setState(
-                    () => _visibleMonth = addMonths(_visibleMonth, 1),
-                  )
-                : null,
-            onDayTap: _openForDay,
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: FilledButton.icon(
-              onPressed: _addPeriod,
-              style: FilledButton.styleFrom(minimumSize: const Size(220, 48)),
-              icon: const Icon(Icons.add),
-              label: const Text('Add a period'),
-            ),
-          ),
-          const SizedBox(height: 24),
-          _History(
-            periods: _periods,
-            today: today,
-            cycleByStart: cycleByStart,
-            onEdit: _edit,
-            onDelete: _deleteFromHistory,
-            pcosMode: pcosModeOn,
-            perimenopauseMode: perimenopauseModeOn,
-          ),
-          const SizedBox(height: 24),
-          _RecentSymptoms(
-            idsByDay: symptomIdsByDay,
+          _RecentActivity(
+            days: recent,
+            flows: {for (final f in flows) dateOnly(f.date): f},
+            symptomIdsByDay: _symptomIdsByDay(symptomEntries),
             types: symptomTypes,
             reduceSpoken: reduceSpoken,
+            onOpenDay: state._openForDay,
+            onSeeAll: state._goToCalendar,
           ),
         ],
       ),
@@ -449,114 +461,407 @@ class _LoadedState extends ConsumerState<_Loaded> {
   }
 }
 
-class _Summary extends StatelessWidget {
-  const _Summary({
-    required this.periods,
-    required this.today,
-    required this.todayFlow,
-    required this.todaySymptomCount,
-    required this.reduceSpoken,
-    required this.onLogTodayFlow,
-    required this.onLogTodaySymptoms,
-  });
+/// The Calendar tab: the month grid, then a lazy, year-grouped history list.
+class _CalendarBody extends ConsumerWidget {
+  const _CalendarBody({required this.state});
+
+  final _LoadedState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final today = DateTime.now();
+    final periods = state._periods;
+
+    final flows = ref.watch(dailyFlowsProvider).value ?? const <DailyFlow>[];
+    final flowByDay = {for (final f in flows) dateOnly(f.date): f};
+    final symptomIdsByDay = _symptomIdsByDay(
+      ref.watch(symptomEntriesProvider).value ?? const <DailySymptomEntry>[],
+    );
+    final cycles = ref.watch(cyclesProvider);
+    final cycleByStart = {for (final c in cycles) c.periodStart: c};
+    final pcosModeOn =
+        ref
+            .watch(lifeStageModeEnabledProvider(LifeStageMode.pcos))
+            .valueOrNull ??
+        false;
+    final perimenopauseModeOn =
+        ref
+            .watch(lifeStageModeEnabledProvider(LifeStageMode.perimenopause))
+            .valueOrNull ??
+        false;
+    final reduceSpoken =
+        ref.watch(reduceSpokenDetailProvider).valueOrNull ?? false;
+
+    // Flatten to a lazy list of year headers + period rows.
+    final items = <_CalItem>[];
+    int? lastYear;
+    for (final p in periods) {
+      final y = p.startDate.year;
+      if (y != lastYear) {
+        items.add(_CalItem.year(y));
+        lastYear = y;
+      }
+      items.add(_CalItem.period(p));
+    }
+
+    final theme = Theme.of(context);
+
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          sliver: SliverToBoxAdapter(
+            child: _MonthCalendar(
+              month: state._visibleMonth,
+              today: today,
+              periodOn: state._periodOn,
+              flowOn: (d) => flowByDay[dateOnly(d)],
+              symptomCountOn: (d) => symptomIdsByDay[dateOnly(d)]?.length ?? 0,
+              reduceSpoken: reduceSpoken,
+              onPrev: () => state._stepMonth(-1),
+              onNext: state._visibleMonth.isBefore(firstOfMonth(today))
+                  ? () => state._stepMonth(1)
+                  : null,
+              onJumpToToday: state._jumpToToday,
+              onDayTap: state._openForDay,
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          sliver: SliverToBoxAdapter(
+            child: Text('History', style: theme.textTheme.titleMedium),
+          ),
+        ),
+        if (items.isEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+            sliver: SliverToBoxAdapter(
+              child: Text(
+                'Nothing logged yet. Tap a day or the Log button.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+            sliver: SliverList.builder(
+              itemCount: items.length,
+              itemBuilder: (context, i) {
+                final item = items[i];
+                if (item.year != null) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 16, bottom: 4),
+                    child: Text(
+                      '${item.year}',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  );
+                }
+                final period = item.period!;
+                return _HistoryRow(
+                  period: period,
+                  today: today,
+                  cycle: cycleByStart[dateOnly(period.startDate)],
+                  pcosMode: pcosModeOn,
+                  perimenopauseMode: perimenopauseModeOn,
+                  onOpen: () => state._openForDay(period.startDate),
+                  onDelete: () => state._deleteFromHistory(period),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CalItem {
+  _CalItem.year(this.year) : period = null;
+  _CalItem.period(this.period) : year = null;
+  final int? year;
+  final Period? period;
+}
+
+Map<DateTime, List<int>> _symptomIdsByDay(List<DailySymptomEntry> entries) {
+  final m = <DateTime, List<int>>{};
+  for (final e in entries) {
+    (m[dateOnly(e.date)] ??= <int>[]).add(e.symptomTypeId);
+  }
+  return m;
+}
+
+/// The most recent days (≤ 3) with anything logged — flow, symptom, temp or
+/// cervical fluid — newest first.
+List<DateTime> _recentActivityDays({
+  required List<DailyFlow> flows,
+  required List<DailySymptomEntry> symptomEntries,
+  required List<BbtEntry> bbtEntries,
+  required List<CervicalMucusEntry> mucusEntries,
+}) {
+  final days = <DateTime>{
+    for (final f in flows) dateOnly(f.date),
+    for (final s in symptomEntries) dateOnly(s.date),
+    for (final b in bbtEntries) dateOnly(b.date),
+    for (final m in mucusEntries) dateOnly(m.date),
+  }.toList()..sort((a, b) => b.compareTo(a));
+  return days.take(3).toList();
+}
+
+/// A one-line "where you are" status under the wheel: the running day count of
+/// an ongoing period, otherwise the last logged period's range, otherwise a
+/// nudge. (The old home summary's log chips are now the "Log" FAB's job.)
+class _PeriodStatusLine extends StatelessWidget {
+  const _PeriodStatusLine({required this.periods, required this.today});
 
   final List<Period> periods;
   final DateTime today;
-  final DailyFlow? todayFlow;
-  final int todaySymptomCount;
-  final bool reduceSpoken;
-  final VoidCallback onLogTodayFlow;
-  final VoidCallback onLogTodaySymptoms;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    Widget content;
     if (periods.isEmpty) {
-      content = Text(
-        'No periods logged yet.',
-        style: theme.textTheme.bodyLarge,
-      );
-    } else {
-      final latest = periods.first;
-      final ongoing =
-          latest.endDate == null &&
-          !dateOnly(latest.startDate).isAfter(dateOnly(today));
-
-      if (ongoing) {
-        final day = dayCountSince(latest.startDate, today);
-        final flow = todayFlow;
-        content = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Day $day',
-              style: theme.textTheme.displaySmall,
-              semanticsLabel: 'Day $day of your period',
-            ),
-            const SizedBox(height: 4),
-            Text('Period started ${formatDay(latest.startDate)}'),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: ActionChip(
-                avatar: const Icon(Icons.water_drop_outlined, size: 18),
-                label: Text(
-                  flow == null
-                      ? "Log today's flow"
-                      : "Today's flow: ${flow.intensity.label}",
-                  semanticsLabel: flow == null
-                      ? null
-                      : spokenLabel(
-                          reduceSpoken,
-                          redacted: "Today's flow logged",
-                        ),
-                ),
-                onPressed: onLogTodayFlow,
-              ),
-            ),
-          ],
-        );
-      } else {
-        content = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Last period', style: theme.textTheme.labelMedium),
-            const SizedBox(height: 4),
-            Text(
-              formatRange(latest.startDate, latest.endDate),
-              style: theme.textTheme.titleMedium,
-            ),
-          ],
-        );
-      }
+      return Text('No periods logged yet.', style: theme.textTheme.bodyLarge);
     }
-
+    final latest = periods.first;
+    final ongoing =
+        latest.endDate == null &&
+        !dateOnly(latest.startDate).isAfter(dateOnly(today));
+    if (ongoing) {
+      final day = dayCountSince(latest.startDate, today);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Day $day',
+            style: theme.textTheme.displaySmall,
+            semanticsLabel: 'Day $day of your period',
+          ),
+          const SizedBox(height: 4),
+          Text('Period started ${formatDay(latest.startDate)}'),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        content,
-        const SizedBox(height: 12),
+        Text('Last period', style: theme.textTheme.labelMedium),
+        const SizedBox(height: 4),
+        Text(
+          formatRange(latest.startDate, latest.endDate),
+          style: theme.textTheme.titleMedium,
+        ),
+      ],
+    );
+  }
+}
+
+/// A horizontal strip of chips, one per enabled life-stage/condition mode, each
+/// opening that mode's screen. Renders nothing when no mode is on.
+class _ModeChipStrip extends ConsumerWidget {
+  const _ModeChipStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled = <LifeStageMode>[
+      for (final mode in LifeStageMode.values)
+        if (ref.watch(lifeStageModeEnabledProvider(mode)).valueOrNull ?? false)
+          mode,
+    ];
+    if (enabled.isEmpty) return const SizedBox.shrink();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final mode in enabled) ...[
+            ActionChip(
+              label: Text(modeCatalogEntry(mode).title),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute<void>(builder: (_) => modeScreen(mode))),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One glanceable card for the cycle in progress: the BBT sparkline, the
+/// fertile-window estimate, and any observed fertile signs. The whole card taps
+/// through to the Patterns tab.
+class _ThisCycleCard extends StatelessWidget {
+  const _ThisCycleCard({
+    required this.points,
+    required this.unit,
+    required this.fertileWindow,
+    required this.observedFertile,
+    required this.onTap,
+  });
+
+  final List<BbtChartPoint> points;
+  final TemperatureUnit unit;
+  final DateRange? fertileWindow;
+  final DateRange? observedFertile;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      container: true,
+      label: 'This cycle. Opens Patterns.',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This cycle',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (points.length >= 2) ...[
+                const SizedBox(height: 8),
+                BbtChart(points: points, unit: unit),
+              ],
+              if (fertileWindow != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Estimated fertile window: ${formatDateRange(fertileWindow!)}',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+              if (observedFertile != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Observed fertile signs: ${formatDateRange(observedFertile!)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Recent activity" — the last ≤ 3 logged days, each opening the day-log sheet,
+/// with a link across to the Calendar tab for the rest.
+class _RecentActivity extends StatelessWidget {
+  const _RecentActivity({
+    required this.days,
+    required this.flows,
+    required this.symptomIdsByDay,
+    required this.types,
+    required this.reduceSpoken,
+    required this.onOpenDay,
+    required this.onSeeAll,
+  });
+
+  final List<DateTime> days;
+  final Map<DateTime, DailyFlow> flows;
+  final Map<DateTime, List<int>> symptomIdsByDay;
+  final List<SymptomType> types;
+  final bool reduceSpoken;
+  final ValueChanged<DateTime> onOpenDay;
+  final VoidCallback onSeeAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Recent activity', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (days.isEmpty)
+          Text('Nothing logged yet.', style: theme.textTheme.bodyMedium)
+        else
+          for (final day in days)
+            _RecentActivityRow(
+              day: day,
+              flow: flows[dateOnly(day)],
+              symptomCount: symptomIdsByDay[dateOnly(day)]?.length ?? 0,
+              reduceSpoken: reduceSpoken,
+              onTap: () => onOpenDay(day),
+            ),
+        const SizedBox(height: 4),
         Align(
           alignment: Alignment.centerLeft,
-          child: ActionChip(
-            avatar: const Icon(Icons.spa_outlined, size: 18),
-            label: Text(
-              todaySymptomCount == 0
-                  ? "Log today's symptoms"
-                  : "Today's symptoms: $todaySymptomCount",
-              semanticsLabel: todaySymptomCount == 0
-                  ? null
-                  : spokenLabel(
-                      reduceSpoken,
-                      redacted: "Today's symptoms logged",
-                    ),
-            ),
-            onPressed: onLogTodaySymptoms,
+          child: TextButton(
+            onPressed: onSeeAll,
+            style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
+            child: const Text('See all in Calendar'),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RecentActivityRow extends StatelessWidget {
+  const _RecentActivityRow({
+    required this.day,
+    required this.flow,
+    required this.symptomCount,
+    required this.reduceSpoken,
+    required this.onTap,
+  });
+
+  final DateTime day;
+  final DailyFlow? flow;
+  final int symptomCount;
+  final bool reduceSpoken;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final f = flow;
+    final parts = <String>[
+      if (f != null) flowSemantics(f.intensity, f.clotSize),
+      if (symptomCount > 0) symptomCountLabel(symptomCount),
+    ];
+    final detail = parts.isEmpty ? 'entry logged' : parts.join(', ');
+    final semantic = reduceSpoken
+        ? '${formatDay(day)}, has entries'
+        : '${formatDay(day)}, $detail';
+    return Semantics(
+      button: true,
+      label: semantic,
+      excludeSemantics: true,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(formatDay(day)),
+        subtitle: parts.isEmpty
+            ? null
+            : Text(
+                detail,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
     );
   }
 }
@@ -571,6 +876,7 @@ class _MonthCalendar extends StatelessWidget {
     required this.reduceSpoken,
     required this.onPrev,
     required this.onNext,
+    required this.onJumpToToday,
     required this.onDayTap,
   });
 
@@ -582,6 +888,7 @@ class _MonthCalendar extends StatelessWidget {
   final bool reduceSpoken;
   final VoidCallback onPrev;
   final VoidCallback? onNext;
+  final VoidCallback onJumpToToday;
   final ValueChanged<DateTime> onDayTap;
 
   @override
@@ -624,6 +931,11 @@ class _MonthCalendar extends StatelessWidget {
               ),
             ),
             IconButton(
+              onPressed: onJumpToToday,
+              icon: const Icon(Icons.today_outlined),
+              tooltip: 'Jump to today',
+            ),
+            IconButton(
               onPressed: onNext,
               icon: const Icon(Icons.chevron_right),
               tooltip: 'Next month',
@@ -647,11 +959,22 @@ class _MonthCalendar extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        GridView.count(
-          crossAxisCount: 7,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: cells,
+        // r3a: horizontal drag switches month, alongside the chevrons.
+        GestureDetector(
+          onHorizontalDragEnd: (d) {
+            final v = d.primaryVelocity ?? 0;
+            if (v < 0) {
+              onNext?.call();
+            } else if (v > 0) {
+              onPrev();
+            }
+          },
+          child: GridView.count(
+            crossAxisCount: 7,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: cells,
+          ),
         ),
       ],
     );
@@ -690,9 +1013,6 @@ class _DayCell extends StatelessWidget {
       if (f != null) flowSemantics(f.intensity, f.clotSize),
       if (symptomCount > 0) symptomCountLabel(symptomCount),
     ];
-    // p5.3: with "Reduce spoken detail" on, a day with anything logged
-    // announces only "<date>, has entries" — no flow intensity, symptom count,
-    // or period state.
     final semantic = reduceSpoken
         ? (hasEntries ? '${formatDay(date)}, has entries' : formatDay(date))
         : '${formatDay(date)}, ${parts.join(', ')}';
@@ -803,293 +1123,57 @@ class _FlowBar extends StatelessWidget {
   }
 }
 
-class _History extends StatelessWidget {
-  const _History({
-    required this.periods,
+/// One history row: the period's range + a two-line detail, tapping through to
+/// the day-log sheet, with a delete affordance in the trailing slot.
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow({
+    required this.period,
     required this.today,
-    required this.cycleByStart,
-    required this.onEdit,
-    required this.onDelete,
-    this.pcosMode = false,
-    this.perimenopauseMode = false,
-  });
-
-  final List<Period> periods;
-  final DateTime today;
-
-  /// The derived cycle each period opens, keyed by `dateOnly(startDate)`.
-  final Map<DateTime, Cycle> cycleByStart;
-  final ValueChanged<Period> onEdit;
-  final ValueChanged<Period> onDelete;
-
-  /// p7.4 / p7.7: soften the likely-gap length note (long / skipped cycles are
-  /// expected in PCOS and perimenopause modes).
-  final bool pcosMode;
-  final bool perimenopauseMode;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('History', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        if (periods.isEmpty)
-          Text(
-            'Nothing logged yet. Tap a day or "Add a period".',
-            style: theme.textTheme.bodyMedium,
-          )
-        else
-          for (final period in periods)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(formatRange(period.startDate, period.endDate)),
-              subtitle: _HistoryRowDetail(
-                periodLength: formatLength(
-                  period.startDate,
-                  period.endDate,
-                  today,
-                ),
-                cycle: cycleByStart[dateOnly(period.startDate)],
-                pcosMode: pcosMode,
-                perimenopauseMode: perimenopauseMode,
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: () => onEdit(period),
-                    icon: const Icon(Icons.edit_outlined),
-                    tooltip: 'Edit period',
-                  ),
-                  IconButton(
-                    onPressed: () => onDelete(period),
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Delete period',
-                  ),
-                ],
-              ),
-            ),
-      ],
-    );
-  }
-}
-
-/// The recent days that have symptoms logged, newest first, with the symptom
-/// names for each. Names are resolved against the active catalogue; a symptom
-/// that has since been removed drops out of the list (its day still counts on
-/// the calendar).
-class _RecentSymptoms extends StatelessWidget {
-  const _RecentSymptoms({
-    required this.idsByDay,
-    required this.types,
-    required this.reduceSpoken,
-  });
-
-  final Map<DateTime, List<int>> idsByDay;
-  final List<SymptomType> types;
-  final bool reduceSpoken;
-
-  static const int _maxDays = 14;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final days = idsByDay.keys.toList()..sort((a, b) => b.compareTo(a));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Recent symptoms', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        if (days.isEmpty)
-          Text('No symptoms logged yet.', style: theme.textTheme.bodyMedium)
-        else
-          for (final day in days.take(_maxDays))
-            Builder(
-              builder: (context) {
-                final names = symptomNames(idsByDay[day]!, types);
-                if (names.isEmpty) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(formatDay(day), style: theme.textTheme.bodyMedium),
-                      Text(
-                        symptomSummary(names),
-                        semanticsLabel: spokenLabel(
-                          reduceSpoken,
-                          redacted: symptomCountLabel(names.length),
-                        ),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-      ],
-    );
-  }
-}
-
-/// A history row's two-line subtitle: the period's own length, then the cycle it
-/// opened (once one can be derived).
-class _HistoryRowDetail extends StatelessWidget {
-  const _HistoryRowDetail({
-    required this.periodLength,
     required this.cycle,
-    this.pcosMode = false,
-    this.perimenopauseMode = false,
+    required this.pcosMode,
+    required this.perimenopauseMode,
+    required this.onOpen,
+    required this.onDelete,
   });
 
-  final String periodLength;
+  final Period period;
+  final DateTime today;
   final Cycle? cycle;
   final bool pcosMode;
   final bool perimenopauseMode;
+  final VoidCallback onOpen;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final c = cycle;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(periodLength),
-        if (c != null)
-          Text(
-            cycleLengthNote(
-              c,
-              pcosMode: pcosMode,
-              perimenopauseMode: perimenopauseMode,
-            ),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// Transient "your update was taken in" note (p3.3).
-///
-/// Shown right where the prediction card is (or would be) after the user edits,
-/// adds, or deletes a logged period. Its body is [PredictionDelta.reasons]
-/// verbatim — plain-language, gender-neutral, non-alarming lines produced by the
-/// core engine, including the explicit "did not need to change" line when the
-/// forecast held. It is a live change, so it announces itself to screen readers
-/// and clears on its own after a short while (or on manual dismiss).
-class _CorrectionNotice extends StatefulWidget {
-  const _CorrectionNotice({
-    required this.delta,
-    required this.reduceSpoken,
-    required this.onDismiss,
-  });
-
-  final PredictionDelta delta;
-  final bool reduceSpoken;
-  final VoidCallback onDismiss;
-
-  @override
-  State<_CorrectionNotice> createState() => _CorrectionNoticeState();
-}
-
-class _CorrectionNoticeState extends State<_CorrectionNotice> {
-  static const _visibleFor = Duration(seconds: 10);
-  Timer? _autoClear;
-
-  /// p5.3: the reason lines can name dates, so with "Reduce spoken detail" on
-  /// the screen reader hears only that the forecast changed. Visible text is
-  /// unchanged.
-  static const _reducedLabel = 'Your prediction was updated.';
-
-  String get _spokenLabel =>
-      widget.reduceSpoken ? _reducedLabel : widget.delta.reasons.join(' ');
-
-  @override
-  void initState() {
-    super.initState();
-    _restartTimer();
-    _announce();
-  }
-
-  @override
-  void didUpdateWidget(_CorrectionNotice old) {
-    super.didUpdateWidget(old);
-    if (widget.delta != old.delta) {
-      _restartTimer();
-      _announce();
-    }
-  }
-
-  @override
-  void dispose() {
-    _autoClear?.cancel();
-    super.dispose();
-  }
-
-  void _restartTimer() {
-    _autoClear?.cancel();
-    _autoClear = Timer(_visibleFor, widget.onDismiss);
-  }
-
-  void _announce() {
-    if (!mounted) return;
-    announce(context, _spokenLabel);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final onColor = theme.colorScheme.onSecondaryContainer;
-    return Semantics(
-      container: true,
-      liveRegion: true,
-      label: _spokenLabel,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2, right: 12),
-              child: Icon(Icons.check_circle_outline, size: 20, color: onColor),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (var i = 0; i < widget.delta.reasons.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 4),
-                    Text(
-                      widget.delta.reasons[i],
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: onColor,
-                      ),
-                    ),
-                  ],
-                ],
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(formatRange(period.startDate, period.endDate)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(formatLength(period.startDate, period.endDate, today)),
+          if (c != null)
+            Text(
+              cycleLengthNote(
+                c,
+                pcosMode: pcosMode,
+                perimenopauseMode: perimenopauseMode,
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.close, size: 20),
-              color: onColor,
-              tooltip: correctionNoticeDismissLabel,
-              onPressed: widget.onDismiss,
-            ),
-          ],
-        ),
+        ],
       ),
+      trailing: IconButton(
+        onPressed: onDelete,
+        icon: const Icon(Icons.delete_outline),
+        tooltip: 'Delete period',
+      ),
+      onTap: onOpen,
     );
   }
 }
@@ -1196,45 +1280,116 @@ class _CycleStatsCard extends StatelessWidget {
   }
 }
 
-/// This cycle's basal-temperature chart, shown once there are at least two
-/// readings to draw a line between.
-class _BbtCard extends StatelessWidget {
-  const _BbtCard({required this.points, required this.unit});
+/// Transient "your update was taken in" note (p3.3).
+class _CorrectionNotice extends StatefulWidget {
+  const _CorrectionNotice({
+    required this.delta,
+    required this.reduceSpoken,
+    required this.onDismiss,
+  });
 
-  final List<BbtChartPoint> points;
-  final TemperatureUnit unit;
+  final PredictionDelta delta;
+  final bool reduceSpoken;
+  final VoidCallback onDismiss;
+
+  @override
+  State<_CorrectionNotice> createState() => _CorrectionNoticeState();
+}
+
+class _CorrectionNoticeState extends State<_CorrectionNotice> {
+  static const _visibleFor = Duration(seconds: 10);
+  Timer? _autoClear;
+
+  static const _reducedLabel = 'Your prediction was updated.';
+
+  String get _spokenLabel =>
+      widget.reduceSpoken ? _reducedLabel : widget.delta.reasons.join(' ');
+
+  @override
+  void initState() {
+    super.initState();
+    _restartTimer();
+    _announce();
+  }
+
+  @override
+  void didUpdateWidget(_CorrectionNotice old) {
+    super.didUpdateWidget(old);
+    if (widget.delta != old.delta) {
+      _restartTimer();
+      _announce();
+    }
+  }
+
+  @override
+  void dispose() {
+    _autoClear?.cancel();
+    super.dispose();
+  }
+
+  void _restartTimer() {
+    _autoClear?.cancel();
+    _autoClear = Timer(_visibleFor, widget.onDismiss);
+  }
+
+  void _announce() {
+    if (!mounted) return;
+    announce(context, _spokenLabel);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Basal temperature — this cycle',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+    final onColor = theme.colorScheme.onSecondaryContainer;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: _spokenLabel,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2, right: 12),
+              child: Icon(Icons.check_circle_outline, size: 20, color: onColor),
             ),
-          ),
-          const SizedBox(height: 8),
-          BbtChart(points: points, unit: unit),
-        ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < widget.delta.reasons.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 4),
+                    Text(
+                      widget.delta.reasons[i],
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: onColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 20),
+              color: onColor,
+              tooltip: correctionNoticeDismissLabel,
+              onPressed: widget.onDismiss,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 /// Gentle heads-up shown after a recorded pregnancy loss / birth while cycles
-/// have not resumed (p1.11). Explains why estimates are paused. When postpartum
-/// mode (p7.1) is on, it also offers a way into the cycle-return view — nothing
-/// extra shows for a user who hasn't enabled the mode.
+/// have not resumed (p1.11).
 class _PregnancyStatusCard extends ConsumerWidget {
   const _PregnancyStatusCard({required this.state, required this.since});
 

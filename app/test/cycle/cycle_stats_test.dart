@@ -25,10 +25,12 @@ void main() {
       tester,
       overrides: [dbOverride(db)],
       body: () async {
+        // The cycle-insights card is on Home …
         expect(find.text('28-day typical cycle'), findsOneWidget);
         expect(find.text('Regular'), findsOneWidget);
         expect(find.text('Typical period 4 days'), findsOneWidget);
-        // history rows carry the derived cycle length
+        // … the per-row derived cycle length is on the Calendar history list.
+        await switchTab(tester, 'Calendar');
         expect(find.text('28-day cycle'), findsNWidgets(2));
         expect(find.text('Current cycle'), findsOneWidget);
       },
@@ -47,6 +49,7 @@ void main() {
       body: () async {
         expect(find.textContaining('Log at least two periods'), findsOneWidget);
         expect(find.textContaining('28-day'), findsNothing);
+        await switchTab(tester, 'Calendar');
         expect(find.text('History'), findsOneWidget);
       },
     );
@@ -63,12 +66,15 @@ void main() {
       body: () async {
         expect(find.text('28-day typical cycle'), findsOneWidget);
 
+        // The delete affordance is on the Calendar history rows now.
+        await switchTab(tester, 'Calendar');
         await tester.tap(find.byTooltip('Delete period').first);
         await tester.pumpAndSettle();
         await tester.tap(find.widgetWithText(TextButton, 'Delete'));
         await tester.pumpAndSettle();
 
         // one period left → back to the nudge, no stale "28-day" figure
+        await switchTab(tester, 'Home');
         expect(find.text('28-day typical cycle'), findsNothing);
         expect(find.textContaining('Log at least two periods'), findsOneWidget);
       },

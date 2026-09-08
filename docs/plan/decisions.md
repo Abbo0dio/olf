@@ -2,6 +2,23 @@
 
 Append-only. Newest first. Each entry: date, decision, rationale, who/what decided.
 
+- 2026-09-08 — **The APK-size perf baseline (`.github/perf-baseline.json` `apk_release_bytes`)
+  is moved from the `v1.0.1` figure (69 904 869 B) to the `v1.2.0` shipped APK
+  (73 138 505 B).** `docs/performance-budget.md` defines the baseline as "the size of the last
+  *signed release* APK … a real shipped number", but it was never advanced when `v1.1.0`
+  (2026-09-04) or `v1.2.0` (2026-09-07) shipped, so it still reflected a build that predated
+  Phases 6–8. Those phases added the only real size growth in the project — `pdf ^3.12.0` + 7
+  transitive packages (p6.5), `androidx.health.connect:connect-client:1.1.0` + minSdk 24→26
+  (p6.3), the native health bridges — pushing the shipped `v1.2.0` APK to +4.63 % over the
+  stale baseline, already near the 5 % ceiling. The r3a UI-refresh slice (`app/`-only, ~1 200
+  lines of Dart) then tipped a CI measurement to **+5.09 %** and failed the gate. r3a's own
+  contribution over `v1.2.0` is **+0.45 %** (73 466 117 B vs 73 138 505 B). Fix = correct the
+  baseline to the current shipped reality, per the doc's own definition; it is not r3a bloat.
+  Landed as its own commit on the r3a branch with `apk_release_bytes_source` updated to the
+  `v1.2.0` tag. **Follow-up (backlog):** `cut_release.sh` / the release checklist should
+  advance `apk_release_bytes` to the just-shipped APK at every release so the baseline can't
+  fall behind again. — Orchestrator ruling (r3a §5, 2nd resolution).
+
 - 2026-09-07 — **Feature phases 9–13 are paused; near-term work is testing, functionality
   hardening, and refinement of the current app (phases 0–8). A release (`v1.2.0`) is cut off
   the current `main`.** The core product is complete and usable on `main`: end-to-end cycle

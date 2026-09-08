@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:olf_app/src/period/period_format.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../support/harness.dart';
@@ -22,10 +21,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(today)}, no period logged'),
-          );
-          await tester.pumpAndSettle();
+          await openDayLogForToday(tester);
           await tester.tap(find.text('Cervical fluid'));
           await tester.pumpAndSettle();
 
@@ -64,10 +60,7 @@ void main() {
         );
 
         // log egg-white today (inside the current cycle)
-        await tester.tap(
-          find.bySemanticsLabel('${formatDay(today)}, no period logged'),
-        );
-        await tester.pumpAndSettle();
+        await openDayLogForToday(tester);
         await tester.tap(find.text('Cervical fluid'));
         await tester.pumpAndSettle();
         await tester.tap(chip('Egg-white'));

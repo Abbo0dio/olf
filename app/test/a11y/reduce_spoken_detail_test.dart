@@ -10,10 +10,11 @@ import '../support/harness.dart';
 /// generic form (an entry *exists*, not what it is). The **visible** text must
 /// never change.
 ///
-/// Redacted surfaces exercised here: the calendar day cell, today's flow chip,
-/// the recent-symptoms list, and the day-log sheet's symptom chips. (Also redacted
-/// in `lib/`: the prediction card and the correction notice — see the p5.3
-/// build notes.)
+/// Redacted surfaces exercised here: the Calendar day cell, the home "Recent
+/// activity" rows (r3a — these replaced the old summary flow chip + recent-
+/// symptoms list), and the day-log sheet's symptom chips. (Also redacted in
+/// `lib/`: the prediction card and the correction notice — see the p5.3 build
+/// notes.)
 void main() {
   final today = DateTime.now();
   DateTime daysAgo(int n) =>
@@ -21,7 +22,8 @@ void main() {
 
   Future<AppDatabase> seeded() async {
     final db = memoryDb();
-    // An ongoing period so the summary shows today's flow chip.
+    // An ongoing period plus a flow + a symptom on different days so the home
+    // "Recent activity" list has a row to speak / redact.
     await DriftPeriodRepository(db).addPeriod(PeriodDraft(start: daysAgo(2)));
     await DriftDailyFlowRepository(
       db,
@@ -40,12 +42,14 @@ void main() {
       tester,
       overrides: [dbOverride(db)],
       body: () async {
-        // Day cell speaks the flow intensity.
+        // Home "Recent activity" rows speak the specifics.
         expect(find.bySemanticsLabel(RegExp('flow heavy')), findsWidgets);
-        // Recent-symptoms line speaks the symptom name.
-        expect(find.bySemanticsLabel(RegExp('Headache')), findsWidgets);
-        // No redacted phrasing anywhere.
+        expect(find.bySemanticsLabel(RegExp('1 symptom')), findsWidgets);
         expect(find.bySemanticsLabel(RegExp('has entries')), findsNothing);
+
+        // The Calendar day cell speaks the flow intensity too.
+        await switchTab(tester, 'Calendar');
+        expect(find.bySemanticsLabel(RegExp('flow heavy')), findsWidgets);
       },
     );
   });
@@ -61,23 +65,25 @@ void main() {
         reduceSpokenDetailProvider.overrideWith((ref) => Stream.value(true)),
       ],
       body: () async {
-        // Day cell: "<date>, has entries" instead of the flow intensity.
+        // Home "Recent activity": each row announces only "<date>, has
+        // entries" …
         expect(find.bySemanticsLabel(RegExp('flow heavy')), findsNothing);
+        expect(find.bySemanticsLabel(RegExp('1 symptom')), findsNothing);
         expect(
-          find.bySemanticsLabel(
-            RegExp('^${RegExp.escape(formatDay(today))}, has entries\$'),
-          ),
+          find.bySemanticsLabel('${formatDay(today)}, has entries'),
           findsOneWidget,
         );
+        // … while the visible detail text is untouched.
+        expect(find.text('flow heavy'), findsWidgets);
+        expect(find.text('1 symptom'), findsWidgets);
 
-        // Recent-symptoms line: "1 symptom" instead of "Headache" — but the
-        // visible text is still the name.
-        expect(find.bySemanticsLabel(RegExp('^Headache\$')), findsNothing);
-        expect(find.text('Headache'), findsWidgets);
-
-        // Today's flow chip: redacted announcement, visible label unchanged.
-        expect(find.bySemanticsLabel("Today's flow logged"), findsOneWidget);
-        expect(find.text("Today's flow: Heavy"), findsOneWidget);
+        // The Calendar day cell redacts the same way.
+        await switchTab(tester, 'Calendar');
+        expect(find.bySemanticsLabel(RegExp('flow heavy')), findsNothing);
+        expect(
+          find.bySemanticsLabel('${formatDay(today)}, has entries'),
+          findsWidgets,
+        );
       },
     );
   });
@@ -86,7 +92,7 @@ void main() {
     tester,
   ) async {
     final db = memoryDb();
-    // Tapping today opens the unified day-log sheet; today leads with Flow, so
+    // The "Log" FAB opens the unified day-log sheet; today leads with Flow, so
     // expand the Symptoms section to reach its chips.
     await pumpOlf(
       tester,
@@ -95,12 +101,7 @@ void main() {
         reduceSpokenDetailProvider.overrideWith((ref) => Stream.value(true)),
       ],
       body: () async {
-        await tester.tap(
-          find.bySemanticsLabel(
-            RegExp('^${RegExp.escape(formatDay(today))}\$'),
-          ),
-        );
-        await tester.pumpAndSettle();
+        await openDayLogForToday(tester);
 
         expect(find.text('Day log — ${formatDay(today)}'), findsOneWidget);
         await tester.tap(find.text('Symptoms'));

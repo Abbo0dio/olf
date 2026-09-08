@@ -94,7 +94,7 @@ void main() {
         await flush(tester, 25);
 
         expect(find.text('Last period'), findsOneWidget);
-        expect(find.text('History'), findsOneWidget);
+        expect(find.text(formatRange(daysAgo(6), daysAgo(3))), findsWidgets);
         expect(find.text('No periods logged yet.'), findsNothing);
       },
     );

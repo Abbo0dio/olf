@@ -19,10 +19,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(today)}, no period logged'),
-          );
-          await tester.pumpAndSettle();
+          await openDayLogForToday(tester);
           await tester.tap(find.text('Temperature'));
           await tester.pumpAndSettle();
 
@@ -62,10 +59,7 @@ void main() {
       tester,
       overrides: [dbOverride(db)],
       body: () async {
-        await tester.tap(
-          find.bySemanticsLabel('${formatDay(today)}, no period logged'),
-        );
-        await tester.pumpAndSettle();
+        await openDayLogForToday(tester);
         await tester.tap(find.text('Temperature'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Add basal temperature'));

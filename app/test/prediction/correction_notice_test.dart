@@ -47,11 +47,17 @@ void main() {
       );
 
   /// Open the editor on the most recent history row and retype its start date.
+  /// r3a: the history list is on the Calendar tab, and a row opens the day-log
+  /// sheet — the editor is one "Edit period dates" tap further in. The
+  /// correction notice it produces renders on the Home tab, so this ends there.
   Future<void> correctMostRecentStartTo(
     WidgetTester tester,
     DateTime to,
   ) async {
-    await tester.tap(find.byTooltip('Edit period').first);
+    await switchTab(tester, 'Calendar');
+    await tester.tap(find.byType(ListTile).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit period dates'));
     await tester.pumpAndSettle();
     expect(find.text('Edit period'), findsOneWidget);
 
@@ -67,6 +73,8 @@ void main() {
 
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
+
+    await switchTab(tester, 'Home');
   }
 
   testWidgets('correcting a logged start shows what changed, recomputed', (
@@ -164,11 +172,16 @@ void main() {
         body: () async {
           expect(find.text('Next period'), findsOneWidget);
 
-          // Re-save the most recent period without touching its dates.
-          await tester.tap(find.byTooltip('Edit period').first);
+          // Re-save the most recent period without touching its dates — via the
+          // Calendar history row → day-log sheet → "Edit period dates".
+          await switchTab(tester, 'Calendar');
+          await tester.tap(find.byType(ListTile).first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Edit period dates'));
           await tester.pumpAndSettle();
           await tester.tap(find.widgetWithText(FilledButton, 'Save'));
           await tester.pumpAndSettle();
+          await switchTab(tester, 'Home');
 
           expect(
             find.text(
@@ -210,9 +223,8 @@ void main() {
       body: () async {
         expect(find.text('Next period'), findsNothing);
 
-        await tester.tap(find.text('Add a period'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await openDayLogForToday(tester);
+        await tester.tap(find.text('Mark today as period start'));
         await tester.pumpAndSettle();
 
         for (final reason in expected.reasons) {
@@ -245,9 +257,8 @@ void main() {
       tester,
       overrides: [dbOverride(db)],
       body: () async {
-        await tester.tap(find.text('Add a period'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await openDayLogForToday(tester);
+        await tester.tap(find.text('Mark today as period start'));
         await tester.pumpAndSettle();
 
         expect(find.text(expected.reasons.single), findsOneWidget);

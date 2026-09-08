@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olf_app/src/onboarding/disclaimers.dart';
-import 'package:olf_app/src/period/period_format.dart';
 
 import '../support/a11y.dart';
 import '../support/harness.dart';
@@ -83,12 +82,8 @@ void main() {
         tester,
         overrides: [dbOverride(memoryDb())],
         body: () async {
-          final today = DateTime.now();
-          // Home → tap today's calendar cell → day sheet → Manage symptoms.
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(today)}, no period logged'),
-          );
-          await tester.pumpAndSettle();
+          // Home → "Log" FAB → day sheet → Manage symptoms.
+          await openDayLogForToday(tester);
           await tester.tap(find.text('Manage symptoms'));
           await tester.pumpAndSettle();
 

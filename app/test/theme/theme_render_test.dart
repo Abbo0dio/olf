@@ -47,10 +47,16 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          // Home renders.
+          expect(find.text('Last period'), findsOneWidget);
+          expectRenderedAt(tester, brightness);
+
+          // Calendar tab: the month grid + the history list.
+          await switchTab(tester, 'Calendar');
           expect(find.text('History'), findsOneWidget);
           expectRenderedAt(tester, brightness);
 
-          // Day-log sheet for a non-period day.
+          // Day-log sheet for a non-period day (from a Calendar cell).
           await tester.tap(
             find.bySemanticsLabel('${formatDay(today)}, no period logged'),
           );
@@ -60,8 +66,10 @@ void main() {
           await tester.tapAt(const Offset(20, 20)); // dismiss the sheet
           await tester.pumpAndSettle();
 
-          // Medications.
-          await tester.tap(find.byTooltip('Medications'));
+          // Medications via the Calendar tab's overflow menu.
+          await tester.tap(find.byTooltip('More'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Medications').last);
           await tester.pumpAndSettle();
           expect(find.widgetWithText(AppBar, 'Medications'), findsOneWidget);
           expectRenderedAt(tester, brightness);

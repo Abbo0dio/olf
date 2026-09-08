@@ -15,7 +15,10 @@ void main() {
       body: () async {
         expect(find.widgetWithText(AppBar, 'olf'), findsOneWidget);
         expect(find.text('No periods logged yet.'), findsOneWidget);
-        expect(find.text('Add a period'), findsOneWidget);
+        expect(
+          find.widgetWithText(FloatingActionButton, 'Log'),
+          findsOneWidget,
+        );
       },
     );
   });
@@ -44,7 +47,7 @@ void main() {
       ],
       body: () async {
         expect(find.text("Can't unlock your data"), findsOneWidget);
-        expect(find.text('Add a period'), findsNothing);
+        expect(find.widgetWithText(FloatingActionButton, 'Log'), findsNothing);
       },
     );
   });

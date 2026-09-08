@@ -2,15 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
-import 'meds/meds_page.dart';
-import 'period/period_calendar_page.dart';
+import 'app_shell.dart';
 import 'providers.dart';
 import 'reminders/reminder_providers.dart';
 import 'retention/retention_providers.dart';
-import 'settings/settings_page.dart';
 
 /// Home screen. Gates on the encrypted database opening, then hands off to the
-/// period calendar (p1.1). A missing key is a deliberate dead-end.
+/// app shell (r3a). A missing key is a deliberate dead-end.
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
@@ -25,43 +23,20 @@ class HomePage extends ConsumerWidget {
     // the start-up pass and re-plans whenever the forecast moves (e.g. a period
     // is logged). Never runs behind the lock or first-run screens.
     ref.watch(reminderSyncProvider);
+
+    if (database case AsyncData()) return const AppShell();
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('olf'),
-        actions: [
-          if (database case AsyncData()) ...[
-            IconButton(
-              icon: const Icon(Icons.medication_outlined),
-              tooltip: 'Medications',
-              onPressed: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute<void>(builder: (_) => const MedsPage())),
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              tooltip: 'Settings',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
-              ),
-            ),
-          ],
-        ],
+      appBar: AppBar(title: const Text('olf')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: switch (database) {
+            AsyncError(:final error) => _DatabaseUnavailable(error: error),
+            _ => const _Busy(message: 'Opening your private database'),
+          },
+        ),
       ),
-      body: switch (database) {
-        AsyncData() => const PeriodCalendarView(),
-        AsyncError(:final error) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: _DatabaseUnavailable(error: error),
-          ),
-        ),
-        _ => const Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: _Busy(message: 'Opening your private database'),
-          ),
-        ),
-      },
     );
   }
 }

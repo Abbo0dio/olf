@@ -169,16 +169,35 @@ longer-term views except by scrolling the home stack or diving into Settings.
   overflow menu on this tab holds **Pregnancy loss & birth** and **Medications**
   (both demoted from the home AppBar).
 - **"Log" FAB** on Home and Calendar → `showDayLog` for today (Calendar: for the
-  selected day). Remove the mid-scroll "Add a period" button; "mark as period
-  start" lives in the day-log sheet and the overdue card.
+  selected day). Remove the mid-scroll "Add a period" button.
+- **"Mark <date> as period start"** — a **one-tap direct-write** action in the
+  day-log sheet's Flow section, shown only when `date` is not already inside a
+  logged period. Writes through the **same** `periodRepository.addPeriod` call +
+  outcome / correction-notice path the period editor's default Save uses for a
+  today-start (verified parity — same `PeriodDraft`, same post-write refresh and
+  notice — not a parallel write path); no editor surface. The overdue check-in
+  card's "mark as period start", if present, routes through the same helper.
+  The period **editor** stays the path for editing an existing period and for
+  starting one on an arbitrary past day (the sheet's "Edit period dates" /
+  "Start a period" actions, and calendar-cell entry).
+  *(§5 negotiation, r3a, 2026-09-08 — resolved option (a): a pure FAB →
+  `showDayLog` fast path is 3 taps to a period write via "Start a period" →
+  editor → Save, and re-pointing the gate to a flow write would change what it
+  asserts. This one-tap action keeps the gate asserting a real period write with
+  its existing "Period saved." / "Day 1" ack. Rejected (b) a context-aware FAB —
+  reintroduces the "'Log' is not one predictable action" problem r2 fixed — and
+  (c) re-pointing the gate to a flow write + a new SnackBar ack — permanently
+  weakens the gate.)*
 - Month grid + full history are **removed from the Home tab**.
 
 **Acceptance criteria.**
 
 - Three tabs, switchable, each retains scroll position on return.
-- `perf/log_period_tap_budget_test.dart` green — fast path re-pointed to the FAB
-  (tap FAB → Save/first-intensity), `maxTaps = 2` and feedback budget unchanged.
-  **If ≤ 2 taps can't be held, STOP and negotiate.**
+- `perf/log_period_tap_budget_test.dart` green — fast path re-pointed to: tap the
+  "Log" FAB → tap "Mark today as period start" (in the opened day-log sheet's
+  Flow section) → assert `Period saved.` + `Day 1`. `maxTaps = 2` and the
+  feedback budget **unchanged**; the assertion still verifies a real period
+  write. (Resolved §5 negotiation — see the Shape note above.)
 - Home no longer shows the month grid or the full history list; "Recent
   activity" shows ≤ 3 days.
 - Calendar history list is lazily built and year-grouped.

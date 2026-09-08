@@ -1,5 +1,5 @@
 import 'package:drift/native.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:olf_app/main.dart';
@@ -141,6 +141,22 @@ Future<void> flush(WidgetTester tester, [int frames = 12]) async {
 Future<void> useTallSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(1000, 2200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
+/// Switch the r3a app shell to the tab whose [NavigationBar] label is [label]
+/// ("Home", "Calendar", "Patterns").
+Future<void> switchTab(WidgetTester tester, String label) async {
+  await tester.tap(
+    find.descendant(of: find.byType(NavigationBar), matching: find.text(label)),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Open the day-log sheet for **today** via the Home "Log" FAB (r3a — the
+/// calendar month grid, and its day cells, now live on the Calendar tab).
+Future<void> openDayLogForToday(WidgetTester tester) async {
+  await tester.tap(find.byType(FloatingActionButton));
+  await tester.pumpAndSettle();
 }
 
 /// Pump the app behind its p1.8 gate.

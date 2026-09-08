@@ -7,9 +7,10 @@ import '../support/harness.dart';
 /// **home → a logged period in ≤ 2 taps**, with the confirmation shown inside a
 /// tight feedback window. This test permanently encodes "one or two taps".
 ///
-/// The canonical fast path (see `period_calendar_test.dart`): tap **"Add a
-/// period"** on the calendar, then **"Save"** in the editor, which is pre-filled
-/// with today — no date entry needed.
+/// r3a re-pointed the canonical fast path (§5 negotiation, `ui-refresh.md` #r3a):
+/// tap the **"Log"** FAB on Home, then **"Mark today as period start"** in the
+/// day-log sheet's Flow section — a direct `addPeriod` write, no editor. It
+/// still asserts a real period write via the same "Period saved." ack.
 void main() {
   // §3 says < 100 ms feedback. Widget-test time is virtual; we allow a small
   // pump budget for the route pop + in-memory DB write + rebuild, and assert
@@ -24,21 +25,17 @@ void main() {
       tester,
       overrides: [dbOverride(memoryDb())],
       body: () async {
-        // Start on the calendar with nothing logged.
-        expect(find.text('Add a period'), findsOneWidget);
-        expect(
-          find.text('Nothing logged yet. Tap a day or "Add a period".'),
-          findsOneWidget,
-        );
+        // Start on Home with nothing logged.
+        expect(find.text('Nothing logged yet.'), findsOneWidget);
 
         var taps = 0;
 
-        await tester.tap(find.text('Add a period'));
+        await tester.tap(find.byType(FloatingActionButton)); // tap 1
         taps++;
         await tester.pumpAndSettle();
-        expect(find.text('Log a period'), findsOneWidget);
+        expect(find.text('Mark today as period start'), findsOneWidget);
 
-        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.tap(find.text('Mark today as period start')); // tap 2
         taps++;
 
         // Feedback budget: pump only a little, then assert the app has already
@@ -56,9 +53,10 @@ void main() {
           findsOneWidget,
           reason: 'the confirmation must appear within $feedbackBudget',
         );
-        expect(find.text('Day 1'), findsOneWidget);
 
         await tester.pumpAndSettle();
+        // The write really landed: the cycle wheel now reads cycle day 1.
+        expect(find.text('Day 1'), findsOneWidget);
       },
     );
   });
