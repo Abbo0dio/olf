@@ -2,6 +2,26 @@
 
 Ideas and follow-ups not yet placed in a phase. Add freely; groom into phases later.
 
+- **Auto-advance the APK-size baseline at release time.** `.github/perf-baseline.json`
+  `apk_release_bytes` is meant to track "the last signed release APK" but nothing enforces
+  that — it sat at the `v1.0.1` figure through `v1.1.0` and `v1.2.0`, drifting ~4.6 % stale,
+  and a small UI slice (r3a, 2026-09-08) then failed the +5 % gate on accumulated
+  Phase-6–8 dependency growth rather than its own. `scripts/cut_release.sh` (or a step in
+  `docs/release-checklist.md`) should run `apk_size_budget.dart --update` against the
+  just-built release APK and commit the bump as part of the release, with
+  `apk_release_bytes_source` pointing at the new tag. — Orchestrator, r3a UI-refresh pass.
+
+- **Overdue check-in card: one-tap "mark today as period start".** r3a added a direct-write
+  `_markTodayAsPeriodStart` for the day-log sheet's Flow section (the perf fast path) but
+  left `ForecastArea`'s overdue-card `onLogPeriodStart` pointed at the full period editor
+  (`_addPeriod`). Route it through the same helper for consistency (pre-authorised as
+  non-blocking in the r3a §5 ruling). — Orchestrator, r3a UI-refresh pass.
+
+- **Calendar "Log" FAB → selected day.** r3a's Calendar-tab FAB opens `showDayLog(today)`;
+  the dispatch wanted "for the selected day", but there is no day-selection model on the
+  month grid yet (a tap opens the sheet directly). Add selection state + wire the FAB to it
+  in r5c (calendar interactions). — Orchestrator, r3a UI-refresh pass.
+
 - ~~**Phase 0 exit-gate: device smoke + `integration_test` in CI.**~~ **Closed → p0.5.**
   `.github/workflows/nightly-integration.yml` runs `flutter test integration_test/` on an
   Android emulator (API 34) and an iOS simulator nightly + on demand — deliberately a
