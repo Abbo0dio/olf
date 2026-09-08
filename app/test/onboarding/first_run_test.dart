@@ -43,7 +43,10 @@ void main() {
         await flush(tester, 20);
 
         expect(find.text('No periods logged yet.'), findsOneWidget);
-        expect(find.text('Add a period'), findsOneWidget);
+        expect(
+          find.widgetWithText(FloatingActionButton, 'Log'),
+          findsOneWidget,
+        );
         expect(
           await DriftSettingsRepository(db).get(SettingKeys.onboardingComplete),
           'true',

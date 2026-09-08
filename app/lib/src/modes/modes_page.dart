@@ -44,8 +44,9 @@ class ModesPage extends StatelessWidget {
 }
 
 /// The screen behind a mode's "Open" row. Only called for modes where
-/// [modeHasScreen] is true.
-Widget _modeScreen(LifeStageMode mode) => switch (mode) {
+/// [modeHasScreen] is true. Also used by the Home tab's active-mode chip strip
+/// (r3a).
+Widget modeScreen(LifeStageMode mode) => switch (mode) {
   LifeStageMode.pregnancy => const PregnancyWeekScreen(),
   LifeStageMode.ttc => const TtcScreen(),
   LifeStageMode.pcos => const PcosScreen(),
@@ -88,7 +89,7 @@ class _ModeTile extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(
               context,
-            ).push(MaterialPageRoute<void>(builder: (_) => _modeScreen(mode))),
+            ).push(MaterialPageRoute<void>(builder: (_) => modeScreen(mode))),
           ),
       ],
     );

@@ -7,8 +7,12 @@ import '../support/fake_reminder_scheduler.dart';
 import '../support/harness.dart';
 
 void main() {
+  // r3a: Medications is a demoted item in the Calendar tab's overflow menu.
   Future<void> openMeds(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Medications'));
+    await switchTab(tester, 'Calendar');
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Medications').last);
     await tester.pumpAndSettle();
     expect(find.widgetWithText(AppBar, 'Medications'), findsOneWidget);
   }

@@ -32,13 +32,14 @@ void main() {
   const title = 'Day log — ';
 
   group('every entry point opens the one sheet', () {
-    testWidgets('period calendar day cell', (tester) async {
+    testWidgets('period calendar day cell (Calendar tab)', (tester) async {
       final db = memoryDb();
       await seedPeriod(db, PeriodDraft(start: daysAgo(1), end: todayDate));
       await pumpOlf(
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          await switchTab(tester, 'Calendar');
           await tester.tap(
             find.bySemanticsLabel('${formatDay(todayDate)}, period day'),
           );
@@ -59,6 +60,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          await switchTab(tester, 'Calendar');
           await tester.tap(
             find.bySemanticsLabel('${formatDay(otherDay)}, no period logged'),
           );
@@ -89,17 +91,14 @@ void main() {
       );
     });
 
-    testWidgets('summary "Log today\'s flow" chip → Flow leads', (
-      tester,
-    ) async {
+    testWidgets('home "Log" FAB → today, Flow leads', (tester) async {
       final db = memoryDb();
       await seedPeriod(db, PeriodDraft(start: daysAgo(1)));
       await pumpOlf(
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          await tester.tap(find.text("Log today's flow"));
-          await tester.pumpAndSettle();
+          await openDayLogForToday(tester);
           expect(find.text('$title${formatDay(todayDate)}'), findsOneWidget);
           expect(flowChip('Medium'), findsOneWidget);
           expect(symptomChip('Cramps'), findsNothing);
@@ -107,24 +106,20 @@ void main() {
       );
     });
 
-    testWidgets(
-      'summary "Log today\'s symptoms" chip → Symptoms leads (lead override)',
-      (tester) async {
-        final db = memoryDb();
-        await pumpOlf(
-          tester,
-          overrides: [dbOverride(db)],
-          body: () async {
-            await tester.tap(find.text("Log today's symptoms"));
-            await tester.pumpAndSettle();
-            expect(find.text('$title${formatDay(todayDate)}'), findsOneWidget);
-            // today would otherwise lead with Flow — the chip forces Symptoms
-            expect(symptomChip('Cramps'), findsOneWidget);
-            expect(flowChip('Medium'), findsNothing);
-          },
-        );
-      },
-    );
+    testWidgets('Calendar "Log" FAB → today, Flow leads', (tester) async {
+      final db = memoryDb();
+      await pumpOlf(
+        tester,
+        overrides: [dbOverride(db)],
+        body: () async {
+          await switchTab(tester, 'Calendar');
+          await tester.tap(find.byType(FloatingActionButton));
+          await tester.pumpAndSettle();
+          expect(find.text('$title${formatDay(todayDate)}'), findsOneWidget);
+          expect(flowChip('Medium'), findsOneWidget);
+        },
+      );
+    });
   });
 
   group('immediate upsert — no Save button', () {
@@ -138,11 +133,9 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          // tap 1: open the sheet for a period day (Flow section already open)
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(todayDate)}, period day'),
-          );
-          await tester.pumpAndSettle();
+          // open the sheet for today (a period day) via the "Log" FAB — the
+          // Flow section leads
+          await openDayLogForToday(tester);
 
           // clots unavailable until an intensity is picked
           expect(
@@ -176,6 +169,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          await switchTab(tester, 'Calendar');
           await tester.tap(
             find.bySemanticsLabel(
               '${formatDay(todayDate)}, period day, flow light',
@@ -202,6 +196,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          await switchTab(tester, 'Calendar');
           await tester.tap(
             find.bySemanticsLabel('${formatDay(otherDay)}, no period logged'),
           );
@@ -234,6 +229,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          await switchTab(tester, 'Calendar');
           await tester.tap(
             find.bySemanticsLabel('${formatDay(otherDay)}, no period logged'),
           );
@@ -268,10 +264,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(todayDate)}, no period logged'),
-          );
-          await tester.pumpAndSettle();
+          await openDayLogForToday(tester);
           await tester.tap(find.text('Temperature'));
           await tester.pumpAndSettle();
 
@@ -307,6 +300,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          await switchTab(tester, 'Calendar');
           await tester.tap(
             find.bySemanticsLabel('${formatDay(otherDay)}, no period logged'),
           );
@@ -327,10 +321,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(todayDate)}, period day'),
-          );
-          await tester.pumpAndSettle();
+          await openDayLogForToday(tester);
           expect(find.text('Start a period'), findsNothing);
 
           await tester.tap(find.text('Edit period dates'));
@@ -348,10 +339,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(otherDay)}, no period logged'),
-          );
-          await tester.pumpAndSettle();
+          await openDayLogForToday(tester);
           await tester.tap(find.text('Manage symptoms'));
           await tester.pumpAndSettle();
           expect(find.text('Add symptom'), findsOneWidget);
@@ -367,10 +355,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(otherDay)}, no period logged'),
-          );
-          await tester.pumpAndSettle();
+          await openDayLogForToday(tester);
           expect(find.text('PMDD rating'), findsNothing);
           expect(find.text('Pain & flares'), findsNothing);
         },
@@ -386,10 +371,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(todayDate)}, no period logged'),
-          );
-          await tester.pumpAndSettle();
+          await openDayLogForToday(tester);
           expect(find.text('PMDD rating'), findsOneWidget);
           expect(find.text('Pain & flares'), findsNothing);
         },
@@ -407,10 +389,7 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
-          await tester.tap(
-            find.bySemanticsLabel('${formatDay(todayDate)}, no period logged'),
-          );
-          await tester.pumpAndSettle();
+          await openDayLogForToday(tester);
           expect(find.text('Pain & flares'), findsOneWidget);
           expect(find.text('PMDD rating'), findsNothing);
 

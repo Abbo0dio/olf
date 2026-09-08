@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:olf_app/src/period/period_format.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../support/harness.dart';
@@ -10,12 +9,10 @@ void main() {
 
   Finder chip(String label) => find.widgetWithText(FilterChip, label);
 
-  /// Open the day sheet for today, then push the manage-symptoms screen.
+  /// Open the day sheet for today (via the "Log" FAB), then push the
+  /// manage-symptoms screen from its always-present action.
   Future<void> openManage(WidgetTester tester) async {
-    await tester.tap(
-      find.bySemanticsLabel('${formatDay(today)}, no period logged'),
-    );
-    await tester.pumpAndSettle();
+    await openDayLogForToday(tester);
     await tester.tap(find.text('Manage symptoms'));
     await tester.pumpAndSettle();
     expect(find.text('Manage symptoms'), findsOneWidget);

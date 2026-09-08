@@ -269,11 +269,14 @@ void main() {
         body: () async {
           expect(find.text('Next period'), findsOneWidget);
 
-          // Delete the most recent period → a correction notice appears.
+          // Delete the most recent period (Calendar history row) → a correction
+          // notice appears back on Home, above the forecast area.
+          await switchTab(tester, 'Calendar');
           await tester.tap(find.byTooltip('Delete period').first);
           await tester.pumpAndSettle();
           await tester.tap(find.widgetWithText(TextButton, 'Delete'));
           await tester.pumpAndSettle();
+          await switchTab(tester, 'Home');
 
           final notice = find.bySemanticsLabel(
             RegExp('Your correction was applied'),

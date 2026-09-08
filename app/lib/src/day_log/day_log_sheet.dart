@@ -34,14 +34,21 @@ enum DayLogLead { flow, symptoms }
 /// on Flow / Symptoms / Temperature / Fluid.
 ///
 /// [onEditPeriodDates] is given exactly when [date] is a period day (adds an
-/// "Edit period dates" action); [onStartPeriod] is given otherwise (adds a
-/// "Start a period" action). Both close the sheet first.
+/// "Edit period dates" action); [onStartPeriod] is given for a *past* non-period
+/// day (adds a "Start a period" action that opens the period editor).
+///
+/// [onMarkPeriodStart] is given only when [date] is **today** and not already a
+/// period day (r3a): it puts a one-tap "Mark today as period start" button at
+/// the top of the Flow section that writes the period directly — no editor — so
+/// the "Log" FAB → logged period path stays at two taps. It is mutually
+/// exclusive with [onStartPeriod]. The sheet closes before it runs.
 Future<void> showDayLog(
   BuildContext context, {
   required DateTime date,
   DayLogLead? lead,
   VoidCallback? onEditPeriodDates,
   VoidCallback? onStartPeriod,
+  Future<void> Function()? onMarkPeriodStart,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -52,6 +59,7 @@ Future<void> showDayLog(
       lead: lead,
       onEditPeriodDates: onEditPeriodDates,
       onStartPeriod: onStartPeriod,
+      onMarkPeriodStart: onMarkPeriodStart,
     ),
   );
 }
@@ -62,12 +70,14 @@ class _DayLogSheet extends ConsumerStatefulWidget {
     this.lead,
     this.onEditPeriodDates,
     this.onStartPeriod,
+    this.onMarkPeriodStart,
   });
 
   final DateTime date;
   final DayLogLead? lead;
   final VoidCallback? onEditPeriodDates;
   final VoidCallback? onStartPeriod;
+  final Future<void> Function()? onMarkPeriodStart;
 
   @override
   ConsumerState<_DayLogSheet> createState() => _DayLogSheetState();
@@ -247,6 +257,11 @@ class _DayLogSheetState extends ConsumerState<_DayLogSheet> {
     widget.onStartPeriod?.call();
   }
 
+  void _markPeriodStart() {
+    Navigator.of(context).pop();
+    widget.onMarkPeriodStart?.call();
+  }
+
   // --- Build -----------------------------------------------------------
 
   ExpansionTile _section({
@@ -395,6 +410,20 @@ class _DayLogSheetState extends ConsumerState<_DayLogSheet> {
   }
 
   List<Widget> _flowChildren(ThemeData theme) => [
+    // r3a: one-tap direct period-start write (today only) — keeps the "Log" FAB
+    // → logged-period fast path at two taps, no editor surface.
+    if (widget.onMarkPeriodStart != null) ...[
+      Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.icon(
+          onPressed: _markPeriodStart,
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Mark today as period start'),
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+        ),
+      ),
+      const SizedBox(height: 16),
+    ],
     Text('Intensity', style: theme.textTheme.labelMedium),
     const SizedBox(height: 8),
     Wrap(

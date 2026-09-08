@@ -9,8 +9,8 @@ void main() {
   DateTime daysAgo(int n) =>
       DateTime(today.year, today.month, today.day).subtract(Duration(days: n));
 
-  testWidgets('the home screen shows a per-cycle BBT chart once there are '
-      'two readings', (tester) async {
+  testWidgets('the home "this cycle" card shows a per-cycle BBT chart once '
+      'there are two readings', (tester) async {
     final db = memoryDb();
     await DriftPeriodRepository(db).addPeriod(PeriodDraft(start: daysAgo(9)));
     final bbt = DriftBbtRepository(db);
@@ -22,7 +22,8 @@ void main() {
       tester,
       overrides: [dbOverride(db)],
       body: () async {
-        expect(find.text('Basal temperature — this cycle'), findsOneWidget);
+        // r3a: the sparkline now lives inside the "This cycle" card.
+        expect(find.text('This cycle'), findsOneWidget);
         expect(find.byType(BbtChart), findsOneWidget);
         expect(
           find.bySemanticsLabel(RegExp(r'Basal temperature chart: 3 readings')),

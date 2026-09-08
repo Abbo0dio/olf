@@ -24,7 +24,12 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 41 surfaces (p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// 42 surfaces (r3a split the old single home/calendar scroll into a
+/// bottom-nav shell: `home_tab` keeps the cycle wheel + slim summary, the new
+/// `calendar_tab` holds the month grid + year-grouped history, and a new
+/// `patterns_tab` placeholder surface is swept for the empty Patterns tab;
+/// Medications moved to the Calendar tab's overflow menu, and the day-log sheet
+/// is now reached from the "Log" FAB. p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -443,11 +448,6 @@ Future<void> _openFromSettings(WidgetTester tester, Finder row) async {
   await tester.pumpAndSettle();
 }
 
-String _todayCellLabel({required bool periodDay}) {
-  final today = DateTime.now();
-  return '${formatDay(today)}, ${periodDay ? 'period day' : 'no period logged'}';
-}
-
 final List<Surface> screenSurfaces = <Surface>[
   Surface('home_page — empty state', (tester, check) async {
     await pumpOlf(
@@ -457,13 +457,16 @@ final List<Surface> screenSurfaces = <Surface>[
     );
   }),
 
-  Surface('period_calendar_page — with cycle history', (tester, check) async {
+  // r3a: the month grid + the full, year-grouped history list now live on the
+  // Calendar tab, not the home scroll — switch to it before the sweep.
+  Surface('calendar_tab — month grid + cycle history', (tester, check) async {
     final db = memoryDb();
     await _seedHistory(db);
     await pumpOlf(
       tester,
       overrides: screenNavOverrides(db),
       body: () async {
+        await switchTab(tester, 'Calendar');
         expect(find.text('History'), findsOneWidget);
         await check(tester);
       },
@@ -476,17 +479,27 @@ final List<Surface> screenSurfaces = <Surface>[
   // surface seeds a regular, `_daysAgo`-relative history so "today" sits
   // inside a real phase, exercising the wheel's actual arcs/marker/labels
   // through the same guideline/label/contrast/keyboard-nav/text-scaling sweep.
-  Surface('period_calendar_page — cycle wheel (active phase)', (
-    tester,
-    check,
-  ) async {
+  Surface('home_tab — cycle wheel (active phase)', (tester, check) async {
     final db = memoryDb();
     await _seedRecentCycle(db);
     await pumpOlf(
       tester,
       overrides: screenNavOverrides(db),
       body: () async {
-        expect(find.text('History'), findsOneWidget);
+        // r3a: the slim home — wheel + caption, no history list.
+        expect(find.text('Last period'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  // r3a: the Patterns tab is an empty scaffold in this slice (r3b fills it).
+  Surface('patterns_tab — placeholder', (tester, check) async {
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(memoryDb()),
+      body: () async {
+        await switchTab(tester, 'Patterns');
         await check(tester);
       },
     );
@@ -632,7 +645,11 @@ final List<Surface> screenSurfaces = <Surface>[
       tester,
       overrides: screenNavOverrides(memoryDb()),
       body: () async {
-        await tester.tap(find.byTooltip('Medications'));
+        // r3a: Medications is a demoted item in the Calendar tab's overflow.
+        await switchTab(tester, 'Calendar');
+        await tester.tap(find.byTooltip('More'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Medications').last);
         await tester.pumpAndSettle();
         await check(tester);
       },
@@ -935,10 +952,9 @@ final List<Surface> screenSurfaces = <Surface>[
       tester,
       overrides: screenNavOverrides(memoryDb()),
       body: () async {
-        await tester.tap(
-          find.bySemanticsLabel(_todayCellLabel(periodDay: false)),
-        );
-        await tester.pumpAndSettle();
+        // r3a: reach the day-log sheet via the home "Log" FAB, then its
+        // always-present "Manage symptoms" action.
+        await openDayLogForToday(tester);
         await tester.tap(find.text('Manage symptoms'));
         await tester.pumpAndSettle();
         await check(tester);
@@ -962,10 +978,9 @@ final List<Surface> screenSurfaces = <Surface>[
       tester,
       overrides: screenNavOverrides(db),
       body: () async {
-        await tester.tap(
-          find.bySemanticsLabel(_todayCellLabel(periodDay: true)),
-        );
-        await tester.pumpAndSettle();
+        // r3a: today is a period day (seeded above) — the home "Log" FAB opens
+        // its sheet with the Flow section leading and the period actions.
+        await openDayLogForToday(tester);
         expect(
           find.text('Day log — ${formatDay(DateTime.now())}'),
           findsOneWidget,
@@ -997,10 +1012,9 @@ final List<Surface> screenSurfaces = <Surface>[
       tester,
       overrides: screenNavOverrides(db),
       body: () async {
-        await tester.tap(
-          find.bySemanticsLabel(_todayCellLabel(periodDay: false)),
-        );
-        await tester.pumpAndSettle();
+        // r3a: today is not a period day — the home "Log" FAB opens its sheet;
+        // expand the Temperature section for the passive-reading sweep.
+        await openDayLogForToday(tester);
         await tester.tap(find.text('Temperature'));
         await tester.pumpAndSettle();
         expect(

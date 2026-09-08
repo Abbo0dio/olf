@@ -117,12 +117,15 @@ void main() {
       body: () async {
         expect(find.text('Next period'), findsOneWidget);
 
-        // remove the most recent period → only one left → nothing to predict
+        // remove the most recent period → only one left → nothing to predict.
+        // The delete affordance is on the Calendar history rows now.
+        await switchTab(tester, 'Calendar');
         await tester.tap(find.byTooltip('Delete period').first);
         await tester.pumpAndSettle();
         await tester.tap(find.widgetWithText(TextButton, 'Delete'));
         await tester.pumpAndSettle();
 
+        await switchTab(tester, 'Home');
         expect(find.text('Next period'), findsNothing);
         expect(find.text('Period check-in'), findsNothing);
       },
