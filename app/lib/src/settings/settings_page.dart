@@ -12,11 +12,8 @@ import '../export/export_report_screen.dart';
 import '../health/conflict_review_screen.dart';
 import '../health/health_import.dart';
 import '../health/health_providers.dart';
-import '../modes/modes_page.dart';
 import '../period/period_format.dart';
 import '../personalization/personalization_providers.dart';
-import '../prediction/accuracy_format.dart';
-import '../prediction/accuracy_page.dart';
 import '../pregnancy/pregnancy_events_page.dart';
 import '../privacy/privacy_education_content.dart';
 import '../privacy/privacy_education_screen.dart';
@@ -259,26 +256,8 @@ class SettingsPage extends ConsumerWidget {
               ),
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.insights_outlined),
-            title: const Text(accuracySettingsTitle),
-            subtitle: const Text(accuracySettingsSubtitle),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const AccuracyPage()),
-            ),
-          ),
-          const _SectionHeader('Modes'),
-          ListTile(
-            leading: const Icon(Icons.tune_outlined),
-            title: const Text('Life-stage & condition modes'),
-            subtitle: const Text(
-              'Optional lenses — postpartum, pregnancy, PCOS and more. All '
-              'off until you turn them on.',
-            ),
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute<void>(builder: (_) => const ModesPage())),
-          ),
+          // r3b: "Prediction accuracy" and the Modes on/off entry moved to the
+          // Patterns tab (no double-home). The broader Settings tidy-up is r4.
           const _SectionHeader('Notifications'),
           ListTile(
             leading: const Icon(Icons.notifications_none),

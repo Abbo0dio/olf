@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../a11y/spoken_detail.dart';
+import '../patterns/patterns_providers.dart';
 import 'correlation_chart.dart';
 import 'pcos_correlation_format.dart';
-import 'pcos_mode_providers.dart';
 
 /// PCOS mode (p7.4): an irregular-cycle-aware framing plus descriptive views of
 /// how logged symptoms track cycle phase over time. No verdict, no diagnosis —
@@ -17,7 +17,7 @@ class PcosScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final correlations = ref.watch(pcosCorrelationsProvider);
+    final correlations = ref.watch(symptomPhaseCorrelationsProvider);
     final reduceSpoken =
         ref.watch(reduceSpokenDetailProvider).valueOrNull ?? false;
 

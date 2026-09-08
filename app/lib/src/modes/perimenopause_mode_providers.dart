@@ -9,8 +9,8 @@ import 'perimenopause_format.dart';
 /// The descriptive transition read shown in perimenopause mode (p7.7). Pure
 /// `core` derivation ([derivePerimenopauseTransition]) over the logged period
 /// history; `DateTime.now()` is read here at the edge, like
-/// `prediction_providers` / `pcosCorrelationsProvider`. `null` until the period
-/// stream has loaded or when nothing is logged.
+/// `prediction_providers` / `symptomPhaseCorrelationsProvider`. `null` until the
+/// period stream has loaded or when nothing is logged.
 final perimenopauseTransitionProvider = Provider<PerimenopauseTransitionRead?>((
   ref,
 ) {

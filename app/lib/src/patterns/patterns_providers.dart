@@ -4,14 +4,18 @@ import 'package:olf_core/olf_core.dart';
 import '../cycle/cycle_providers.dart';
 import '../symptom/symptom_providers.dart';
 
-/// The descriptive symptom-vs-cycle-phase summary shown in PCOS mode (p7.4).
+/// The descriptive symptom-vs-cycle-phase summary (p7.4 `cyclePhaseCorrelations`
+/// core) over the whole symptom log and the derived cycle history.
 ///
-/// Pure `core` derivation ([cyclePhaseCorrelations]) over the symptom log and
-/// the derived cycle history; `DateTime.now()` is read here at the edge, like
-/// `prediction_providers` / `postpartumCycleReturnProvider`. Symptom names come
-/// from the full catalogue (archived types included) so a later-removed symptom
-/// is still named. Empty until both streams have loaded.
-final pcosCorrelationsProvider = Provider<List<PhaseCorrelation>>((ref) {
+/// Landed as `pcosCorrelationsProvider` in p7.4; nothing about it was ever
+/// PCOS-specific — it covers every logged symptom — so r3b lifts it here to
+/// back the Patterns tab's correlations section as well as the PCOS screen.
+///
+/// `DateTime.now()` is read here at the edge, like `prediction_providers` /
+/// `postpartumCycleReturnProvider`. Symptom names come from the full catalogue
+/// (archived types included) so a later-removed symptom is still named. Empty
+/// until both streams have loaded.
+final symptomPhaseCorrelationsProvider = Provider<List<PhaseCorrelation>>((ref) {
   final entries =
       ref.watch(symptomEntriesProvider).valueOrNull ??
       const <DailySymptomEntry>[];
