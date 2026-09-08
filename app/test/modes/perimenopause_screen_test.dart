@@ -21,8 +21,8 @@ void main() {
   }
 
   Future<void> openScreen(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
+    // r3b: the Modes on/off entry moved from Settings to the Patterns tab.
+    await switchTab(tester, 'Patterns');
     await tester.scrollUntilVisible(
       find.text('Life-stage & condition modes'),
       200,
@@ -211,6 +211,8 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          // r3b: the gap line is on the cycle-stats card, now on Patterns.
+          await switchTab(tester, 'Patterns');
           expect(find.textContaining('perimenopause transition'), findsWidgets);
           expect(
             find.textContaining('a period may not have been logged'),
@@ -256,6 +258,8 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          // r3b: the gap line is on the cycle-stats card, now on Patterns.
+          await switchTab(tester, 'Patterns');
           expect(
             find.textContaining('a period may not have been logged'),
             findsWidgets,

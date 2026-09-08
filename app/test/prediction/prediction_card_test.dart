@@ -181,6 +181,9 @@ void main() {
       body: () async {
         expect(find.text('Next period'), findsNothing);
         expect(find.text('Period check-in'), findsNothing);
+        // The keep-logging nudge lives on the Patterns tab now (r3b relocated
+        // the cycle-stats card there).
+        await switchTab(tester, 'Patterns');
         expect(find.textContaining('Log at least two periods'), findsOneWidget);
       },
     );

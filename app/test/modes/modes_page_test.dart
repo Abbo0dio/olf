@@ -11,8 +11,8 @@ void main() {
   }
 
   Future<void> openModesPage(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
+    // r3b: the Modes on/off entry lives on the Patterns tab now, not Settings.
+    await switchTab(tester, 'Patterns');
     await tester.scrollUntilVisible(
       find.text('Life-stage & condition modes'),
       200,

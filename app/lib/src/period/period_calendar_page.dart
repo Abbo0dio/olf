@@ -19,8 +19,6 @@ import '../modes/birth_control_recalibration_providers.dart';
 import '../modes/mode_catalog.dart';
 import '../modes/modes_page.dart';
 import '../modes/modes_providers.dart';
-import '../modes/pcos_correlation_format.dart';
-import '../modes/perimenopause_format.dart';
 import '../modes/perimenopause_mode_providers.dart';
 import '../modes/postpartum_screen.dart';
 import '../mucus/mucus_providers.dart';
@@ -433,16 +431,6 @@ class _HomeBody extends ConsumerWidget {
               fertileWindow: prediction?.fertileWindow,
               observedFertile: observedFertile,
               onTap: state._goToPatterns,
-            ),
-          ],
-          if (state._periods.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            // r3b relocates this to the Patterns tab; kept on Home for now so
-            // cycle-length insight isn't lost in this slice.
-            _CycleStatsCard(
-              stats: ref.watch(cycleStatsProvider),
-              pcosMode: pcosModeOn,
-              perimenopauseMode: perimenopauseModeOn,
             ),
           ],
           const SizedBox(height: 24),
@@ -1174,108 +1162,6 @@ class _HistoryRow extends StatelessWidget {
         tooltip: 'Delete period',
       ),
       onTap: onOpen,
-    );
-  }
-}
-
-/// Cycle-length and variability summary, shown once at least one period exists.
-/// Falls back to a "keep logging" nudge rather than assuming any cycle length.
-class _CycleStatsCard extends StatelessWidget {
-  const _CycleStatsCard({
-    required this.stats,
-    this.pcosMode = false,
-    this.perimenopauseMode = false,
-  });
-
-  final CycleStats stats;
-
-  /// p7.4 / p7.7: soften the likely-gap / irregular wording (long, variable and
-  /// skipped cycles are expected in PCOS and perimenopause modes). The [stats]
-  /// themselves are unchanged.
-  final bool pcosMode;
-  final bool perimenopauseMode;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final typical = stats.typicalCycleLength;
-    final hasRange = stats.shortestCycleLength != stats.longestCycleLength;
-    final regularityLabel =
-        (pcosMode || perimenopauseMode) &&
-            stats.regularity == CycleRegularity.irregular
-        ? '${stats.regularity.label} — expected in this mode'
-        : stats.regularity.label;
-
-    return Semantics(
-      container: true,
-      label:
-          'Cycle insights. '
-          '${summariseStats(stats, pcosMode: pcosMode, perimenopauseMode: perimenopauseMode)}',
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Your cycles',
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 6),
-            if (typical != null) ...[
-              Text(
-                '$typical-day typical cycle',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                hasRange
-                    ? '${stats.shortestCycleLength}–${stats.longestCycleLength} '
-                          'days  ·  $regularityLabel'
-                    : regularityLabel,
-                style: theme.textTheme.bodyMedium,
-              ),
-              if (stats.typicalPeriodLength != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  'Typical period ${stats.typicalPeriodLength} days',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-              if (stats.hasLikelyGap) ...[
-                const SizedBox(height: 6),
-                Text(
-                  pcosMode
-                      ? pcosSoftenedGapLine
-                      : perimenopauseMode
-                      ? perimenopauseSoftenedGapLine
-                      : 'A long gap is set aside — a period may not have been '
-                            'logged then.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ] else
-              Text(
-                summariseStats(
-                  stats,
-                  pcosMode: pcosMode,
-                  perimenopauseMode: perimenopauseMode,
-                ),
-                style: theme.textTheme.bodyMedium,
-              ),
-          ],
-        ),
-      ),
     );
   }
 }

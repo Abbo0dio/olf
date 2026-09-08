@@ -15,8 +15,8 @@ void main() {
       DriftSettingsRepository(db).set(LifeStageMode.pcos.settingKey, 'true');
 
   Future<void> openPcosScreen(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
+    // r3b: the Modes on/off entry moved from Settings to the Patterns tab.
+    await switchTab(tester, 'Patterns');
     await tester.scrollUntilVisible(
       find.text('Life-stage & condition modes'),
       200,
@@ -187,14 +187,18 @@ void main() {
         tester,
         overrides: [dbOverride(db)],
         body: () async {
+          // The wider-interval note rides the prediction card on Home.
+          expect(
+            find.textContaining('treat the date range as wide'),
+            findsOneWidget,
+          );
+          // r3b: the softened gap line is on the cycle-stats card, now on the
+          // Patterns tab.
+          await switchTab(tester, 'Patterns');
           expect(find.textContaining('common with PCOS'), findsWidgets);
           expect(
             find.textContaining('a period may not have been logged'),
             findsNothing,
-          );
-          expect(
-            find.textContaining('treat the date range as wide'),
-            findsOneWidget,
           );
         },
       );
@@ -210,14 +214,16 @@ void main() {
         overrides: [dbOverride(db)],
         body: () async {
           expect(
+            find.textContaining('treat the date range as wide'),
+            findsNothing,
+          );
+          // r3b: the gap line is on the cycle-stats card, now on Patterns.
+          await switchTab(tester, 'Patterns');
+          expect(
             find.textContaining('a period may not have been logged'),
             findsWidgets,
           );
           expect(find.textContaining('common with PCOS'), findsNothing);
-          expect(
-            find.textContaining('treat the date range as wide'),
-            findsNothing,
-          );
         },
       );
     });
