@@ -12,8 +12,12 @@ void main() {
   // test here is the Health Connect (p6.3) wording.
   final tile = find.widgetWithText(SwitchListTile, 'Connect a health app');
 
-  Future<void> openSettings(WidgetTester tester) async {
+  // r4: the health bridge moved from Settings → "Apps & export" to its own
+  // Settings → "Data & sharing" screen.
+  Future<void> openDataAndSharing(WidgetTester tester) async {
     await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Data & sharing'));
     await tester.pumpAndSettle();
   }
 
@@ -43,11 +47,11 @@ void main() {
         tester,
         overrides: [dbOverride(memoryDb())],
         body: () async {
-          await openSettings(tester);
-          // The "Apps & export" section still shows — it also holds the doctor
+          await openDataAndSharing(tester);
+          // The Data & sharing screen still shows — it also holds the doctor
           // report export (p6.5), which does not depend on a health platform —
           // but the health-connect tile itself is gone.
-          expect(find.text('Apps & export'), findsOneWidget);
+          expect(find.widgetWithText(AppBar, 'Data & sharing'), findsOneWidget);
           expect(find.text('Export report for a doctor'), findsOneWidget);
           expect(find.text('Connect a health app'), findsNothing);
         },
@@ -65,9 +69,8 @@ void main() {
         ),
       ],
       body: () async {
-        await openSettings(tester);
+        await openDataAndSharing(tester);
         await scrollToTile(tester);
-        expect(find.text('Apps & export'), findsOneWidget);
         expect(tester.widget<SwitchListTile>(tile).value, isFalse);
       },
     );
@@ -85,7 +88,7 @@ void main() {
         ),
       ],
       body: () async {
-        await openSettings(tester);
+        await openDataAndSharing(tester);
         await scrollToTile(tester);
         await tester.tap(tile);
         await tester.pumpAndSettle();
@@ -121,7 +124,7 @@ void main() {
         ),
       ],
       body: () async {
-        await openSettings(tester);
+        await openDataAndSharing(tester);
         await scrollToTile(tester);
         await tester.tap(tile);
         await tester.pumpAndSettle();
@@ -156,7 +159,7 @@ void main() {
         ),
       ],
       body: () async {
-        await openSettings(tester);
+        await openDataAndSharing(tester);
         await scrollToTile(tester);
         await tester.tap(tile);
         await tester.pumpAndSettle();
@@ -189,7 +192,7 @@ void main() {
         ),
       ],
       body: () async {
-        await openSettings(tester);
+        await openDataAndSharing(tester);
         await scrollToTile(tester);
         await tester.tap(tile);
         await tester.pumpAndSettle();
@@ -217,7 +220,7 @@ void main() {
         ),
       ],
       body: () async {
-        await openSettings(tester);
+        await openDataAndSharing(tester);
         await scrollToTile(tester);
 
         final subtitle = find.textContaining('Last sync: added 2, updated 1');

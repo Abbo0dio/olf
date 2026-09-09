@@ -6,9 +6,11 @@ import '../support/harness.dart';
 
 void main() {
   Future<void> openPage(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Settings'));
+    // r3a/r4: reached from the Calendar tab's overflow menu, not Settings.
+    await switchTab(tester, 'Calendar');
+    await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Pregnancy loss & birth'));
+    await tester.tap(find.text('Pregnancy loss & birth').last);
     await tester.pumpAndSettle();
     expect(
       find.widgetWithText(AppBar, 'Pregnancy loss & birth'),

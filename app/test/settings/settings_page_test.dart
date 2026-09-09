@@ -174,26 +174,35 @@ void main() {
   );
 
   testWidgets(
-    'r3b: "Prediction accuracy" and the Modes on/off entry are gone from '
-    'Settings (moved to the Patterns tab)',
+    'r4: Settings holds only settings + the one "Data & sharing" entry',
     (tester) async {
       await pumpOlf(
         tester,
         overrides: [dbOverride(memoryDb())],
         body: () async {
           await openSettings(tester);
-          // Bring the Cycle section into view via a stable anchor inside it.
           await tester.scrollUntilVisible(
-            find.text('Pregnancy loss & birth'),
+            find.text('Data & sharing'),
             200,
             scrollable: find.byType(Scrollable).first,
           );
-          // The Cycle header stays (it still holds this row) …
-          expect(find.text('Pregnancy loss & birth'), findsOneWidget);
-          // … but the two relocated entry points are gone.
+          // The one data entry is present …
+          expect(find.text('Data & sharing'), findsOneWidget);
+          expect(
+            find.widgetWithText(ListTile, 'Notifications'),
+            findsOneWidget,
+          );
+          // … and every feature screen is out of the flat list.
+          expect(find.text('Backup & restore'), findsNothing);
+          expect(find.text('Export report for a doctor'), findsNothing);
+          expect(find.text('Connect a health app'), findsNothing);
+          expect(find.text('Pregnancy loss & birth'), findsNothing);
+          // r3b relocations stay gone.
           expect(find.text('Prediction accuracy'), findsNothing);
           expect(find.text('Life-stage & condition modes'), findsNothing);
-          expect(find.text('Modes'), findsNothing);
+          // The emptied section headers are gone too.
+          expect(find.text('Cycle'), findsNothing);
+          expect(find.text('Apps & export'), findsNothing);
         },
       );
     },

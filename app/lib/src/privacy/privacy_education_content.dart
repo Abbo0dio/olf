@@ -95,8 +95,9 @@ const PrivacyExplainer lawEnforcementExplainer = PrivacyExplainer(
 /// restore (see [deleteEverythingBackupAction]).
 const List<String> deleteEverythingSteps = <String>[
   'Optional: export an encrypted backup first, if you want to keep a copy you '
-      'control. Settings → Backup & restore → "Create an encrypted '
-      'backup". You choose where the file is saved and set its passphrase.',
+      'control. Settings → Data & sharing → Backup & restore → "Create an '
+      'encrypted backup". You choose where the file is saved and set its '
+      'passphrase.',
   'To clear out older entries on a schedule, set an auto-delete window. '
       'Settings → "Auto-delete old entries". Anything past the window is '
       'deleted and left out of future backups.',

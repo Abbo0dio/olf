@@ -9,8 +9,11 @@ import '../support/harness.dart';
 import 'conflict_fixtures.dart';
 
 void main() {
+  // r4: the health bridge moved to Settings → "Data & sharing".
   Future<void> openSettings(WidgetTester tester) async {
     await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Data & sharing'));
     await tester.pumpAndSettle();
   }
 
