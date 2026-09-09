@@ -24,7 +24,7 @@ import 'harness.dart';
 /// [SurfaceCheck] that runs against the mounted screen (inside `pumpOlf`'s
 /// `body`, before its teardown).
 ///
-/// 43 surfaces (r3a split the old single home/calendar scroll into a
+/// 44 surfaces (r3a split the old single home/calendar scroll into a
 /// bottom-nav shell: `home_tab` keeps the cycle wheel + slim summary, the new
 /// `calendar_tab` holds the month grid + year-grouped history;
 /// Medications moved to the Calendar tab's overflow menu, and the day-log sheet
@@ -33,7 +33,12 @@ import 'harness.dart';
 /// rendered) and a `patterns_tab — thin data` sweep (the empty/keep-logging
 /// states); "Prediction accuracy" and the Modes on/off entry moved off Settings
 /// onto Patterns, so the `accuracy_page` and `modes_page` surfaces navigate
-/// through the Patterns tab now. p1.12 added the cycle-wheel active-phase one; p6.2 the
+/// through the Patterns tab now. r4 pulled the data/sharing rows out of Settings
+/// into a `data_and_sharing` screen (+1 surface): the two "Apps & export"
+/// health surfaces are renamed `data_and_sharing — …` and, with `backup_page`
+/// and `export_report_screen`, navigate Settings → "Data & sharing"; the
+/// conflict-review surface too; `pregnancy_events_page` now opens from the
+/// Calendar tab's overflow (its Settings pointer was dropped as double-homed). p1.12 added the cycle-wheel active-phase one; p6.2 the
 /// "Apps & export" / health-app-connected one — still shared and unchanged in
 /// p6.3, the tile is platform-neutral; p6.4 the conflict-review screen; p6.5 the
 /// doctor-report export screen; p7.1 the Modes page, the postpartum
@@ -478,6 +483,33 @@ Future<void> _openFromPatterns(WidgetTester tester, Finder row) async {
   await tester.pumpAndSettle();
 }
 
+/// r4: Settings → "Data & sharing" → the given row (backup / doctor export /
+/// the health-platform block all moved off the flat Settings list).
+Future<void> _openDataAndSharing(WidgetTester tester) async {
+  await _openFromSettings(tester, find.text('Data & sharing'));
+}
+
+Future<void> _openFromDataAndSharing(WidgetTester tester, Finder row) async {
+  await _openDataAndSharing(tester);
+  await tester.scrollUntilVisible(
+    row,
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.tap(row);
+  await tester.pumpAndSettle();
+}
+
+/// r3a/r4: "Pregnancy loss & birth" is a demoted item in the Calendar tab's
+/// overflow menu, no longer a Settings row.
+Future<void> _openPregnancyEvents(WidgetTester tester) async {
+  await switchTab(tester, 'Calendar');
+  await tester.tap(find.byTooltip('More'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Pregnancy loss & birth').last);
+  await tester.pumpAndSettle();
+}
+
 final List<Surface> screenSurfaces = <Surface>[
   Surface('home_page — empty state', (tester, check) async {
     await pumpOlf(
@@ -585,10 +617,20 @@ final List<Surface> screenSurfaces = <Surface>[
     );
   }),
 
-  Surface('settings_page — Apps & export (health app connected)', (
-    tester,
-    check,
-  ) async {
+  // r4: Settings → "Data & sharing" — backup, doctor export, health bridge.
+  Surface('data_and_sharing', (tester, check) async {
+    await pumpOlf(
+      tester,
+      overrides: screenNavOverrides(memoryDb()),
+      body: () async {
+        await _openDataAndSharing(tester);
+        expect(find.widgetWithText(AppBar, 'Data & sharing'), findsOneWidget);
+        await check(tester);
+      },
+    );
+  }),
+
+  Surface('data_and_sharing — health app connected', (tester, check) async {
     final db = memoryDb();
     await _seedHealthAppConnected(db);
     await pumpOlf(
@@ -600,7 +642,7 @@ final List<Surface> screenSurfaces = <Surface>[
         ),
       ],
       body: () async {
-        await _openSettings(tester);
+        await _openDataAndSharing(tester);
         await tester.scrollUntilVisible(
           find.text('Connect a health app'),
           200,
@@ -611,10 +653,7 @@ final List<Surface> screenSurfaces = <Surface>[
     );
   }),
 
-  Surface('settings_page — Apps & export (per-device list)', (
-    tester,
-    check,
-  ) async {
+  Surface('data_and_sharing — per-device list', (tester, check) async {
     final db = memoryDb();
     await _seedHealthAppConnected(db);
     await pumpOlf(
@@ -626,7 +665,7 @@ final List<Surface> screenSurfaces = <Surface>[
         ),
       ],
       body: () async {
-        await _openSettings(tester);
+        await _openDataAndSharing(tester);
         await tester.scrollUntilVisible(
           find.text('From Oura'),
           200,
@@ -671,7 +710,7 @@ final List<Surface> screenSurfaces = <Surface>[
         ),
       ],
       body: () async {
-        await _openSettings(tester);
+        await _openDataAndSharing(tester);
         await tester.scrollUntilVisible(
           find.textContaining('to review'),
           200,
@@ -720,7 +759,7 @@ final List<Surface> screenSurfaces = <Surface>[
       tester,
       overrides: screenNavOverrides(memoryDb()),
       body: () async {
-        await _openFromSettings(tester, find.text('Backup & restore'));
+        await _openFromDataAndSharing(tester, find.text('Backup & restore'));
         await check(tester);
       },
     );
@@ -733,7 +772,7 @@ final List<Surface> screenSurfaces = <Surface>[
       tester,
       overrides: screenNavOverrides(db),
       body: () async {
-        await _openFromSettings(
+        await _openFromDataAndSharing(
           tester,
           find.text('Export report for a doctor'),
         );
@@ -762,7 +801,7 @@ final List<Surface> screenSurfaces = <Surface>[
       tester,
       overrides: screenNavOverrides(memoryDb()),
       body: () async {
-        await _openFromSettings(tester, find.text('Pregnancy loss & birth'));
+        await _openPregnancyEvents(tester);
         await check(tester);
       },
     );

@@ -13,7 +13,11 @@ void main() {
   final flowDay = DateTime(2026, 5, 11);
 
   Future<void> openReview(WidgetTester tester) async {
+    // r4: the health bridge (and its "differences to review" row) moved to
+    // Settings → "Data & sharing".
     await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Data & sharing'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.textContaining('to review'),

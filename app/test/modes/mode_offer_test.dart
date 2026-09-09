@@ -6,9 +6,11 @@ import '../support/harness.dart';
 
 void main() {
   Future<void> logBirth(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Settings'));
+    // r3a/r4: "Pregnancy loss & birth" is in the Calendar tab's overflow menu.
+    await switchTab(tester, 'Calendar');
+    await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Pregnancy loss & birth'));
+    await tester.tap(find.text('Pregnancy loss & birth').last);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FloatingActionButton, 'Add entry'));
     await tester.pumpAndSettle();

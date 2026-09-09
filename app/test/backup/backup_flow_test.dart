@@ -24,7 +24,10 @@ void main() {
   }
 
   Future<void> openBackupPage(WidgetTester tester) async {
+    // r4: Settings → "Data & sharing" → Backup & restore.
     await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Data & sharing'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Backup & restore'));
     await tester.pumpAndSettle();

@@ -33,7 +33,10 @@ void main() {
   }
 
   Future<void> openScreen(WidgetTester tester) async {
+    // r4: Settings → "Data & sharing" → Export report for a doctor.
     await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Data & sharing'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Export report for a doctor'),
