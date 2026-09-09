@@ -704,46 +704,50 @@ class _ThisCycleCard extends StatelessWidget {
       button: true,
       container: true,
       label: 'This cycle. Opens Patterns.',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'This cycle',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (points.length >= 2) ...[
-                const SizedBox(height: 8),
-                BbtChart(points: points, unit: unit),
-              ],
-              if (fertileWindow != null) ...[
-                const SizedBox(height: 8),
+      // Neutral theme `Card` (was a hand-rolled radius-12 container); the
+      // ink splash is clipped to the card's rounded corners.
+      child: Card(
+        // Purely visual — the wrapping Semantics is the semantic container.
+        semanticContainer: false,
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  'Estimated fertile window: ${formatDateRange(fertileWindow!)}',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
-              if (observedFertile != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Observed fertile signs: ${formatDateRange(observedFertile!)}',
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  'This cycle',
+                  style: theme.textTheme.labelMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+                if (points.length >= 2) ...[
+                  const SizedBox(height: 8),
+                  BbtChart(points: points, unit: unit),
+                ],
+                if (fertileWindow != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Estimated fertile window: '
+                    '${formatDateRange(fertileWindow!)}',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+                if (observedFertile != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Observed fertile signs: '
+                    '${formatDateRange(observedFertile!)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -1226,48 +1230,59 @@ class _CorrectionNoticeState extends State<_CorrectionNotice> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final onColor = theme.colorScheme.onSecondaryContainer;
+    final onColor = theme.colorScheme.onSurfaceVariant;
     return Semantics(
       container: true,
       liveRegion: true,
       label: _spokenLabel,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2, right: 12),
-              child: Icon(Icons.check_circle_outline, size: 20, color: onColor),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (var i = 0; i < widget.delta.reasons.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 4),
-                    Text(
-                      widget.delta.reasons[i],
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: onColor,
-                      ),
-                    ),
-                  ],
-                ],
+      // Neutral theme `Card` — one accent per screen, held by the forecast
+      // card. This transient notice reads via its icon + live announcement.
+      child: Card(
+        // Purely visual — the wrapping Semantics is the semantic container.
+        semanticContainer: false,
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2, right: 12),
+                child: Icon(
+                  Icons.check_circle_outline,
+                  size: 20,
+                  color: onColor,
+                ),
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, size: 20),
-              color: onColor,
-              tooltip: correctionNoticeDismissLabel,
-              onPressed: widget.onDismiss,
-            ),
-          ],
+              Expanded(
+                // The outer Semantics already speaks the full `_spokenLabel`;
+                // exclude the visual reason lines so it stays one node (the
+                // theme `Card` boundary would otherwise split them out).
+                child: ExcludeSemantics(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < widget.delta.reasons.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 4),
+                        Text(
+                          widget.delta.reasons[i],
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: onColor,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 20),
+                color: onColor,
+                tooltip: correctionNoticeDismissLabel,
+                onPressed: widget.onDismiss,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1295,49 +1310,51 @@ class _PregnancyStatusCard extends ConsumerWidget {
     return Semantics(
       container: true,
       label: message,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  state == PregnancyRecoveryState.postpartum
-                      ? Icons.child_friendly_outlined
-                      : Icons.favorite_border,
-                  color: theme.colorScheme.onSecondaryContainer,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    message,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSecondaryContainer,
+      // Neutral theme `Card` (was a hand-rolled radius-12 container); the
+      // leading icon carries the state, not a coloured background.
+      child: Card(
+        // Purely visual — the wrapping Semantics is the semantic container.
+        semanticContainer: false,
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    state == PregnancyRecoveryState.postpartum
+                        ? Icons.child_friendly_outlined
+                        : Icons.favorite_border,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      message,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            if (postpartumMode)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const PostpartumScreen(),
-                    ),
-                  ),
-                  child: const Text('Open postpartum view'),
-                ),
+                ],
               ),
-          ],
+              if (postpartumMode)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const PostpartumScreen(),
+                      ),
+                    ),
+                    child: const Text('Open postpartum view'),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

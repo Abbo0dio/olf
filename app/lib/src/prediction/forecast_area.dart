@@ -171,19 +171,30 @@ class _PredictionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final overdue = prediction.isOverdue;
     return Semantics(
       container: true,
       label: _semanticLabel(),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: prediction.isOverdue
-              ? theme.colorScheme.tertiaryContainer
-              : theme.colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(12),
+      child: Card(
+        // The parent (`ForecastArea`, inside the home scroll) already insets and
+        // spaces this card; take only the theme's shape / elevation / colour.
+        // Purely visual — the wrapping Semantics is the semantic container.
+        semanticContainer: false,
+        margin: EdgeInsets.zero,
+        // The single screen accent stays on the forecast card. The overdue
+        // check-in keeps the same surface — it is set apart by a leading icon
+        // and a thin error edge (see `_overdue`), not a full background flip.
+        color: theme.colorScheme.primaryContainer,
+        shape: overdue
+            ? RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: theme.colorScheme.error, width: 1.5),
+              )
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: overdue ? _overdue(context) : _forecast(context),
         ),
-        child: prediction.isOverdue ? _overdue(context) : _forecast(context),
       ),
     );
   }
@@ -263,13 +274,19 @@ class _PredictionCard extends StatelessWidget {
 
   Widget _overdue(BuildContext context) {
     final theme = Theme.of(context);
-    final onColor = theme.colorScheme.onTertiaryContainer;
+    final onColor = theme.colorScheme.onPrimaryContainer;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Period check-in',
-          style: theme.textTheme.labelMedium?.copyWith(color: onColor),
+        Row(
+          children: [
+            Icon(Icons.event_busy_outlined, size: 20, color: onColor),
+            const SizedBox(width: 8),
+            Text(
+              'Period check-in',
+              style: theme.textTheme.labelMedium?.copyWith(color: onColor),
+            ),
+          ],
         ),
         const SizedBox(height: 4),
         Text(
@@ -345,65 +362,70 @@ class _RecalibrationNote extends StatelessWidget {
     return Semantics(
       container: true,
       label: secondaryLine == null ? note : '$note $secondaryLine',
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.timelapse_outlined,
-                  color: theme.colorScheme.onSecondaryContainer,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    note,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSecondaryContainer,
+      // Neutral surface (theme `Card`) — one accent per screen, and it belongs
+      // to the forecast card. Existing icon carries the meaning, not colour.
+      child: Card(
+        // Purely visual — the wrapping Semantics is the semantic container.
+        semanticContainer: false,
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.timelapse_outlined,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      note,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
+                  ),
+                ],
+              ),
+              if (secondaryLine != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  secondaryLine!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
-            ),
-            if (secondaryLine != null) ...[
               const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const BirthControlRecalibrationScreen(),
+                      ),
+                    ),
+                    child: const Text('Learn more'),
+                  ),
+                  TextButton(
+                    onPressed: onDismiss,
+                    child: const Text('Dismiss'),
+                  ),
+                ],
+              ),
               Text(
-                secondaryLine!,
+                BirthControlRecalibrationContent.notMedicalDeviceLine,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSecondaryContainer,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const BirthControlRecalibrationScreen(),
-                    ),
-                  ),
-                  child: const Text('Learn more'),
-                ),
-                TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
-              ],
-            ),
-            Text(
-              BirthControlRecalibrationContent.notMedicalDeviceLine,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSecondaryContainer,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -424,30 +446,31 @@ class _PerimenopausePausedNote extends StatelessWidget {
     return Semantics(
       container: true,
       label: perimenopauseForecastSuppressedNote,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              Icons.timelapse_outlined,
-              color: theme.colorScheme.onSecondaryContainer,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                perimenopauseForecastSuppressedNote,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSecondaryContainer,
+      // Neutral surface (theme `Card`); the icon, not colour, marks it out.
+      child: Card(
+        // Purely visual — the wrapping Semantics is the semantic container.
+        semanticContainer: false,
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.timelapse_outlined,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  perimenopauseForecastSuppressedNote,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

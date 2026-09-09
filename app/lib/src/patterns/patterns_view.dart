@@ -259,62 +259,64 @@ class _CycleStatsCard extends StatelessWidget {
       label:
           'Cycle insights. '
           '${summariseStats(stats, pcosMode: pcosMode, perimenopauseMode: perimenopauseMode)}',
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (typical != null) ...[
-              Text(
-                '$typical-day typical cycle',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                hasRange
-                    ? '${stats.shortestCycleLength}–${stats.longestCycleLength} '
-                          'days  ·  $regularityLabel'
-                    : regularityLabel,
-                style: theme.textTheme.bodyMedium,
-              ),
-              if (stats.typicalPeriodLength != null) ...[
+      // Neutral theme `Card` (was a hand-rolled radius-12 container) — one
+      // accent per screen and it is not this one.
+      child: Card(
+        // Purely visual — the wrapping Semantics is the semantic container.
+        semanticContainer: false,
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (typical != null) ...[
+                Text(
+                  '$typical-day typical cycle',
+                  style: theme.textTheme.titleMedium,
+                ),
                 const SizedBox(height: 2),
                 Text(
-                  'Typical period ${stats.typicalPeriodLength} days',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                  hasRange
+                      ? '${stats.shortestCycleLength}–'
+                            '${stats.longestCycleLength} days  ·  $regularityLabel'
+                      : regularityLabel,
+                  style: theme.textTheme.bodyMedium,
                 ),
-              ],
-              if (stats.hasLikelyGap) ...[
-                const SizedBox(height: 6),
+                if (stats.typicalPeriodLength != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Typical period ${stats.typicalPeriodLength} days',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                if (stats.hasLikelyGap) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    pcosMode
+                        ? pcosSoftenedGapLine
+                        : perimenopauseMode
+                        ? perimenopauseSoftenedGapLine
+                        : 'A long gap is set aside — a period may not have '
+                              'been logged then.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ] else
                 Text(
-                  pcosMode
-                      ? pcosSoftenedGapLine
-                      : perimenopauseMode
-                      ? perimenopauseSoftenedGapLine
-                      : 'A long gap is set aside — a period may not have been '
-                            'logged then.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  summariseStats(
+                    stats,
+                    pcosMode: pcosMode,
+                    perimenopauseMode: perimenopauseMode,
                   ),
+                  style: theme.textTheme.bodyMedium,
                 ),
-              ],
-            ] else
-              Text(
-                summariseStats(
-                  stats,
-                  pcosMode: pcosMode,
-                  perimenopauseMode: perimenopauseMode,
-                ),
-                style: theme.textTheme.bodyMedium,
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
