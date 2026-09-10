@@ -107,6 +107,44 @@ void main() {
     );
   });
 
+  testWidgets('deep history — per-cycle BBT charts build lazily (r5b)', (
+    tester,
+  ) async {
+    final db = memoryDb();
+    // 60 completed cycles, each with two basal readings inside it, so every
+    // cycle qualifies for a chart. An eager list mounts all 60 charts; the
+    // builder may only mount the viewport's worth.
+    final periods = DriftPeriodRepository(db);
+    final bbt = DriftBbtRepository(db);
+    var start = daysAgo(60 * 28 + 10);
+    for (var i = 0; i < 60; i++) {
+      await periods.addPeriod(
+        PeriodDraft(start: start, end: start.add(const Duration(days: 3))),
+      );
+      await bbt.setTemp(start.add(const Duration(days: 1)), 36.4);
+      await bbt.setTemp(start.add(const Duration(days: 2)), 36.5);
+      start = start.add(const Duration(days: 28));
+    }
+
+    await pumpOlf(
+      tester,
+      overrides: [dbOverride(db)],
+      body: () async {
+        await switchTab(tester, 'Patterns');
+
+        expect(find.text('This cycle'), findsOneWidget);
+        final chartsBuilt = find.byType(BbtChart).evaluate().toList().length;
+        expect(
+          chartsBuilt,
+          lessThan(40),
+          reason:
+              'the per-cycle BBT loop must build lazily — eager would mount '
+              'all 60 charts',
+        );
+      },
+    );
+  });
+
   testWidgets('the accuracy row opens the Prediction accuracy screen', (
     tester,
   ) async {

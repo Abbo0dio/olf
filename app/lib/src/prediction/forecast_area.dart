@@ -6,6 +6,7 @@ import '../modes/birth_control_recalibration_screen.dart';
 import '../modes/pcos_correlation_format.dart';
 import '../modes/perimenopause_format.dart';
 import '../period/period_format.dart';
+import '../widgets/animated_reveal.dart';
 import 'prediction_format.dart';
 
 /// The single "what goes where the forecast lives" widget on the home screen.
@@ -90,8 +91,17 @@ class ForecastArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final child = _child();
-    if (child == null) return const SizedBox.shrink();
-    return Padding(padding: const EdgeInsets.only(top: 16), child: child);
+    // r5b: the one card animates between states — and to/from the empty
+    // "nothing" state — via AnimatedReveal, gated on the platform
+    // reduce-motion flag. The top spacing rides *inside* the animated child so
+    // the collapsed state is truly 0px tall (the r1 test asserts
+    // `getSize(…).height == 0` with nothing to show); the collapse transition
+    // still animates the full 16px + card height back to 0.
+    return AnimatedReveal(
+      child: child == null
+          ? null
+          : Padding(padding: const EdgeInsets.only(top: 16), child: child),
+    );
   }
 
   Widget? _child() {
@@ -100,6 +110,7 @@ class ForecastArea extends StatelessWidget {
     //    this card's one secondary line rather than a second stacked note.
     if (bcRecalActive) {
       return _RecalibrationNote(
+        key: const ValueKey('forecastArea.bcRecal'),
         onDismiss: onDismissRecalibration,
         secondaryLine: perimenopauseGapSuppress
             ? perimenopauseForecastSuppressedNote
@@ -109,7 +120,9 @@ class ForecastArea extends StatelessWidget {
 
     // 2. Perimenopause paused — a long gap withholds the forecast.
     if (perimenopauseGapSuppress) {
-      return const _PerimenopausePausedNote();
+      return _PerimenopausePausedNote(
+        key: const ValueKey('forecastArea.perimenopause'),
+      );
     }
 
     // 3. Pregnancy mode on — the week view is the mode screen.
@@ -119,10 +132,13 @@ class ForecastArea extends StatelessWidget {
     //        the widget by `prediction.isOverdue`. Only reached when none of the
     //        three suppression conditions above hold, matching the pre-r1
     //        `!bcRecalActive && !perimenopauseGapSuppress && !pregnancyModeOn`
-    //        guard exactly.
+    //        guard exactly. The key re-fades the swap between the two halves.
     final p = prediction;
     if (p != null) {
       return _PredictionCard(
+        key: ValueKey(
+          p.isOverdue ? 'forecastArea.overdue' : 'forecastArea.forecast',
+        ),
         prediction: p,
         observedFertileWindow: observedFertileWindow,
         reduceSpoken: reduceSpoken,
@@ -143,6 +159,7 @@ class ForecastArea extends StatelessWidget {
 /// dates and asks the user to log the real start).
 class _PredictionCard extends StatelessWidget {
   const _PredictionCard({
+    super.key,
     required this.prediction,
     required this.onLogPeriodStart,
     required this.reduceSpoken,
@@ -345,7 +362,11 @@ class _PredictionCard extends StatelessWidget {
 /// early. Only rendered when the birth-control-change mode is on and the
 /// recalibration window is active (see `birthControlRecalibrationProvider`).
 class _RecalibrationNote extends StatelessWidget {
-  const _RecalibrationNote({required this.onDismiss, this.secondaryLine});
+  const _RecalibrationNote({
+    super.key,
+    required this.onDismiss,
+    this.secondaryLine,
+  });
 
   final VoidCallback onDismiss;
 
@@ -438,7 +459,7 @@ class _RecalibrationNote extends StatelessWidget {
 /// in this stage, so the estimate pauses rather than asserting a forecast built
 /// on pre-gap cycles.
 class _PerimenopausePausedNote extends StatelessWidget {
-  const _PerimenopausePausedNote();
+  const _PerimenopausePausedNote({super.key});
 
   @override
   Widget build(BuildContext context) {

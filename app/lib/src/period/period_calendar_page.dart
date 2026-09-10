@@ -31,6 +31,8 @@ import '../prediction/prediction_providers.dart';
 import '../symptom/symptom_format.dart';
 import '../symptom/symptom_providers.dart';
 import '../wearable/passive_phase_providers.dart';
+import '../widgets/animated_reveal.dart';
+import '../widgets/empty_state.dart';
 import 'period_editor.dart';
 import 'period_format.dart';
 import 'period_providers.dart';
@@ -400,15 +402,14 @@ class _HomeBody extends ConsumerWidget {
             const SizedBox(height: 16),
             _PregnancyStatusCard(state: pregnancyState, since: pregnancySince),
           ],
-          if (correctionDelta != null) ...[
-            const SizedBox(height: 16),
-            _CorrectionNotice(
-              delta: correctionDelta,
-              reduceSpoken: reduceSpoken,
-              onDismiss: () =>
-                  ref.read(correctionNoticeProvider.notifier).clear(),
-            ),
-          ],
+          // Always mounted so the notice's collapse animates; it renders
+          // nothing (via AnimatedReveal) while [correctionDelta] is null.
+          _CorrectionNotice(
+            delta: correctionDelta,
+            reduceSpoken: reduceSpoken,
+            onDismiss: () =>
+                ref.read(correctionNoticeProvider.notifier).clear(),
+          ),
           ForecastArea(
             prediction: prediction,
             bcRecalActive: bcRecalActive,
@@ -525,9 +526,9 @@ class _CalendarBody extends ConsumerWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
             sliver: SliverToBoxAdapter(
-              child: Text(
-                'Nothing logged yet. Tap a day or the Log button.',
-                style: theme.textTheme.bodyMedium,
+              child: const EmptyState(
+                message: 'Nothing logged yet. Tap a day or the Log button.',
+                icon: Icons.calendar_month_outlined,
               ),
             ),
           )
@@ -612,7 +613,7 @@ class _PeriodStatusLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (periods.isEmpty) {
-      return Text('No periods logged yet.', style: theme.textTheme.bodyLarge);
+      return const EmptyState(message: 'No periods logged yet.');
     }
     final latest = periods.first;
     final ongoing =
@@ -648,7 +649,9 @@ class _PeriodStatusLine extends StatelessWidget {
 }
 
 /// A horizontal strip of chips, one per enabled life-stage/condition mode, each
-/// opening that mode's screen. Renders nothing when no mode is on.
+/// opening that mode's screen. Renders nothing when no mode is on — and fades
+/// in / collapses (r5b, gated on the platform reduce-motion flag) when modes
+/// are enabled or disabled.
 class _ModeChipStrip extends ConsumerWidget {
   const _ModeChipStrip();
 
@@ -659,22 +662,27 @@ class _ModeChipStrip extends ConsumerWidget {
         if (ref.watch(lifeStageModeEnabledProvider(mode)).valueOrNull ?? false)
           mode,
     ];
-    if (enabled.isEmpty) return const SizedBox.shrink();
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final mode in enabled) ...[
-            ActionChip(
-              label: Text(modeCatalogEntry(mode).title),
-              onPressed: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute<void>(builder: (_) => modeScreen(mode))),
+    return AnimatedReveal(
+      child: enabled.isEmpty
+          ? null
+          : SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final mode in enabled) ...[
+                    ActionChip(
+                      label: Text(modeCatalogEntry(mode).title),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => modeScreen(mode),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
             ),
-            const SizedBox(width: 8),
-          ],
-        ],
-      ),
     );
   }
 }
@@ -785,7 +793,10 @@ class _RecentActivity extends StatelessWidget {
         Text('Recent activity', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         if (days.isEmpty)
-          Text('Nothing logged yet.', style: theme.textTheme.bodyMedium)
+          const EmptyState(
+            message: 'Nothing logged yet.',
+            icon: Icons.history_outlined,
+          )
         else
           for (final day in days)
             _RecentActivityRow(
@@ -1171,6 +1182,11 @@ class _HistoryRow extends StatelessWidget {
 }
 
 /// Transient "your update was taken in" note (p3.3).
+///
+/// r5b: [delta] is nullable — the notice stays **mounted** on the home scroll
+/// with a null delta rendering nothing, so its appear / collapse animates via
+/// [AnimatedReveal] (gated on the platform reduce-motion flag). The timer and
+/// the live announcement only run while a delta is present.
 class _CorrectionNotice extends StatefulWidget {
   const _CorrectionNotice({
     required this.delta,
@@ -1178,7 +1194,7 @@ class _CorrectionNotice extends StatefulWidget {
     required this.onDismiss,
   });
 
-  final PredictionDelta delta;
+  final PredictionDelta? delta;
   final bool reduceSpoken;
   final VoidCallback onDismiss;
 
@@ -1193,21 +1209,27 @@ class _CorrectionNoticeState extends State<_CorrectionNotice> {
   static const _reducedLabel = 'Your prediction was updated.';
 
   String get _spokenLabel =>
-      widget.reduceSpoken ? _reducedLabel : widget.delta.reasons.join(' ');
+      widget.reduceSpoken ? _reducedLabel : widget.delta!.reasons.join(' ');
 
   @override
   void initState() {
     super.initState();
-    _restartTimer();
-    _announce();
+    if (widget.delta != null) {
+      _restartTimer();
+      _announce();
+    }
   }
 
   @override
   void didUpdateWidget(_CorrectionNotice old) {
     super.didUpdateWidget(old);
     if (widget.delta != old.delta) {
-      _restartTimer();
-      _announce();
+      if (widget.delta == null) {
+        _autoClear?.cancel();
+      } else {
+        _restartTimer();
+        _announce();
+      }
     }
   }
 
@@ -1223,65 +1245,72 @@ class _CorrectionNoticeState extends State<_CorrectionNotice> {
   }
 
   void _announce() {
-    if (!mounted) return;
+    if (!mounted || widget.delta == null) return;
     announce(context, _spokenLabel);
   }
 
   @override
   Widget build(BuildContext context) {
+    final delta = widget.delta;
+    if (delta == null) return AnimatedReveal(child: null);
     final theme = Theme.of(context);
     final onColor = theme.colorScheme.onSurfaceVariant;
-    return Semantics(
-      container: true,
-      liveRegion: true,
-      label: _spokenLabel,
-      // Neutral theme `Card` — one accent per screen, held by the forecast
-      // card. This transient notice reads via its icon + live announcement.
-      child: Card(
-        // Purely visual — the wrapping Semantics is the semantic container.
-        semanticContainer: false,
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2, right: 12),
-                child: Icon(
-                  Icons.check_circle_outline,
-                  size: 20,
-                  color: onColor,
-                ),
-              ),
-              Expanded(
-                // The outer Semantics already speaks the full `_spokenLabel`;
-                // exclude the visual reason lines so it stays one node (the
-                // theme `Card` boundary would otherwise split them out).
-                child: ExcludeSemantics(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (var i = 0; i < widget.delta.reasons.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 4),
-                        Text(
-                          widget.delta.reasons[i],
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: onColor,
-                          ),
-                        ),
-                      ],
-                    ],
+    return AnimatedReveal(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Semantics(
+          container: true,
+          liveRegion: true,
+          label: _spokenLabel,
+          // Neutral theme `Card` — one accent per screen, held by the forecast
+          // card. This transient notice reads via its icon + live announcement.
+          child: Card(
+            // Purely visual — the wrapping Semantics is the semantic container.
+            semanticContainer: false,
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, right: 12),
+                    child: Icon(
+                      Icons.check_circle_outline,
+                      size: 20,
+                      color: onColor,
+                    ),
                   ),
-                ),
+                  Expanded(
+                    // The outer Semantics already speaks the full `_spokenLabel`;
+                    // exclude the visual reason lines so it stays one node (the
+                    // theme `Card` boundary would otherwise split them out).
+                    child: ExcludeSemantics(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var i = 0; i < delta.reasons.length; i++) ...[
+                            if (i > 0) const SizedBox(height: 4),
+                            Text(
+                              delta.reasons[i],
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: onColor,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    color: onColor,
+                    tooltip: correctionNoticeDismissLabel,
+                    onPressed: widget.onDismiss,
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(Icons.close, size: 20),
-                color: onColor,
-                tooltip: correctionNoticeDismissLabel,
-                onPressed: widget.onDismiss,
-              ),
-            ],
+            ),
           ),
         ),
       ),

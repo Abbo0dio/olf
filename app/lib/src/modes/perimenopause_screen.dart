@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../a11y/spoken_detail.dart';
+import '../widgets/empty_state.dart';
 import 'correlation_chart.dart';
 import 'perimenopause_format.dart';
 import 'perimenopause_mode_providers.dart';
@@ -96,7 +97,10 @@ class PerimenopauseScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           if (correlations.isEmpty)
-            Text(perimenopauseTimelineEmpty, style: theme.textTheme.bodyMedium)
+            const EmptyState(
+              message: perimenopauseTimelineEmpty,
+              icon: Icons.science_outlined,
+            )
           else
             for (final c in correlations) ...[
               _CorrelationTile(correlation: c, reduceSpoken: reduceSpoken),

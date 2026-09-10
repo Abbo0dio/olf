@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../a11y/spoken_detail.dart';
+import '../widgets/empty_state.dart';
 import 'correlation_chart.dart';
 import 'pmdd_format.dart';
 import 'pmdd_mode_providers.dart';
@@ -71,7 +72,10 @@ class PmddScreen extends ConsumerWidget {
           const SizedBox(height: 16),
 
           if (rows.isEmpty)
-            Text(pmddEmptyState, style: theme.textTheme.bodyMedium)
+            const EmptyState(
+              message: pmddEmptyState,
+              icon: Icons.science_outlined,
+            )
           else if (overlay != null) ...[
             Text(
               pmddLutealSummary(overlay.lutealRead),

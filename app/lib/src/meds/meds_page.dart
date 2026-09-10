@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
 import '../period/period_format.dart';
+import '../widgets/empty_state.dart';
 import 'meds_providers.dart';
 
 /// Record medications and a birth-control method (p1.7).
@@ -148,7 +149,10 @@ class _MedicationsSection extends ConsumerWidget {
             padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('No medications added.'),
+              child: EmptyState(
+                message: 'No medications added.',
+                icon: Icons.medication_outlined,
+              ),
             ),
           ),
         for (final med in meds)

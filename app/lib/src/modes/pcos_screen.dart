@@ -4,6 +4,7 @@ import 'package:olf_core/olf_core.dart';
 
 import '../a11y/spoken_detail.dart';
 import '../patterns/patterns_providers.dart';
+import '../widgets/empty_state.dart';
 import 'correlation_chart.dart';
 import 'pcos_correlation_format.dart';
 
@@ -49,10 +50,11 @@ class PcosScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           if (correlations.isEmpty)
-            Text(
-              'Log symptoms over a few cycles and this will show how they '
-              'line up with cycle phase.',
-              style: theme.textTheme.bodyMedium,
+            const EmptyState(
+              message:
+                  'Log symptoms over a few cycles and this will show how they '
+                  'line up with cycle phase.',
+              icon: Icons.science_outlined,
             )
           else
             for (final c in correlations) ...[

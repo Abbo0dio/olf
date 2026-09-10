@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olf_core/olf_core.dart';
 
+import '../widgets/empty_state.dart';
 import 'symptom_providers.dart';
 
 /// Add, rename, reorder and remove the symptoms that appear in the day sheet.
@@ -47,9 +48,9 @@ class _List extends ConsumerWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text(
-            'Your symptom list is empty. Add one to start logging.',
-            textAlign: TextAlign.center,
+          child: EmptyState(
+            message: 'Your symptom list is empty. Add one to start logging.',
+            icon: Icons.tune_outlined,
           ),
         ),
       );
