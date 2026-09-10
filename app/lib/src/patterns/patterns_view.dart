@@ -16,6 +16,7 @@ import '../modes/perimenopause_format.dart';
 import '../period/period_format.dart';
 import '../prediction/accuracy_format.dart';
 import '../prediction/accuracy_page.dart';
+import '../widgets/empty_state.dart';
 import 'patterns_providers.dart';
 
 /// The Patterns tab (r3b): the longer-term views, moved off the Home scroll and
@@ -41,8 +42,6 @@ class PatternsView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-
     final stats = ref.watch(cycleStatsProvider);
     final pcosMode =
         ref
@@ -86,85 +85,265 @@ class PatternsView extends ConsumerWidget {
           mode,
     ];
 
-    return ListView(
+    // r5b: the Patterns list is **lazy** — each entry is a lightweight
+    // [_PatternsItem], and the per-cycle BBT charts / correlation tiles (one
+    // per logged period or placed symptom — unbounded) are built only when
+    // scrolled into view. The itemBuilder closes solely over [data], which
+    // holds pre-watched values; nothing in it touches [ref] (WidgetRef is only
+    // legal inside a widget's own build).
+    final data = _PatternsData(
+      stats: stats,
+      pcosMode: pcosMode,
+      perimenopauseMode: perimenopauseMode,
+      bbtCharts: bbtCharts,
+      unit: unit,
+      correlations: correlations,
+      reduceSpoken: reduceSpoken,
+      enabledModes: enabledModes,
+      onOpenAccuracy: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const AccuracyPage())),
+      onOpenModes: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const ModesPage())),
+    );
+    final items = <_PatternsItem>[
+      _PatternsItem.accuracy(),
+      _PatternsItem.header('Your cycles'),
+      _PatternsItem.cycleStats(),
+      _PatternsItem.header('Basal temperature'),
+      if (bbtCharts.isEmpty)
+        _PatternsItem.bbtEmpty()
+      else
+        for (final chart in bbtCharts) _PatternsItem.bbtChart(chart),
+      if (correlations.isNotEmpty) ...[
+        _PatternsItem.header('Symptoms across your cycle'),
+        _PatternsItem.correlationLede(),
+        for (final c in correlations) _PatternsItem.correlation(c),
+      ],
+      _PatternsItem.header('Modes'),
+      for (final mode in enabledModes) _PatternsItem.modeRow(mode),
+      _PatternsItem.modesEntry(),
+    ];
+
+    return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      children: [
-        _NavRow(
-          icon: Icons.insights_outlined,
-          title: accuracySettingsTitle,
-          subtitle: accuracySettingsSubtitle,
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: (_) => const AccuracyPage())),
-        ),
+      itemCount: items.length,
+      itemBuilder: (context, i) => items[i].build(context, data),
+    );
+  }
+}
 
-        const _SectionHeader('Your cycles'),
-        _CycleStatsCard(
-          stats: stats,
-          pcosMode: pcosMode,
-          perimenopauseMode: perimenopauseMode,
-        ),
+/// Pre-watched values the lazy item builders close over — never [ref] (see the
+/// build above).
+class _PatternsData {
+  const _PatternsData({
+    required this.stats,
+    required this.pcosMode,
+    required this.perimenopauseMode,
+    required this.bbtCharts,
+    required this.unit,
+    required this.correlations,
+    required this.reduceSpoken,
+    required this.enabledModes,
+    required this.onOpenAccuracy,
+    required this.onOpenModes,
+  });
 
-        const _SectionHeader('Basal temperature'),
-        if (bbtCharts.isEmpty)
-          Text(
+  final CycleStats stats;
+  final bool pcosMode;
+  final bool perimenopauseMode;
+  final List<_CycleChart> bbtCharts;
+  final TemperatureUnit unit;
+  final List<PhaseCorrelation> correlations;
+  final bool reduceSpoken;
+  final List<LifeStageMode> enabledModes;
+  final VoidCallback onOpenAccuracy;
+  final VoidCallback onOpenModes;
+}
+
+/// One row of the lazily-built Patterns list (r5b): a fixed entry, a section
+/// header, or one per-cycle / per-symptom / per-mode payload row. Built only
+/// when scrolled into view by [ListView.builder].
+enum _PatternsItemKind {
+  accuracy,
+  header,
+  cycleStats,
+  bbtEmpty,
+  bbtChart,
+  correlationLede,
+  correlation,
+  modeRow,
+  modesEntry,
+}
+
+class _PatternsItem {
+  _PatternsItem.accuracy()
+    : kind = _PatternsItemKind.accuracy,
+      title = null,
+      chart = null,
+      correlation = null,
+      mode = null;
+
+  _PatternsItem.header(this.title)
+    : kind = _PatternsItemKind.header,
+      chart = null,
+      correlation = null,
+      mode = null;
+
+  _PatternsItem.cycleStats()
+    : kind = _PatternsItemKind.cycleStats,
+      title = null,
+      chart = null,
+      correlation = null,
+      mode = null;
+
+  _PatternsItem.bbtEmpty()
+    : kind = _PatternsItemKind.bbtEmpty,
+      title = null,
+      chart = null,
+      correlation = null,
+      mode = null;
+
+  _PatternsItem.bbtChart(this.chart)
+    : kind = _PatternsItemKind.bbtChart,
+      title = null,
+      correlation = null,
+      mode = null;
+
+  _PatternsItem.correlationLede()
+    : kind = _PatternsItemKind.correlationLede,
+      title = null,
+      chart = null,
+      correlation = null,
+      mode = null;
+
+  _PatternsItem.correlation(this.correlation)
+    : kind = _PatternsItemKind.correlation,
+      title = null,
+      chart = null,
+      mode = null;
+
+  _PatternsItem.modeRow(this.mode)
+    : kind = _PatternsItemKind.modeRow,
+      title = null,
+      chart = null,
+      correlation = null;
+
+  _PatternsItem.modesEntry()
+    : kind = _PatternsItemKind.modesEntry,
+      title = null,
+      chart = null,
+      correlation = null,
+      mode = null;
+
+  final _PatternsItemKind kind;
+  final String? title;
+  final _CycleChart? chart;
+  final PhaseCorrelation? correlation;
+  final LifeStageMode? mode;
+
+  Widget build(BuildContext context, _PatternsData data) {
+    final theme = Theme.of(context);
+    return switch (kind) {
+      _PatternsItemKind.accuracy => _NavRow(
+        icon: Icons.insights_outlined,
+        title: accuracySettingsTitle,
+        subtitle: accuracySettingsSubtitle,
+        onTap: data.onOpenAccuracy,
+      ),
+      _PatternsItemKind.header => _SectionHeader(title!),
+      _PatternsItemKind.cycleStats => _CycleStatsCard(
+        stats: data.stats,
+        pcosMode: data.pcosMode,
+        perimenopauseMode: data.perimenopauseMode,
+      ),
+      _PatternsItemKind.bbtEmpty => const EmptyState(
+        message:
             'Log two or more basal temperatures within one cycle to see a '
             'chart here.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          )
-        else
-          for (final chart in bbtCharts) ...[
-            Text(chart.label, style: theme.textTheme.labelLarge),
-            const SizedBox(height: 4),
-            BbtChart(points: chart.points, unit: unit),
-            const SizedBox(height: 16),
-          ],
-
-        if (correlations.isNotEmpty) ...[
-          const _SectionHeader('Symptoms across your cycle'),
-          Text(
-            'How your logged symptoms have fallen across cycle phases. '
-            'Descriptive only.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 12),
-          for (final c in correlations) ...[
-            Text(
-              c.category,
-              style: theme.textTheme.titleSmall,
-              semanticsLabel: spokenLabel(reduceSpoken, redacted: 'symptom'),
-            ),
-            const SizedBox(height: 8),
-            CorrelationChart(
-              label: reduceSpoken ? 'symptom' : c.category,
-              daysByPhase: c.daysByPhase,
-            ),
-            const SizedBox(height: 16),
-          ],
-        ],
-
-        const _SectionHeader('Modes'),
-        for (final mode in enabledModes)
-          _NavRow(
-            title: 'Open ${modeCatalogEntry(mode).title}',
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute<void>(builder: (_) => modeScreen(mode))),
-          ),
-        _NavRow(
-          icon: Icons.tune_outlined,
-          title: 'Life-stage & condition modes',
-          subtitle:
-              'Optional lenses — postpartum, pregnancy, PCOS and more. All '
-              'off until you turn them on.',
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: (_) => const ModesPage())),
+        icon: Icons.thermostat_outlined,
+      ),
+      _PatternsItemKind.bbtChart => _ChartItem(chart: chart!, unit: data.unit),
+      _PatternsItemKind.correlationLede => Text(
+        'How your logged symptoms have fallen across cycle phases. '
+        'Descriptive only.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
         ),
+      ),
+      _PatternsItemKind.correlation => _CorrelationItem(
+        c: correlation!,
+        reduceSpoken: data.reduceSpoken,
+      ),
+      _PatternsItemKind.modeRow => _NavRow(
+        title: 'Open ${modeCatalogEntry(mode!).title}',
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => modeScreen(mode!))),
+      ),
+      _PatternsItemKind.modesEntry => _NavRow(
+        icon: Icons.tune_outlined,
+        title: 'Life-stage & condition modes',
+        subtitle:
+            'Optional lenses — postpartum, pregnancy, PCOS and more. All off '
+            'until you turn them on.',
+        onTap: data.onOpenModes,
+      ),
+    };
+  }
+}
+
+/// One [BbtChart] plus the cycle label it belongs to — the label, the 4px gap
+/// and the trailing 16px spacing ride along inside one list item.
+class _ChartItem extends StatelessWidget {
+  const _ChartItem({required this.chart, required this.unit});
+
+  final _CycleChart chart;
+  final TemperatureUnit unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(chart.label, style: theme.textTheme.labelLarge),
+        const SizedBox(height: 4),
+        BbtChart(points: chart.points, unit: unit),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+}
+
+/// One symptom × cycle-phase correlation tile: the category title (redacted
+/// under reduce-spoken-detail, exactly as before) + the shared bar chart.
+class _CorrelationItem extends StatelessWidget {
+  const _CorrelationItem({required this.c, required this.reduceSpoken});
+
+  final PhaseCorrelation c;
+  final bool reduceSpoken;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          c.category,
+          style: theme.textTheme.titleSmall,
+          semanticsLabel: spokenLabel(reduceSpoken, redacted: 'symptom'),
+        ),
+        const SizedBox(height: 8),
+        CorrelationChart(
+          label: reduceSpoken ? 'symptom' : c.category,
+          daysByPhase: c.daysByPhase,
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }

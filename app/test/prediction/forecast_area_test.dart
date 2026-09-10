@@ -292,4 +292,48 @@ void main() {
       );
     });
   });
+
+  group('platform reduce-motion flag', () {
+    void useReduceMotion(WidgetTester tester) {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+    }
+
+    testWidgets('a swap shows the right card instantly, no animation widgets', (
+      tester,
+    ) async {
+      useReduceMotion(tester);
+      await pumpArea(tester, area(prediction: upcoming()));
+      expect(find.text('Next period'), findsOneWidget);
+      expect(find.byType(AnimatedSize), findsNothing);
+      expect(find.byType(FadeTransition), findsNothing);
+
+      await pumpArea(tester, area(bcRecalActive: true));
+      expect(find.text('Learn more'), findsOneWidget);
+      expect(find.text('Next period'), findsNothing);
+      expect(find.byType(AnimatedSize), findsNothing);
+      expect(find.byType(FadeTransition), findsNothing);
+    });
+
+    testWidgets('with motion, the swap mounts AnimatedSize and settles on the '
+        'note', (tester) async {
+      await pumpArea(tester, area(prediction: upcoming()));
+      expect(find.text('Next period'), findsOneWidget);
+
+      await pumpArea(tester, area(bcRecalActive: true));
+      expect(
+        find.descendant(
+          of: find.byType(ForecastArea),
+          matching: find.byType(AnimatedSize),
+        ),
+        findsOneWidget,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Learn more'), findsOneWidget);
+      expect(find.text('Next period'), findsNothing);
+    });
+  });
 }

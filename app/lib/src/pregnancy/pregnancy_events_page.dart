@@ -4,6 +4,7 @@ import 'package:olf_core/olf_core.dart';
 
 import '../modes/mode_offer.dart';
 import '../modes/modes_providers.dart';
+import '../widgets/empty_state.dart';
 import 'pregnancy_format.dart';
 import 'pregnancy_providers.dart';
 
@@ -34,11 +35,9 @@ class PregnancyEventsPage extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             if (value.isEmpty)
-              Text(
-                'Nothing recorded.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+              const EmptyState(
+                message: 'Nothing recorded.',
+                icon: Icons.event_outlined,
               )
             else
               for (final event in value.reversed)
