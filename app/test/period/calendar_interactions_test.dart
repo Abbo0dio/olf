@@ -21,80 +21,89 @@ import '../support/harness.dart';
 void main() {
   final now = DateTime.now();
   final thisMonth = formatMonthYear(firstOfMonth(now));
-  DateTime monthBy(int delta) => addMonths(firstOfMonth(now), delta);
 
-  String labelFor(int delta) => formatMonthYear(monthBy(delta));
+  String labelFor(int delta) =>
+      formatMonthYear(addMonths(firstOfMonth(now), delta));
 
-  Future<void> pumpCalendar(WidgetTester tester, AppDatabase db) => pumpOlf(
+  /// Run [body] — the whole assertion sequence — inside [`pumpOlf`]'s `body`:
+  /// `pumpOlf` tears the app down after its body returns, so asserts must live
+  /// inside it (the repo-wide pattern).
+  Future<void> pumpCalendar(
+    WidgetTester tester,
+    AppDatabase db,
+    Future<void> Function() body,
+  ) => pumpOlf(
     tester,
     overrides: [dbOverride(db)],
     body: () async {
       await switchTab(tester, 'Calendar');
+      await body();
     },
   );
 
   final grid = find.byType(GridView);
 
   group('baseline', () {
-    testWidgets('lands on the current month with all three controls present', (
-      tester,
-    ) async {
-      await pumpCalendar(tester, memoryDb());
-      expect(find.text(thisMonth), findsOneWidget);
-      expect(find.byTooltip('Previous month'), findsOneWidget);
-      expect(find.byTooltip('Jump to today'), findsOneWidget);
-      // No next month in the future — the chevron is not even rendered.
-      expect(find.byTooltip('Next month'), findsNothing);
-    });
-
-    testWidgets('the three controls are IconButtons with a 44px tap target', (
-      tester,
-    ) async {
-      await pumpCalendar(tester, memoryDb());
-      final prev = find.byTooltip('Previous month');
-      final jump = find.byTooltip('Jump to today');
-      expect(
-        find.ancestor(of: prev, matching: find.byType(IconButton)),
-        findsOneWidget,
-      );
-      expect(
-        find.ancestor(of: jump, matching: find.byType(IconButton)),
-        findsOneWidget,
-      );
-      expect(tester.getSize(prev).width, greaterThanOrEqualTo(44));
-      expect(tester.getSize(prev).height, greaterThanOrEqualTo(44));
-      expect(tester.getSize(jump).width, greaterThanOrEqualTo(44));
-      expect(tester.getSize(jump).height, greaterThanOrEqualTo(44));
-    });
+    testWidgets(
+      'lands on the current month with all three controls present — the '
+      '44px tap-target floor is the a11y sweep\'s job over this surface',
+      (tester) async {
+        await pumpCalendar(tester, memoryDb(), () async {
+          expect(find.text(thisMonth), findsOneWidget);
+          // All three affordances are reachable the way a screen reader /
+          // keyboard reach them: their tooltips are their accessible names.
+          expect(find.byTooltip('Previous month'), findsOneWidget);
+          expect(find.byTooltip('Jump to today'), findsOneWidget);
+          // Next is always rendered; on the current month it is inert (see
+          // the chevrons group).
+          expect(find.byTooltip('Next month'), findsOneWidget);
+          // Tap-target floor (iOS 44 / Android 48) + labels + contrast are
+          // asserted by the a11y guidelines over the calendar_tab surface
+          // (`screen_nav.dart` — no surface added by this PR).
+        });
+      },
+    );
   });
 
   group('chevrons', () {
     testWidgets('Previous goes back one month; Next returns to the current', (
       tester,
     ) async {
-      await pumpCalendar(tester, memoryDb());
-      await tester.tap(find.byTooltip('Previous month'));
-      await tester.pumpAndSettle();
-      expect(find.text(labelFor(-1)), findsOneWidget);
-      expect(find.text(thisMonth), findsNothing);
+      await pumpCalendar(tester, memoryDb(), () async {
+        await tester.tap(find.byTooltip('Previous month'));
+        await tester.pumpAndSettle();
+        expect(find.text(labelFor(-1)), findsOneWidget);
+        expect(find.text(thisMonth), findsNothing);
 
-      // Once on a past month, the Next chevron appears.
-      expect(find.byTooltip('Next month'), findsOneWidget);
-      await tester.tap(find.byTooltip('Next month'));
-      await tester.pumpAndSettle();
-      expect(find.text(thisMonth), findsOneWidget);
-      expect(find.byTooltip('Next month'), findsNothing);
+        await tester.tap(find.byTooltip('Next month'));
+        await tester.pumpAndSettle();
+        expect(find.text(thisMonth), findsOneWidget);
+      });
+    });
+
+    testWidgets('Next is inert on the current month — no future months', (
+      tester,
+    ) async {
+      await pumpCalendar(tester, memoryDb(), () async {
+        // The chevron renders, but on the current month its handler is null
+        // (`onNext` is only wired once the visible month is in the past).
+        expect(find.byTooltip('Next month'), findsOneWidget);
+        await tester.tap(find.byTooltip('Next month'));
+        await tester.pumpAndSettle();
+        expect(find.text(thisMonth), findsOneWidget);
+      });
     });
 
     testWidgets('Previous stays on the previous month under repeated taps', (
       tester,
     ) async {
-      await pumpCalendar(tester, memoryDb());
-      for (var i = 0; i < 3; i++) {
-        await tester.tap(find.byTooltip('Previous month'));
-        await tester.pumpAndSettle();
-      }
-      expect(find.text(labelFor(-3)), findsOneWidget);
+      await pumpCalendar(tester, memoryDb(), () async {
+        for (var i = 0; i < 3; i++) {
+          await tester.tap(find.byTooltip('Previous month'));
+          await tester.pumpAndSettle();
+        }
+        expect(find.text(labelFor(-3)), findsOneWidget);
+      });
     });
   });
 
@@ -102,17 +111,17 @@ void main() {
     testWidgets('restores the current month from a navigated-away month', (
       tester,
     ) async {
-      await pumpCalendar(tester, memoryDb());
-      for (var i = 0; i < 3; i++) {
-        await tester.tap(find.byTooltip('Previous month'));
-        await tester.pumpAndSettle();
-      }
-      expect(find.text(labelFor(-3)), findsOneWidget);
+      await pumpCalendar(tester, memoryDb(), () async {
+        for (var i = 0; i < 3; i++) {
+          await tester.tap(find.byTooltip('Previous month'));
+          await tester.pumpAndSettle();
+        }
+        expect(find.text(labelFor(-3)), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Jump to today'));
-      await tester.pumpAndSettle();
-      expect(find.text(thisMonth), findsOneWidget);
-      expect(find.byTooltip('Next month'), findsNothing);
+        await tester.tap(find.byTooltip('Jump to today'));
+        await tester.pumpAndSettle();
+        expect(find.text(thisMonth), findsOneWidget);
+      });
     });
   });
 
@@ -120,41 +129,45 @@ void main() {
     testWidgets('swipe right (positive velocity) goes back one month', (
       tester,
     ) async {
-      await pumpCalendar(tester, memoryDb());
-      await tester.fling(grid, const Offset(300, 0), 1500);
-      await tester.pumpAndSettle();
-      expect(find.text(labelFor(-1)), findsOneWidget);
+      await pumpCalendar(tester, memoryDb(), () async {
+        await tester.fling(grid, const Offset(300, 0), 1500);
+        await tester.pumpAndSettle();
+        expect(find.text(labelFor(-1)), findsOneWidget);
+      });
     });
 
     testWidgets('swipe left (negative velocity) advances one month — from a '
         'past month', (tester) async {
-      await pumpCalendar(tester, memoryDb());
-      await tester.tap(find.byTooltip('Previous month'));
-      await tester.pumpAndSettle();
-      expect(find.text(labelFor(-1)), findsOneWidget);
+      await pumpCalendar(tester, memoryDb(), () async {
+        await tester.tap(find.byTooltip('Previous month'));
+        await tester.pumpAndSettle();
+        expect(find.text(labelFor(-1)), findsOneWidget);
 
-      await tester.fling(grid, const Offset(-300, 0), 1500);
-      await tester.pumpAndSettle();
-      expect(find.text(thisMonth), findsOneWidget);
+        await tester.fling(grid, const Offset(-300, 0), 1500);
+        await tester.pumpAndSettle();
+        expect(find.text(thisMonth), findsOneWidget);
+      });
     });
 
     testWidgets(
       'swipe left on the current month stays put (no future months)',
       (tester) async {
-        await pumpCalendar(tester, memoryDb());
-        await tester.fling(grid, const Offset(-300, 0), 1500);
-        await tester.pumpAndSettle();
-        expect(find.text(thisMonth), findsOneWidget);
+        await pumpCalendar(tester, memoryDb(), () async {
+          await tester.fling(grid, const Offset(-300, 0), 1500);
+          await tester.pumpAndSettle();
+          expect(find.text(thisMonth), findsOneWidget);
+        });
       },
     );
 
     testWidgets('a slow drag without a fling does not change the month', (
       tester,
     ) async {
-      await pumpCalendar(tester, memoryDb());
-      await tester.drag(grid, const Offset(300, 0));
-      await tester.pumpAndSettle();
-      expect(find.text(thisMonth), findsOneWidget);
+      await pumpCalendar(tester, memoryDb(), () async {
+        await tester.drag(grid, const Offset(300, 0));
+        await tester.pumpAndSettle();
+        expect(find.text(thisMonth), findsOneWidget);
+      });
     });
   });
 
@@ -162,39 +175,39 @@ void main() {
     testWidgets('chevron Previous and swipe right land on the same month', (
       tester,
     ) async {
-      await pumpCalendar(tester, memoryDb());
+      await pumpCalendar(tester, memoryDb(), () async {
+        await tester.tap(find.byTooltip('Previous month'));
+        await tester.pumpAndSettle();
+        expect(find.text(labelFor(-1)), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Previous month'));
-      await tester.pumpAndSettle();
-      expect(find.text(labelFor(-1)), findsOneWidget);
-
-      // Back to today, then the swipe takes the same single step.
-      await tester.tap(find.byTooltip('Jump to today'));
-      await tester.pumpAndSettle();
-      await tester.fling(grid, const Offset(300, 0), 1500);
-      await tester.pumpAndSettle();
-      expect(find.text(labelFor(-1)), findsOneWidget);
-      expect(find.text(thisMonth), findsNothing);
+        // Back to today, then the swipe takes the same single step.
+        await tester.tap(find.byTooltip('Jump to today'));
+        await tester.pumpAndSettle();
+        await tester.fling(grid, const Offset(300, 0), 1500);
+        await tester.pumpAndSettle();
+        expect(find.text(labelFor(-1)), findsOneWidget);
+        expect(find.text(thisMonth), findsNothing);
+      });
     });
 
     testWidgets('chevron Next and swipe left land on the same month', (
       tester,
     ) async {
-      await pumpCalendar(tester, memoryDb());
+      await pumpCalendar(tester, memoryDb(), () async {
+        // One step back, then the chevron returns to today.
+        await tester.tap(find.byTooltip('Previous month'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Next month'));
+        await tester.pumpAndSettle();
+        expect(find.text(thisMonth), findsOneWidget);
 
-      // One step back, then the chevron returns to today.
-      await tester.tap(find.byTooltip('Previous month'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Next month'));
-      await tester.pumpAndSettle();
-      expect(find.text(thisMonth), findsOneWidget);
-
-      // One step back again, then the swipe returns to the same state.
-      await tester.tap(find.byTooltip('Previous month'));
-      await tester.pumpAndSettle();
-      await tester.fling(grid, const Offset(-300, 0), 1500);
-      await tester.pumpAndSettle();
-      expect(find.text(thisMonth), findsOneWidget);
+        // One step back again, then the swipe returns to the same state.
+        await tester.tap(find.byTooltip('Previous month'));
+        await tester.pumpAndSettle();
+        await tester.fling(grid, const Offset(-300, 0), 1500);
+        await tester.pumpAndSettle();
+        expect(find.text(thisMonth), findsOneWidget);
+      });
     });
   });
 }
