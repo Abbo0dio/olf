@@ -14,8 +14,6 @@ name: Dependency report
 # Not wired into `CI OK`; failure here never blocks a merge.
 
 on:
-  schedule:
-    - cron: "0 6 1 * *"        # 06:00 UTC on the 1st (nightly-integration is 03:17)
   workflow_dispatch:
 
 permissions:
