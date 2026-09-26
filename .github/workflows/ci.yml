@@ -1,12 +1,13 @@
 name: CI
 
-# Gates every PR into main and every push to main.
+# Manually dispatched only (Actions tab → Run workflow, or
+# `gh workflow run ci.yml`). It does NOT run on PRs or pushes.
 # Jobs: format · analyze · test · dependency-audit · build  →  CI OK (aggregate)
 #
 # The on-device integration_test suite is NOT run here (GitHub's Linux runners
 # have no emulator, and spinning one up per PR is slow and flaky). It runs in a
 # SEPARATE, non-blocking workflow — .github/workflows/nightly-integration.yml
-# (nightly `schedule:` + manual `workflow_dispatch`) — which is deliberately not
+# (manual `workflow_dispatch` only) — which is deliberately not
 # wired into `CI OK`. The restart round-trip it covers is also covered headless
 # on every PR by core/test/db/persistence_test.dart + app/test/widget_test.dart.
 #
@@ -25,10 +26,6 @@ name: CI
 #     threshold on a release build is p5.5).
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

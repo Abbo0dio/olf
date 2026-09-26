@@ -14,12 +14,10 @@ name: Nightly integration tests
 # A red run here is a bug to chase the next morning, not a merge blocker. Keep it
 # out of `.github/workflows/ci.yml`'s `CI OK` aggregate.
 #
-# Triggers: nightly cron + manual `workflow_dispatch` (Actions tab → Run
-# workflow, or `gh workflow run nightly-integration.yml`).
+# Triggers: manual `workflow_dispatch` only (Actions tab → Run workflow, or
+# `gh workflow run nightly-integration.yml`).
 
 on:
-  schedule:
-    - cron: "17 3 * * *" # 03:17 UTC daily
   workflow_dispatch:
 
 permissions:

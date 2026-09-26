@@ -1,5 +1,14 @@
 # UI / UX refresh — refinement pass (2026-09-08)
 
+**STATUS: CLOSED 2026-09-11** — all six slices `r1…r5c` merged through the normal
+worktree → PR → gate → merge flow; exit-gate paragraph below. Exit gate MET by
+slices: perf `≤2`-tap + a11y sweeps held every slice (r1 #90, r2 #91, r3a #92,
+r3b #93, r4 #94, r5a #95, r5b #96, r5c #97 — all 9 CI checks green each,
+`schemaVersion` stayed 11, `core/` untouched all pass, three §5 negotiations
+declared in-row: r3a §5 resolutions 1+2, r5a overdue-accent token). Final
+`main` @ `4dd4cba`. Feature roadmap stays PAUSED (phases 9–13) per the 2026-09-07
+user decision — the pass is done, nothing further dispatched.
+
 Not a numbered roadmap phase. The feature roadmap (phases 9–13) stays **paused**
 (`decisions.md` 2026-09-07). This is refinement of the **current** scope — the
 information architecture, the logging flow, and visual consistency of what
@@ -319,6 +328,7 @@ Split into three PRs; each independently shippable.
 
 - Horizontal swipe between months; "jump to today"; keep the chevrons.
 - Acceptance: keyboard-nav sweep green; swipe + chevron reach the same state.
+- **STATUS: DONE — #97 `4dd4cba`, merged 2026-09-11, gate green (all 9), clean no-bounce.** Test-only verification (features already shipped in r3a): new `calendar_interactions_test.dart` (11 widget tests) locks the swipe/chevron/jump-to-today interactions + the "swipe + chevron reach the same state" acceptance; two findings locked as-is (Next inert on the current month — no future months; 44px tap-target floor asserted by the a11y sweep over the existing `calendar_tab` surface). Zero feature code; `screen_nav` unchanged. **Pass CLOSED.**
 
 **Risk.** Low–medium, broad surface.
 
